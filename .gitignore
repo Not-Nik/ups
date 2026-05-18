@@ -8,3 +8,4 @@ web/.superpowers/
 
 .env
 db.sqlite3
+matches.json

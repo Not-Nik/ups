@@ -4,16 +4,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::account::{create_account, exists_account, verify_session};
+use crate::account::{create_account, delete_account, exists_account, verify_session};
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::structures::*;
 
 use crate::predictions::{get_matches, get_predictions, get_user_predictions, submit_prediction};
-use futures_util::TryStreamExt;
 use log::debug;
-use serde_derive::{Deserialize, Serialize};
-use sqlx::{Row, SqliteConnection};
-use std::ops::DerefMut;
+use sqlx::SqliteConnection;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -104,4 +101,24 @@ pub async fn submit(
     }
 
     Ok(warp::reply::json(&Token { token }))
+}
+
+pub async fn delete(
+    token: Token,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let name = verify_session(&mut conn_lock, &token.token)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+    let Some(name) = name else {
+        Err(warp::reject::custom(AccessDenied))?
+    };
+
+    delete_account(&mut conn_lock, &name)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::reply())
 }

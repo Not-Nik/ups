@@ -14,7 +14,6 @@ use crate::error::*;
 use serde_derive::Serialize;
 use sqlx::{Connection, SqliteConnection};
 use std::convert::Infallible;
-use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
@@ -77,8 +76,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::submit);
 
+    let delete = warp::path!("api" / "delete")
+        .and(warp::body::json())
+        .and(conn.clone())
+        .and_then(endpoints::delete);
+
     let get_routes = warp::get().and(matches.or(predictions).or(warp::fs::dir("web")));
-    let post_routes = warp::post().and(submit.or(user_predictions));
+    let post_routes = warp::post().and(submit.or(user_predictions).or(delete));
 
     warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()

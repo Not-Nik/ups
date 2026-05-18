@@ -4,7 +4,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::error::InternalError;
 use crate::structures::{Match, Prediction};
 use futures_util::TryStreamExt;
 use sqlx::{Row, SqliteConnection};
@@ -13,7 +12,8 @@ use tokio::sync::MutexGuard;
 
 pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::Result<Vec<Match>> {
     let mut match_query =
-        sqlx::query("SELECT MatchID, TeamA, TeamB, Section FROM matches").fetch(conn.deref_mut());
+        sqlx::query("SELECT MatchID, TeamA, TeamB, LogoA, LogoB, Section FROM matches")
+            .fetch(conn.deref_mut());
 
     let mut matches = Vec::new();
 
@@ -22,12 +22,16 @@ pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::R
         let id: u64 = row.try_get("MatchID")?;
         let team_a: String = row.try_get("TeamA")?;
         let team_b: String = row.try_get("TeamB")?;
+        let logo_a: String = row.try_get("LogoA")?;
+        let logo_b: String = row.try_get("LogoB")?;
         let section: String = row.try_get("Section")?;
 
         matches.push(Match {
             id,
             team_a,
             team_b,
+            logo_a,
+            logo_b,
             section,
         });
     }
@@ -40,7 +44,7 @@ pub async fn get_predictions(
     id: u32,
 ) -> sqlx::Result<Vec<Prediction>> {
     let mut pred_query =
-        sqlx::query("SELECT Name, ScoreA, ScoreB FROM prediction WHERE MatchID = ?")
+        sqlx::query("SELECT Name, ScoreA, ScoreB FROM predictions WHERE MatchID = ?")
             .bind(id)
             .fetch(conn.deref_mut());
 
@@ -68,7 +72,7 @@ pub async fn get_user_predictions(
     name: &String,
 ) -> sqlx::Result<Vec<Prediction>> {
     let mut pred_query =
-        sqlx::query("SELECT MatchID, ScoreA, ScoreB FROM prediction WHERE Name = ?")
+        sqlx::query("SELECT MatchID, ScoreA, ScoreB FROM predictions WHERE Name = ?")
             .bind(name)
             .fetch(conn.deref_mut());
 
@@ -98,7 +102,7 @@ pub async fn submit_prediction(
     score_a: u32,
     score_b: u32,
 ) -> sqlx::Result<()> {
-    sqlx::query("INSERT INTO prediction (Name, MatchID, ScoreA, ScoreB) VALUES (?, ?, ?, ?)")
+    sqlx::query("INSERT INTO predictions (Name, MatchID, ScoreA, ScoreB) VALUES (?, ?, ?, ?)")
         .bind(name)
         .bind(id)
         .bind(score_a)

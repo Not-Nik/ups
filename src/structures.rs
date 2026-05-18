@@ -11,6 +11,8 @@ pub struct Match {
     pub id: u64,
     pub team_a: String,
     pub team_b: String,
+    pub logo_a: String,
+    pub logo_b: String,
     pub section: String,
 }
 

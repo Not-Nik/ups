@@ -65,14 +65,15 @@ const isValidScore = value => /^\d+$/.test(value.trim());
 function updateSubmitAll() {
   const count = state.pendingIndices().length;
   $('submit-all-count').textContent = count;
-  $('submit-all-container').classList.toggle('d-none', count < 2);
+  const visible = count > 0;
+  $('submit-all-container').classList.toggle('d-none', !visible);
+  $('main').classList.toggle('pb-5', visible);
 }
 
 // Per-card score validation and state sync
 function updateCardState(card, index) {
   const [a, b] = card.querySelectorAll('.score-input');
   const valid = isValidScore(a.value) && isValidScore(b.value);
-  card.querySelector('.submit-btn').disabled = !valid;
   if (valid) {
     state.scores[index] = [parseInt(a.value, 10), parseInt(b.value, 10)];
   } else {
@@ -118,20 +119,18 @@ function createCard(match, index) {
   card.dataset.index = index;
 
   card.innerHTML = `
-    <div class="card-body">
-      <div class="text-secondary small text-uppercase mb-3" style="letter-spacing:.05em">Match ${index + 1}</div>
-      <div class="score-grid">
-        <div class="fw-semibold small text-center text-truncate" style="min-width:0">${escapeHtml(match.team_a)}</div>
-        <div></div>
-        <div class="fw-semibold small text-center text-truncate" style="min-width:0">${escapeHtml(match.team_b)}</div>
-        <div><input type="text" class="form-control score-input" data-side="0" inputmode="numeric" placeholder="0"></div>
-        <div class="score-sep">:</div>
-        <div><input type="text" class="form-control score-input" data-side="1" inputmode="numeric" placeholder="0"></div>
+    <div class="card-body p-3">
+      <div class="team-row">
+        ${match.logo_a ? `<img src="${escapeHtml(match.logo_a)}" class="team-logo" alt="">` : ''}
+        <span class="team-name fw-semibold small">${escapeHtml(match.team_a)}</span>
+        <input type="text" class="form-control score-input" data-side="0" inputmode="numeric" placeholder="0">
       </div>
-      <div class="d-flex justify-content-between align-items-center mt-3" style="min-height:32px">
-        <button class="toggle-btn" aria-label="Show predictions"></button>
-        <button class="btn btn-danger btn-sm submit-btn" disabled>Submit</button>
+      <div class="team-row mt-1">
+        ${match.logo_b ? `<img src="${escapeHtml(match.logo_b)}" class="team-logo" alt="">` : ''}
+        <span class="team-name fw-semibold small">${escapeHtml(match.team_b)}</span>
+        <input type="text" class="form-control score-input" data-side="1" inputmode="numeric" placeholder="0">
       </div>
+      <button class="toggle-btn" aria-label="Show predictions"></button>
       <div class="predictions-panel"><div class="predictions-inner"></div></div>
     </div>
   `;
@@ -142,7 +141,6 @@ function createCard(match, index) {
   card.querySelectorAll('.score-input').forEach(input =>
     input.addEventListener('input', () => updateCardState(card, index))
   );
-  card.querySelector('.submit-btn').addEventListener('click', () => doSubmit([index]));
 
   return card;
 }
@@ -194,7 +192,7 @@ function renderGrid(matches) {
   });
 }
 
-// Mark a card as submitted: lock inputs, replace button with badge
+// Mark a card as submitted: lock inputs, show checkmark
 function markSubmitted(index) {
   state.submitted.add(index);
   delete state.scores[index];
@@ -203,12 +201,14 @@ function markSubmitted(index) {
   if (!card) return;
 
   card.querySelectorAll('.score-input').forEach(input => { input.disabled = true; });
-  card.querySelector('.submit-btn')?.replaceWith(
-    Object.assign(document.createElement('span'), {
-      className: 'text-success fw-semibold small',
-      textContent: '✓ Submitted',
-    })
-  );
+  if (!card.querySelector('.submitted-badge')) {
+    card.querySelector('.toggle-btn').insertAdjacentElement('afterend',
+      Object.assign(document.createElement('span'), {
+        className: 'submitted-badge text-success small',
+        textContent: '✓',
+      })
+    );
+  }
 
   updateSubmitAll();
 }
@@ -324,6 +324,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
     localStorage.setItem('ups_theme', next);
     applyTheme(next);
+  });
+
+  $('save-image-btn').addEventListener('click', async () => {
+    // Collect elements belonging to sections with no submitted predictions
+    const toHide = [];
+    let sectionEls = [], hasSubmitted = false;
+    const flush = () => {
+      if (sectionEls.length && !hasSubmitted) toHide.push(...sectionEls);
+      sectionEls = []; hasSubmitted = false;
+    };
+    for (const el of $('grid').children) {
+      if (el.classList.contains('section-divider')) { flush(); sectionEls.push(el); }
+      else if (el.classList.contains('section-header')) { sectionEls.push(el); }
+      else { sectionEls.push(el); const i = +el.dataset.index; if (i in state.scores || state.submitted.has(i)) hasSubmitted = true; }
+    }
+    flush();
+
+    toHide.forEach(el => { el.style.display = 'none'; });
+    try {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
+      const canvas = await html2canvas($('grid'), { backgroundColor: bg, scale: window.devicePixelRatio });
+      const pad = 16 * window.devicePixelRatio;
+      const padded = document.createElement('canvas');
+      padded.width = canvas.width + pad * 2;
+      padded.height = canvas.height + pad * 2;
+      const ctx = padded.getContext('2d');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, padded.width, padded.height);
+      ctx.drawImage(canvas, pad, pad);
+      Object.assign(document.createElement('a'), {
+        download: 'predictions.png',
+        href: padded.toDataURL('image/png'),
+      }).click();
+    } finally {
+      toHide.forEach(el => { el.style.display = ''; });
+    }
   });
 
   $('submit-all-btn').addEventListener('click', () => doSubmit(state.pendingIndices()));

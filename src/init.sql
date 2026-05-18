@@ -10,7 +10,7 @@ CREATE TABLE sessions
     Token TEXT PRIMARY KEY
 );
 
-CREATE TABLE prediction
+CREATE TABLE predictions
 (
     Name    TEXT NOT NULL,
     MatchID int  NOT NULL,
@@ -22,5 +22,8 @@ CREATE TABLE matches
 (
     MatchID INTEGER PRIMARY KEY,
     TeamA   TEXT NOT NULL,
-    TeamB   TEXT NOT NULL
+    TeamB   TEXT NOT NULL,
+    LogoA   TEXT NOT NULL,
+    LogoB   TEXT NOT NULL,
+    Section TEXT NOT NULL
 );
