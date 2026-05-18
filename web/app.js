@@ -119,7 +119,7 @@ function createCard(match, index) {
   card.dataset.index = index;
 
   card.innerHTML = `
-    <div class="card-body p-3">
+    <div class="card-body">
       <div class="team-row">
         ${match.logo_a ? `<img src="${escapeHtml(match.logo_a)}" class="team-logo" alt="">` : ''}
         <span class="team-name fw-semibold small">${escapeHtml(match.team_a)}</span>
