@@ -1,0 +1,10 @@
+/target
+/.idea
+
+certs/cert.rest.pem
+certs/key.rest.pem
+
+web/.superpowers/
+
+.env
+db.sqlite3
