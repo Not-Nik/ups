@@ -37,27 +37,6 @@ const state = {
 const getToken = () => localStorage.getItem('ups_token');
 const saveToken = token => localStorage.setItem('ups_token', token);
 
-// Theme
-const THEME_CYCLE = ['dark', 'light', 'system'];
-const THEME_ICONS = { dark: '☾', light: '☀', system: '◑' };
-let _systemThemeListener = null;
-
-function applyTheme(theme) {
-  if (_systemThemeListener) {
-    window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', _systemThemeListener);
-    _systemThemeListener = null;
-  }
-  if (theme === 'system') {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    _systemThemeListener = () => { document.documentElement.dataset.bsTheme = mq.matches ? 'dark' : 'light'; };
-    _systemThemeListener();
-    mq.addEventListener('change', _systemThemeListener);
-  } else {
-    document.documentElement.dataset.bsTheme = theme;
-  }
-  $('theme-toggle').textContent = THEME_ICONS[theme];
-}
-
 // Validation
 const isValidScore = value => /^\d+$/.test(value.trim());
 
@@ -317,15 +296,6 @@ async function loadPastPredictions() {
 
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
-  const savedTheme = localStorage.getItem('ups_theme') ?? 'dark';
-  applyTheme(savedTheme);
-  $('theme-toggle').addEventListener('click', () => {
-    const current = localStorage.getItem('ups_theme') ?? 'dark';
-    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
-    localStorage.setItem('ups_theme', next);
-    applyTheme(next);
-  });
-
   $('save-image-btn').addEventListener('click', async () => {
     // Collect elements belonging to sections with no submitted predictions
     const toHide = [];
