@@ -1,8 +1,8 @@
 /target
 /.idea
 
-certs/cert.rest.pem
-certs/key.rest.pem
+certs/fullchain.pem
+certs/privkey.pem
 
 web/.superpowers/
 web/docs

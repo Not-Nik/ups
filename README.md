@@ -16,7 +16,11 @@ choice for help.
 
 ## Self-hosting
 
-With a simple stack comes simple self-hosting. The following should be enough to get an empty instance up and running:
+With a simple stack comes simple self-hosting. The only complicated thing about the server is TLS. You'll need
+`fullchain.pem` and `privkey.pem` from your SSL certificate provider. If you are using certbot, these will likely be
+at `/etc/letsencrypt/live/yourdomain/`. Both files need to be put into certs.
+
+Apart from that, these commands should be enough to get an empty instance up and running:
 
 ```
 sqlite3 db.sqlite3 < src/init.sql

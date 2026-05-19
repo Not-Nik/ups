@@ -86,8 +86,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()
-        .cert_path("certs/cert.rest.pem")
-        .key_path("certs/key.rest.pem")
+        .cert_path("certs/fullchain.pem")
+        .key_path("certs/privkey.pem")
         .run(([0, 0, 0, 0], 443))
         .await;
 
