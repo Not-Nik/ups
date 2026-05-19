@@ -10,6 +10,9 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
+// Escape HTML attribute values (escapeHtml + quotes)
+const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
+
 // Generic JSON fetch — throws on non-ok with parsed error code
 async function fetchJSON(url, { method = 'GET', body } = {}) {
   const options = { method };
@@ -100,12 +103,12 @@ function createCard(match, index) {
   card.innerHTML = `
     <div class="card-body">
       <div class="team-row">
-        ${match.logo_a ? `<img src="${escapeHtml(match.logo_a)}" class="team-logo" alt="">` : ''}
+        ${match.logo_a ? `<img src="${escapeAttr(match.logo_a)}" class="team-logo" alt="">` : ''}
         <span class="team-name fw-semibold small">${escapeHtml(match.team_a)}</span>
         <input type="text" class="form-control score-input" data-side="0" inputmode="numeric" placeholder="0">
       </div>
       <div class="team-row mt-1">
-        ${match.logo_b ? `<img src="${escapeHtml(match.logo_b)}" class="team-logo" alt="">` : ''}
+        ${match.logo_b ? `<img src="${escapeAttr(match.logo_b)}" class="team-logo" alt="">` : ''}
         <span class="team-name fw-semibold small">${escapeHtml(match.team_b)}</span>
         <input type="text" class="form-control score-input" data-side="1" inputmode="numeric" placeholder="0">
       </div>
