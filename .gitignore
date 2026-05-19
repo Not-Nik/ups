@@ -5,6 +5,7 @@ certs/cert.rest.pem
 certs/key.rest.pem
 
 web/.superpowers/
+web/docs
 
 .env
 db.sqlite3
