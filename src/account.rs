@@ -22,7 +22,7 @@ pub async fn exists_account(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
 ) -> sqlx::Result<bool> {
-    let res = sqlx::query("SELECT EXISTS(SELECT 1 FROM users WHERE Name = ?)")
+    let res = sqlx::query("SELECT EXISTS(SELECT 1 FROM users WHERE Name = ? COLLATE NOCASE)")
         .bind(name)
         .fetch_one(conn.deref_mut())
         .await?;
