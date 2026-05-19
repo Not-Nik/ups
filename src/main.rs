@@ -84,12 +84,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let get_routes = warp::get().and(matches.or(predictions).or(warp::fs::dir("web")));
     let post_routes = warp::post().and(submit.or(user_predictions).or(delete));
 
-    warp::serve(get_routes.or(post_routes).recover(handle_rejection))
+    let https_server = warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()
         .cert_path("certs/fullchain.pem")
         .key_path("certs/privkey.pem")
-        .run(([0, 0, 0, 0], 443))
-        .await;
+        .run(([0, 0, 0, 0], 443));
+
+    // HTTP server: redirects all requests to HTTPS
+    let redirect = warp::any()
+        .and(warp::host::optional())
+        .and(warp::path::full())
+        .map(
+            |host: Option<warp::host::Authority>, path: warp::path::FullPath| {
+                let host = host.map(|h| h.to_string()).unwrap_or_default();
+                let https_url = format!("https://{}{}", host, path.as_str());
+                warp::redirect::permanent(https_url.parse::<warp::http::Uri>().unwrap())
+            },
+        );
+
+    let http_server = warp::serve(redirect).run(([0, 0, 0, 0], 80));
+
+    tokio::join!(http_server, https_server);
 
     Ok(())
 }
