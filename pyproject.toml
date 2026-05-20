@@ -8,4 +8,5 @@ dependencies = [
     "asyncio>=4.0.0",
     "beautifulsoup4>=4.14.3",
     "playwright>=1.60.0",
+    "requests>=2.34.2",
 ]
