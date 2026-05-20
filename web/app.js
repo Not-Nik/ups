@@ -154,6 +154,29 @@ function sectionOrder(a, b) {
   return (pa[1] ?? '').localeCompare(pb[1] ?? '');
 }
 
+function activateTab(day) {
+  $('tabs-bar').querySelectorAll('.tab-btn').forEach(btn => {
+    const active = btn.dataset.day === day;
+    btn.className = `tab-btn btn btn-sm ${active ? 'btn-secondary' : 'btn-outline-secondary'}`;
+  });
+  $('grid').querySelectorAll('[data-day]').forEach(el => {
+    el.classList.toggle('d-none', el.dataset.day !== day);
+  });
+}
+
+function renderTabs(days) {
+  const bar = $('tabs-bar');
+  bar.innerHTML = '';
+  days.forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn btn btn-sm btn-outline-secondary';
+    btn.textContent = day;
+    btn.dataset.day = day;
+    btn.addEventListener('click', () => activateTab(day));
+    bar.appendChild(btn);
+  });
+}
+
 function renderGrid(matches) {
   state.matches = matches;
   const grid = $('grid');
@@ -166,20 +189,51 @@ function renderGrid(matches) {
     groups.get(sec).push([match, i]);
   });
 
-  [...groups.keys()].sort(sectionOrder).forEach((sec, si) => {
-    if (si > 0) {
+  const sortedSections = [...groups.keys()].sort(sectionOrder);
+  const dayOf = sec => sec.split('/').at(-1) ?? sec;
+
+  const days = [...new Set(sortedSections.map(dayOf))].sort((a, b) => {
+    const la = a.replace(/\d+/g, '').trim();
+    const lb = b.replace(/\d+/g, '').trim();
+    const lCmp = la.localeCompare(lb);
+    if (lCmp !== 0) return lCmp;
+    const na = parseInt(a.match(/\d+/)?.[0], 10);
+    const nb = parseInt(b.match(/\d+/)?.[0], 10);
+    return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
+  });
+
+  renderTabs(days);
+
+  sortedSections.forEach((sec, si) => {
+    const day = dayOf(sec);
+    const prevDay = si > 0 ? dayOf(sortedSections[si - 1]) : null;
+
+    if (si > 0 && prevDay === day) {
       const hr = document.createElement('div');
       hr.className = 'section-divider';
+      hr.dataset.day = day;
       grid.appendChild(hr);
     }
+
     if (sec) {
       const h = document.createElement('div');
       h.className = 'section-header';
       h.textContent = sec;
+      h.dataset.day = day;
       grid.appendChild(h);
     }
-    groups.get(sec).forEach(([match, i]) => grid.appendChild(createCard(match, i)));
+
+    groups.get(sec).forEach(([match, i]) => {
+      const card = createCard(match, i);
+      card.dataset.day = day;
+      grid.appendChild(card);
+    });
   });
+
+  const defaultDay = days.find(day =>
+    matches.some(m => dayOf(m.section ?? '') === day && (m.score_a == null || m.score_b == null))
+  ) ?? days.at(-1);
+  if (defaultDay) activateTab(defaultDay);
 }
 
 // Mark a card as submitted: lock inputs, show checkmark
