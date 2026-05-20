@@ -48,6 +48,9 @@ def load_matches(url):
             group = match["group"]["name"].strip()
             round = match["round"]["name"].strip()
 
+            if round.startswith("Round"):
+                round = "Day" + round.lstrip("Round")
+
             if match["opponents"][0]["participant"]["logo"]:
                 logo_a = match["opponents"][0]["participant"]["customFieldValues"]["logo"]["icon_medium"].strip()
             else:

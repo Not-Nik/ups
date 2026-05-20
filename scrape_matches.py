@@ -66,6 +66,7 @@ def _parse_matches(html: str, base_url: str) -> list[dict]:
             for d in block.find_all("div", class_=lambda c: c and "text" in c and "sized" in c)
         ]
         stage = "/".join(t for t in text_divs if t not in ("/", "-"))
+        stage.replace("/Stage", "/Day")
 
         t1 = match.select_one(".opponent-1 .name")
         t2 = match.select_one(".opponent-2 .name")

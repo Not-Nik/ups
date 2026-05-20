@@ -30,13 +30,14 @@ cargo run --release
 
 An empty instance is not very useful, obviously, so you'll have to add match data into the database manually. The
 provided script `scrape_matches.py` gathers data from toornament to insert into the database. It filters based on
-some specific conditions of the league it was written for. Alternatively, you can write your own script to write
-data based on `scrape_matches.py` and `src/init.sql`.
+some specific conditions of the league it was written for. It also replaces each stage that starts with a plain
+"Stage" to "Day". Uniliga Overwatch uses Swiss Format for it's fourth division only, because it can't be created
+with "Day". Alternatively, you can write your own script to write data based on `scrape_matches.py` and `src/init.sql`.
 
 ## What to change for your league
 
-If your not hosting for Uniliga Overwatch, there are some specific things you'll have to edit besides the scraper
+If you're not hosting for Uniliga Overwatch, there are some specific things you'll have to edit besides the scraper
 script. In `src/app.js` the `sectionOrder()` function is specific to the way Uniliga matches are organised, which
 might not work for your league. Specifically the german words for first, second and third are used for sorting. If
-you have a simple (i.e. single-division) toornament to pull data from, the code will likely still work, because it
-sorts by toornaments 'Day x' parameter.
+you have a simple (i.e. single-division with Days) toornament to pull data from, the code will likely still work,
+because it sorts by toornaments 'Day x' parameter.
