@@ -36,8 +36,7 @@ clearServerConf.addEventListener('click', async () => {
   try {
     const res = await fetch('/api/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) throw new Error();
     localStorage.removeItem('ups_token');

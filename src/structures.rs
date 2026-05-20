@@ -34,11 +34,10 @@ pub struct PredictionSubmission {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Submission {
     pub name: Option<String>,
-    pub token: Option<String>,
     pub predictions: Vec<PredictionSubmission>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Serialize, Debug)]
 pub struct Token {
     pub token: String,
 }

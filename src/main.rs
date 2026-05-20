@@ -67,22 +67,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(endpoints::predictions);
 
     let user_predictions = warp::path!("api" / "predictions" / "me")
-        .and(warp::body::json())
+        .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::user_predictions);
 
     let submit = warp::path!("api" / "submit")
         .and(warp::body::json())
+        .and(warp::header::optional("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::submit);
 
     let delete = warp::path!("api" / "delete")
-        .and(warp::body::json())
+        .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::delete);
 
-    let get_routes = warp::get().and(matches.or(predictions).or(warp::fs::dir("web")));
-    let post_routes = warp::post().and(submit.or(user_predictions).or(delete));
+    let get_routes = warp::get().and(
+        matches
+            .or(predictions)
+            .or(user_predictions)
+            .or(warp::fs::dir("web")),
+    );
+    let post_routes = warp::post().and(submit.or(delete));
 
     let https_server = warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()

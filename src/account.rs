@@ -78,7 +78,7 @@ pub async fn delete_account(
 
 pub async fn verify_session(
     conn: &mut MutexGuard<'_, SqliteConnection>,
-    token: &String,
+    token: &str,
 ) -> sqlx::Result<Option<String>> {
     let mut session_query = sqlx::query("SELECT Name FROM sessions WHERE Token = ?")
         .bind(token)

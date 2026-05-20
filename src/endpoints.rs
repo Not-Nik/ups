@@ -40,14 +40,17 @@ pub async fn predictions(
 }
 
 pub async fn user_predictions(
-    token: Token,
+    auth: String,
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let name = verify_session(&mut conn_lock, &token.token)
-        .await
-        .map_err(|_| warp::reject::custom(InternalError))?;
+    let name = verify_session(
+        &mut conn_lock,
+        auth.strip_prefix("Bearer ").ok_or(BadRequest)?,
+    )
+    .await
+    .map_err(|_| warp::reject::custom(InternalError))?;
     let Some(name) = name else {
         Err(warp::reject::custom(AccessDenied))?
     };
@@ -61,20 +64,22 @@ pub async fn user_predictions(
 
 pub async fn submit(
     submission: Submission,
+    auth: Option<String>,
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     debug!("Submission: {:#?}", submission);
     let mut conn_lock = conn.lock().await;
 
-    let (name, token) = if let Some(token) = submission.token {
-        let name = verify_session(&mut conn_lock, &token)
+    let (name, token) = if let Some(auth) = auth {
+        let token = auth.strip_prefix("Bearer ").ok_or(BadRequest)?;
+        let name = verify_session(&mut conn_lock, token)
             .await
             .map_err(|_| warp::reject::custom(InternalError))?;
         let Some(name) = name else {
             Err(warp::reject::custom(AccessDenied))?
         };
 
-        (name, token)
+        (name, token.to_string())
     } else if let Some(name) = submission.name {
         if exists_account(&mut conn_lock, &name).await.unwrap_or(false) == true {
             Err(warp::reject::custom(AccountExists))?
@@ -104,14 +109,17 @@ pub async fn submit(
 }
 
 pub async fn delete(
-    token: Token,
+    auth: String,
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let name = verify_session(&mut conn_lock, &token.token)
-        .await
-        .map_err(|_| warp::reject::custom(InternalError))?;
+    let name = verify_session(
+        &mut conn_lock,
+        auth.strip_prefix("Bearer ").ok_or(BadRequest)?,
+    )
+    .await
+    .map_err(|_| warp::reject::custom(InternalError))?;
     let Some(name) = name else {
         Err(warp::reject::custom(AccessDenied))?
     };

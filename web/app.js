@@ -14,10 +14,10 @@ function escapeHtml(str) {
 const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 
 // Generic JSON fetch — throws on non-ok with parsed error code
-async function fetchJSON(url, { method = 'GET', body } = {}) {
-  const options = { method };
+async function fetchJSON(url, { method = 'GET', body, headers = {} } = {}) {
+  const options = { method, headers: { ...headers } };
   if (body !== undefined) {
-    options.headers = { 'Content-Type': 'application/json' };
+    options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
   }
   const res = await fetch(url, options);
@@ -230,10 +230,10 @@ const nameModal = {
 
 // API
 async function submitPredictions(predictions, name) {
-  const body = { predictions };
   const token = getToken();
-  if (token) body.token = token; else body.name = name;
-  const data = await fetchJSON('/api/submit', { method: 'POST', body });
+  const body = token ? { predictions } : { predictions, name };
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+  const data = await fetchJSON('/api/submit', { method: 'POST', body, headers });
   if (data.token) saveToken(data.token);
 }
 
@@ -281,7 +281,7 @@ async function loadPastPredictions() {
   const token = getToken();
   if (!token) return;
   try {
-    const predictions = await fetchJSON('/api/predictions/me', { method: 'POST', body: { token } });
+    const predictions = await fetchJSON('/api/predictions/me', { headers: { 'Authorization': `Bearer ${token}` } });
     predictions.forEach(p => {
       const index = state.matches.findIndex(m => m.id === p.id);
       if (index === -1) return;
