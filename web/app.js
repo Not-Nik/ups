@@ -448,6 +448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.removeItem('ups_token');
     hide($('logout-modal'));
     $('user-menu').classList.add('d-none');
+    location.reload();
   });
   document.addEventListener('click', () => $('user-dropdown').classList.add('d-none'));
 

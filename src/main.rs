@@ -12,7 +12,6 @@ mod structures;
 
 use crate::error::*;
 use crate::structures::ProxyQuery;
-use futures_util::TryFutureExt;
 use serde_derive::Serialize;
 use sqlx::{Connection, SqliteConnection};
 use std::convert::Infallible;
