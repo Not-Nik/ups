@@ -46,3 +46,8 @@ pub struct Submission {
 pub struct Token {
     pub token: String,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct ProxyQuery {
+    pub url: String,
+}

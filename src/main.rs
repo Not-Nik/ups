@@ -11,6 +11,7 @@ mod predictions;
 mod structures;
 
 use crate::error::*;
+use crate::structures::ProxyQuery;
 use serde_derive::Serialize;
 use sqlx::{Connection, SqliteConnection};
 use std::convert::Infallible;
@@ -87,11 +88,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::delete);
 
+    let proxy = warp::path!("api" / "proxy")
+        .and(warp::query::<ProxyQuery>())
+        .and_then(endpoints::proxy);
+
     let get_routes = warp::get().and(
         me.or(matches)
             .or(predictions)
             .or(user_predictions)
-            .or(warp::fs::dir("web")),
+            .or(warp::fs::dir("web"))
+            .or(proxy),
     );
     let post_routes = warp::post().and(submit.or(delete));
 

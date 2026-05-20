@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     toHide.forEach(el => { el.style.display = 'none'; });
     try {
       const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
-      const canvas = await html2canvas($('grid'), { backgroundColor: bg, scale: window.devicePixelRatio });
+      const canvas = await html2canvas($('grid'), { backgroundColor: bg, scale: window.devicePixelRatio, proxy: '/api/proxy', useCORS: false });
       const pad = 16 * window.devicePixelRatio;
       const padded = document.createElement('canvas');
       padded.width = canvas.width + pad * 2;

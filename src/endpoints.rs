@@ -161,3 +161,24 @@ pub async fn delete(
 
     Ok(warp::reply::reply())
 }
+
+pub async fn proxy(query: ProxyQuery) -> Result<impl warp::Reply, warp::Rejection> {
+    if !query
+        .url
+        .starts_with("https://play.toornament.com/media/file")
+    {
+        return Err(warp::reject::custom(AccessDenied))?;
+    }
+
+    let response = reqwest::get(query.url)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    let status = response.status();
+    let body = response.bytes().await.map_err(|_| warp::reject::reject())?;
+
+    Ok(warp::reply::with_status(
+        warp::reply::Response::new(body.into()),
+        status,
+    ))
+}
