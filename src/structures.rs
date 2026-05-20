@@ -47,6 +47,11 @@ pub struct Token {
     pub token: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Password {
+    pub password: String,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ProxyQuery {
     pub url: String,

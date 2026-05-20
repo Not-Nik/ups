@@ -12,6 +12,7 @@ mod structures;
 
 use crate::error::*;
 use crate::structures::ProxyQuery;
+use futures_util::TryFutureExt;
 use serde_derive::Serialize;
 use sqlx::{Connection, SqliteConnection};
 use std::convert::Infallible;
@@ -88,6 +89,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::delete);
 
+    let password = warp::path!("api" / "password")
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and(conn.clone())
+        .and_then(endpoints::password);
+
     let proxy = warp::path!("api" / "proxy")
         .and(warp::query::<ProxyQuery>())
         .and_then(endpoints::proxy);
@@ -99,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .or(warp::fs::dir("web"))
             .or(proxy),
     );
-    let post_routes = warp::post().and(submit.or(delete));
+    let post_routes = warp::post().and(submit.or(delete).or(password));
 
     let https_server = warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()

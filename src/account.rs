@@ -90,3 +90,19 @@ pub async fn verify_session(
 
     Ok(res.try_get("Name")?)
 }
+
+pub async fn set_password(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    name: &String,
+    password: &String,
+) -> sqlx::Result<()> {
+    let password_hash = Sha256::digest(format!("{name}{password}"));
+    let hash: String = password_hash.iter().map(|b| format!("{:02X}", b)).collect();
+
+    sqlx::query("UPDATE users SET Password = ? WHERE Name = ?")
+        .bind(hash)
+        .bind(name)
+        .execute(conn.deref_mut())
+        .await?;
+    Ok(())
+}

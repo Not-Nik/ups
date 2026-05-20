@@ -4,7 +4,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::account::{create_account, delete_account, exists_account, verify_session};
+use crate::account::{
+    create_account, delete_account, exists_account, set_password, verify_session,
+};
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::structures::*;
 
@@ -156,6 +158,30 @@ pub async fn delete(
     };
 
     delete_account(&mut conn_lock, &name)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::reply())
+}
+
+pub async fn password(
+    auth: String,
+    password: Password,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let name = verify_session(
+        &mut conn_lock,
+        auth.strip_prefix("Bearer ").ok_or(BadRequest)?,
+    )
+    .await
+    .map_err(|_| warp::reject::custom(InternalError))?;
+    let Some(name) = name else {
+        Err(warp::reject::custom(AccessDenied))?
+    };
+
+    set_password(&mut conn_lock, &name, &password.password)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 

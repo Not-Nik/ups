@@ -204,6 +204,13 @@ const nameModal = {
       this._resolve = resolve;
       const input = $('name-input');
       const error = $('modal-error');
+      $('modal-title').textContent = 'Who are you?';
+      $('modal-subtitle').textContent = 'Enter a name to save your prediction.';
+      input.disabled = false;
+      $('password-input').classList.add('d-none');
+      $('modal-actions-1').classList.remove('d-none');
+      $('modal-actions-2').classList.add('d-none');
+      $('modal-cookie').classList.remove('d-none');
       input.value = '';
       error.textContent = errorMsg ?? '';
       error.classList.toggle('d-none', !errorMsg);
@@ -214,6 +221,25 @@ const nameModal = {
         input.classList.add('shake');
       }
       input.focus();
+    });
+  },
+
+  promptPassword(name) {
+    return new Promise(resolve => {
+      this._resolve = resolve;
+      $('modal-title').textContent = 'Set a password?';
+      $('modal-subtitle').textContent = 'Optionally protect your account with a password.';
+      $('modal-error').classList.add('d-none');
+      $('name-input').value = name;
+      $('name-input').disabled = true;
+      $('password-input').value = '';
+      $('password-input').classList.remove('d-none');
+      $('modal-actions-1').classList.add('d-none');
+      $('modal-actions-2').classList.remove('d-none');
+      $('password-submit').disabled = false;
+      $('password-skip').disabled = false;
+      $('modal-cookie').classList.add('d-none');
+      $('password-input').focus();
     });
   },
 
@@ -235,6 +261,7 @@ async function submitPredictions(predictions, name) {
   const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
   const data = await fetchJSON('/api/submit', { method: 'POST', body, headers });
   if (data.token) { saveToken(data.token); loadCurrentUser(); }
+  return !!data.token;
 }
 
 // Core submission
@@ -260,7 +287,8 @@ async function doSubmit(indices) {
 
   while (true) {
     try {
-      await submitPredictions(predictions, name);
+      const isNew = await submitPredictions(predictions, name);
+      if (isNew) await nameModal.promptPassword(name);
       nameModal.close(null);
       indices.forEach(markSubmitted);
       return;
@@ -372,6 +400,40 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (name) nameModal.resolve(name);
     }
   });
+  $('password-skip').addEventListener('click', () => nameModal.resolve(null));
+
+  const shakePassword = () => {
+    $('password-input').classList.remove('shake');
+    void $('password-input').offsetWidth;
+    $('password-input').classList.add('shake');
+  };
+
+  const submitPassword = async () => {
+    const password = $('password-input').value;
+    if (!password) { shakePassword(); return; }
+    $('password-submit').disabled = true;
+    $('password-skip').disabled = true;
+    try {
+      const res = await fetch('/api/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error();
+      nameModal.resolve(null);
+    } catch (error) {
+  console.error(error);
+      $('password-submit').disabled = false;
+      $('password-skip').disabled = false;
+      const err = $('modal-error');
+      err.textContent = 'Failed to set password. Please try again.';
+      err.classList.remove('d-none');
+      shakePassword();
+    }
+  };
+
+  $('password-submit').addEventListener('click', submitPassword);
+  $('password-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPassword(); });
 
   $('user-btn').addEventListener('click', e => {
     e.stopPropagation();
