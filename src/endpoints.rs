@@ -8,7 +8,10 @@ use crate::account::{create_account, delete_account, exists_account, verify_sess
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::structures::*;
 
-use crate::predictions::{get_matches, get_predictions, get_user_predictions, submit_prediction};
+use crate::predictions::{
+    get_matches, get_predictions, get_user_match_predictions, get_user_predictions,
+    submit_prediction,
+};
 use log::debug;
 use sqlx::SqliteConnection;
 use std::sync::Arc;
@@ -94,6 +97,15 @@ pub async fn submit(
     };
 
     for pred in submission.predictions {
+        if get_user_match_predictions(&mut conn_lock, &name, pred.id as u32)
+            .await
+            .map_err(|_| warp::reject::custom(InternalError))?
+            .len()
+            > 0
+        {
+            continue;
+        }
+
         submit_prediction(
             &mut conn_lock,
             &name,

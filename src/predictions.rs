@@ -95,6 +95,35 @@ pub async fn get_user_predictions(
     Ok(predictions)
 }
 
+pub async fn get_user_match_predictions(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    name: &String,
+    id: u32,
+) -> sqlx::Result<Vec<Prediction>> {
+    let mut pred_query =
+        sqlx::query("SELECT ScoreA, ScoreB FROM predictions WHERE Name = ? AND MatchID = ?")
+            .bind(name)
+            .bind(id)
+            .fetch(conn.deref_mut());
+
+    let mut predictions = Vec::new();
+
+    while let Some(row) = pred_query.try_next().await? {
+        // map the row into a user-defined domain type
+        let score_a: u64 = row.try_get("ScoreA")?;
+        let score_b: u64 = row.try_get("ScoreB")?;
+
+        predictions.push(Prediction {
+            name: name.clone(),
+            id: id as u64,
+            score_a,
+            score_b,
+        });
+    }
+
+    Ok(predictions)
+}
+
 pub async fn submit_prediction(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
