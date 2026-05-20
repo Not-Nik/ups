@@ -218,3 +218,32 @@
 .shake {
   animation: shake 0.4s ease;
 }
+
+.user-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-secondary-color);
+  border-radius: 0.25rem;
+  min-width: max-content;
+  z-index: 1001;
+}
+
+.user-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--bs-secondary-color);
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+}
+
+.user-dropdown-item:hover {
+  color: var(--bs-body-color);
+  background: rgba(128, 128, 128, 0.1);
+}

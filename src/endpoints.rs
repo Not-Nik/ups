@@ -17,6 +17,25 @@ use sqlx::SqliteConnection;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+pub async fn me(
+    auth: String,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let name = verify_session(
+        &mut conn_lock,
+        auth.strip_prefix("Bearer ").ok_or(BadRequest)?,
+    )
+    .await
+    .map_err(|_| warp::reject::custom(InternalError))?;
+    let Some(name) = name else {
+        Err(warp::reject::custom(AccessDenied))?
+    };
+
+    Ok(warp::reply::json(&User { name }))
+}
+
 pub async fn matches(
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {

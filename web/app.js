@@ -234,7 +234,7 @@ async function submitPredictions(predictions, name) {
   const body = token ? { predictions } : { predictions, name };
   const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
   const data = await fetchJSON('/api/submit', { method: 'POST', body, headers });
-  if (data.token) saveToken(data.token);
+  if (data.token) { saveToken(data.token); loadCurrentUser(); }
 }
 
 // Core submission
@@ -297,6 +297,18 @@ async function loadPastPredictions() {
   }
 }
 
+async function loadCurrentUser() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const data = await fetchJSON('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
+    $('user-name').textContent = data.name;
+    $('user-menu').classList.remove('d-none');
+  } catch {
+    // non-critical — fail silently
+  }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
   $('save-image-btn').addEventListener('click', async () => {
@@ -348,6 +360,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  $('user-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    $('user-dropdown').classList.toggle('d-none');
+  });
+  $('logout-btn').addEventListener('click', () => {
+    $('user-dropdown').classList.add('d-none');
+    show($('logout-modal'));
+  });
+  $('logout-cancel').addEventListener('click', () => hide($('logout-modal')));
+  $('logout-confirm').addEventListener('click', () => {
+    localStorage.removeItem('ups_token');
+    hide($('logout-modal'));
+    $('user-menu').classList.add('d-none');
+  });
+  document.addEventListener('click', () => $('user-dropdown').classList.add('d-none'));
+
   try {
     const matches = await fetchJSON('/api/matches');
     renderGrid(matches);
@@ -355,4 +383,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch {
     $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load matches. Please refresh.</p>';
   }
+  loadCurrentUser();
 });

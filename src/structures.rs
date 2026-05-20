@@ -6,6 +6,11 @@
 
 use serde_derive::{Deserialize, Serialize};
 
+#[derive(Serialize)]
+pub struct User {
+    pub name: String,
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Match {
     pub id: u64,

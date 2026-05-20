@@ -38,6 +38,12 @@
     <h1 class="h5 fw-bold mb-0"><a href="/" class="text-decoration-none text-body">Prediction für die Uniliga
         Overwatch</a> <span class="beta-badge">BETA</span></h1>
     <div class="d-flex align-items-center gap-2">
+        <div id="user-menu" class="d-none position-relative">
+            <button id="user-btn" class="btn btn-sm btn-outline-secondary"><span id="user-name"></span></button>
+            <div id="user-dropdown" class="user-dropdown d-none">
+                <button id="logout-btn" class="user-dropdown-item">Log out</button>
+            </div>
+        </div>
         <a href="https://github.com/Not-Nik/ups" target="_blank" rel="noopener" class="text-secondary lh-1"
            aria-label="GitHub">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" fill="currentColor"
@@ -77,6 +83,16 @@
             to <a href="privacy.html"
                   target="_blank"
                   class="text-secondary">store cookies</a></p>
+    </div>
+</div>
+<div id="logout-modal" class="nm-overlay d-none">
+    <div class="nm-box">
+        <h2 class="h6 fw-bold mb-1">Log out?</h2>
+        <p class="text-secondary small mb-3">There is no way to log back in — your account token will be permanently removed from this device.</p>
+        <div class="d-flex gap-2 justify-content-end">
+            <button id="logout-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+            <button id="logout-confirm" class="btn btn-danger btn-sm">Log out</button>
+        </div>
     </div>
 </div>
 <script src="common.js"></script>

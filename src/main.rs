@@ -58,6 +58,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Arc::new(Mutex::new(SqliteConnection::connect("db.sqlite3").await?));
     let conn = warp::any().map(move || db.clone());
 
+    let me = warp::path!("api" / "me")
+        .and(warp::header("Authorization"))
+        .and(conn.clone())
+        .and_then(endpoints::me);
+
     let matches = warp::path!("api" / "matches")
         .and(conn.clone())
         .and_then(endpoints::matches);
@@ -83,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(endpoints::delete);
 
     let get_routes = warp::get().and(
-        matches
+        me.or(matches)
             .or(predictions)
             .or(user_predictions)
             .or(warp::fs::dir("web")),
