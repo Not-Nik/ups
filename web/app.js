@@ -338,6 +338,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, padded.width, padded.height);
       ctx.drawImage(canvas, pad, pad);
+      try {
+        const wm = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = '/pulow.png';
+        });
+        const wmH = 128 * window.devicePixelRatio;
+        const wmW = (wm.naturalWidth / wm.naturalHeight) * wmH;
+        ctx.globalAlpha = 0.75;
+        ctx.drawImage(wm, padded.width - wmW, padded.height - wmH, wmW, wmH);
+        ctx.globalAlpha = 1;
+      } catch { /* watermark is non-critical */ }
       Object.assign(document.createElement('a'), {
         download: 'predictions.png',
         href: padded.toDataURL('image/png'),
