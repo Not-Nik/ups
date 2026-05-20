@@ -345,10 +345,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           img.onerror = reject;
           img.src = '/pulow.png';
         });
-        const wmH = 128 * window.devicePixelRatio;
+        const wmH = 32 * window.devicePixelRatio;
         const wmW = (wm.naturalWidth / wm.naturalHeight) * wmH;
-        ctx.globalAlpha = 0.75;
-        ctx.drawImage(wm, padded.width - wmW, padded.height - wmH, wmW, wmH);
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(wm, padded.width - wmW - pad / 2, padded.height - wmH - pad / 2, wmW, wmH);
         ctx.globalAlpha = 1;
       } catch { /* watermark is non-critical */ }
       Object.assign(document.createElement('a'), {
