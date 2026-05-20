@@ -42,6 +42,8 @@ const saveToken = token => localStorage.setItem('ups_token', token);
 
 // Validation
 const isValidScore = value => /^\d+$/.test(value.trim());
+const predictionClass = (predicted, actual) =>
+  predicted > actual ? 'prediction-high' : predicted < actual ? 'prediction-low' : 'prediction-exact';
 
 // Submit-all button visibility
 function updateSubmitAll() {
@@ -100,17 +102,23 @@ function createCard(match, index) {
   card.className = 'card';
   card.dataset.index = index;
 
+  const hasFinal = match.score_a != null && match.score_b != null;
+  const clrA = hasFinal ? (match.score_a > match.score_b ? 'text-success' : match.score_a < match.score_b ? 'text-danger' : '') : '';
+  const clrB = hasFinal ? (match.score_b > match.score_a ? 'text-success' : match.score_b < match.score_a ? 'text-danger' : '') : '';
+
   card.innerHTML = `
     <div class="card-body">
       <div class="team-row">
         ${match.logo_a ? `<img src="${escapeAttr(match.logo_a)}" class="team-logo" alt="">` : ''}
-        <span class="team-name fw-semibold small">${escapeHtml(match.team_a)}</span>
+        <span class="team-name fw-semibold small ${clrA}">${escapeHtml(match.team_a)}</span>
         <input type="text" class="form-control score-input" data-side="0" inputmode="numeric" placeholder="0">
+        ${match.score_a != null ? `<span class="actual-score small ${clrA || 'text-secondary'}">${match.score_a}</span>` : ''}
       </div>
       <div class="team-row mt-1">
         ${match.logo_b ? `<img src="${escapeAttr(match.logo_b)}" class="team-logo" alt="">` : ''}
-        <span class="team-name fw-semibold small">${escapeHtml(match.team_b)}</span>
+        <span class="team-name fw-semibold small ${clrB}">${escapeHtml(match.team_b)}</span>
         <input type="text" class="form-control score-input" data-side="1" inputmode="numeric" placeholder="0">
+        ${match.score_b != null ? `<span class="actual-score small ${clrB || 'text-secondary'}">${match.score_b}</span>` : ''}
       </div>
       <button class="toggle-btn" aria-label="Show predictions"></button>
       <div class="predictions-panel"><div class="predictions-inner"></div></div>
@@ -313,16 +321,40 @@ async function loadPastPredictions() {
     predictions.forEach(p => {
       const index = state.matches.findIndex(m => m.id === p.id);
       if (index === -1) return;
+      const match = state.matches[index];
       const card = document.querySelector(`.card[data-index="${index}"]`);
       if (!card) return;
       const [a, b] = card.querySelectorAll('.score-input');
       a.value = p.score_a;
       b.value = p.score_b;
+      if (match.score_a != null && match.score_b != null) {
+        const clsA = predictionClass(p.score_a, match.score_a);
+        const clsB = predictionClass(p.score_b, match.score_b);
+        const sign = cls => cls === 'prediction-high' ? '>' : cls === 'prediction-low' ? '<' : '=';
+        const mkSign = cls => Object.assign(document.createElement('span'), {
+          className: `pred-sign small ${cls}`,
+          textContent: sign(cls),
+        });
+        a.classList.add(clsA);
+        b.classList.add(clsB);
+        a.insertAdjacentElement('afterend', mkSign(clsA));
+        b.insertAdjacentElement('afterend', mkSign(clsB));
+      }
       markSubmitted(index);
     });
   } catch {
     // past predictions are non-critical — fail silently
   }
+}
+
+function applyFinalScoreStates() {
+  state.matches.forEach((match, index) => {
+    if (match.score_a == null || match.score_b == null) return;
+    if (state.submitted.has(index)) return;
+    const card = document.querySelector(`.card[data-index="${index}"]`);
+    if (!card) return;
+    card.querySelectorAll('.score-input').forEach(el => el.remove());
+  });
 }
 
 async function loadCurrentUser() {
@@ -456,6 +488,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const matches = await fetchJSON('/api/matches');
     renderGrid(matches);
     await loadPastPredictions();
+    applyFinalScoreStates();
   } catch {
     $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load matches. Please refresh.</p>';
   }

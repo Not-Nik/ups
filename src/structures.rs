@@ -19,6 +19,8 @@ pub struct Match {
     pub logo_a: String,
     pub logo_b: String,
     pub section: String,
+    pub score_a: Option<u64>,
+    pub score_b: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

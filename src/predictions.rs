@@ -11,9 +11,10 @@ use std::ops::DerefMut;
 use tokio::sync::MutexGuard;
 
 pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::Result<Vec<Match>> {
-    let mut match_query =
-        sqlx::query("SELECT MatchID, TeamA, TeamB, LogoA, LogoB, Section FROM matches")
-            .fetch(conn.deref_mut());
+    let mut match_query = sqlx::query(
+        "SELECT MatchID, TeamA, TeamB, LogoA, LogoB, Section, ScoreA, ScoreB FROM matches",
+    )
+    .fetch(conn.deref_mut());
 
     let mut matches = Vec::new();
 
@@ -25,6 +26,8 @@ pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::R
         let logo_a: String = row.try_get("LogoA")?;
         let logo_b: String = row.try_get("LogoB")?;
         let section: String = row.try_get("Section")?;
+        let score_a: Option<u64> = row.try_get("ScoreA")?;
+        let score_b: Option<u64> = row.try_get("ScoreB")?;
 
         matches.push(Match {
             id,
@@ -33,6 +36,8 @@ pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::R
             logo_a,
             logo_b,
             section,
+            score_a,
+            score_b,
         });
     }
 

@@ -25,5 +25,7 @@ CREATE TABLE matches
     TeamB   TEXT NOT NULL,
     LogoA   TEXT NOT NULL,
     LogoB   TEXT NOT NULL,
-    Section TEXT NOT NULL
+    Section TEXT NOT NULL,
+    ScoreA  int,
+    ScoreB  int,
 );
