@@ -6,7 +6,6 @@
 
 use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
-use log::debug;
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqliteConnection};
 use std::ops::DerefMut;
@@ -53,13 +52,17 @@ pub async fn create_session(
 pub async fn create_account(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
-) -> sqlx::Result<String> {
+) -> sqlx::Result<Option<String>> {
+    if name.len() > 128 {
+        return Ok(None);
+    }
+
     sqlx::query("INSERT INTO users (Name) VALUES (?)")
         .bind(name)
         .execute(conn.deref_mut())
         .await?;
 
-    create_session(conn, name).await
+    Ok(Some(create_session(conn, name).await?))
 }
 
 pub async fn delete_account(

@@ -108,9 +108,12 @@ pub async fn submit(
         if exists_account(&mut conn_lock, &name).await.unwrap_or(false) == true {
             Err(warp::reject::custom(AccountExists))?
         }
-        let token = create_account(&mut conn_lock, &name)
+        let Some(token) = create_account(&mut conn_lock, &name)
             .await
-            .map_err(|_| warp::reject::custom(InternalError))?;
+            .map_err(|_| warp::reject::custom(InternalError))?
+        else {
+            return Err(warp::reject::custom(BadRequest))?;
+        };
 
         (name, token)
     } else {
