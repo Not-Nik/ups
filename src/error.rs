@@ -19,3 +19,7 @@ impl warp::reject::Reject for AccessDenied {}
 #[derive(Debug)]
 pub struct AccountExists;
 impl warp::reject::Reject for AccountExists {}
+
+#[derive(Debug)]
+pub struct RateLimited;
+impl warp::reject::Reject for RateLimited {}

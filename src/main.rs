@@ -12,9 +12,14 @@ mod structures;
 
 use crate::error::*;
 use crate::structures::ProxyQuery;
+use governor::clock::DefaultClock;
+use governor::state::keyed::DefaultKeyedStateStore;
+use governor::{Quota, RateLimiter};
+use nonzero_ext::nonzero;
 use serde_derive::Serialize;
 use sqlx::{Connection, Executor, SqliteConnection};
 use std::convert::Infallible;
+use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
@@ -40,6 +45,9 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     } else if let Some(_) = err.find::<AccountExists>() {
         code = warp::http::StatusCode::UNAUTHORIZED;
         message = "AccountExists";
+    } else if err.find::<RateLimited>().is_some() {
+        code = warp::http::StatusCode::TOO_MANY_REQUESTS;
+        message = "RateLimited";
     } else {
         code = warp::http::StatusCode::INTERNAL_SERVER_ERROR;
         message = "InternalError";
@@ -50,6 +58,28 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     });
 
     Ok(warp::reply::with_status(json, code))
+}
+
+// Keyed by client IP. Use NotKeyed if you want a single global bucket.
+type IpRateLimiter = RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>;
+
+fn with_rate_limit(
+    limiter: Arc<IpRateLimiter>,
+) -> impl Filter<Extract = (), Error = Rejection> + Clone {
+    warp::addr::remote()
+        .and_then(move |addr: Option<std::net::SocketAddr>| {
+            let limiter = limiter.clone();
+            async move {
+                let ip = addr
+                    .map(|a| a.ip())
+                    .ok_or_else(|| warp::reject::custom(error::InternalError))?;
+                match limiter.check_key(&ip) {
+                    Ok(_) => Ok(()),
+                    Err(_) => Err(warp::reject::custom(error::RateLimited)),
+                }
+            }
+        })
+        .untuple_one()
 }
 
 #[tokio::main]
@@ -104,14 +134,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::query::<ProxyQuery>())
         .and_then(endpoints::proxy);
 
-    let get_routes = warp::get().and(
+    // e.g. 30 requests per minute per IP, with bursts up to 10
+    let quota = Quota::per_minute(nonzero!(30u32)).allow_burst(nonzero!(10u32));
+    let limiter: Arc<IpRateLimiter> = Arc::new(RateLimiter::keyed(quota));
+    let rate_limit = warp::any().and(with_rate_limit(limiter.clone()));
+
+    let get_routes = warp::get().and(rate_limit.clone()).and(
         me.or(matches)
             .or(predictions)
             .or(user_predictions)
             .or(warp::fs::dir("web"))
             .or(proxy),
     );
-    let post_routes = warp::post().and(submit.or(login).or(delete).or(password));
+    let post_routes = warp::post()
+        .and(rate_limit.clone())
+        .and(submit.or(login).or(delete).or(password));
 
     let https_server = warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()
