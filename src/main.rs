@@ -155,17 +155,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let limiter: Arc<IpRateLimiter> = Arc::new(RateLimiter::keyed(quota));
     let rate_limit = warp::any().and(with_rate_limit(limiter.clone()));
 
-    let routes = rate_limit.and(
-        me.or(matches)
-            .or(predictions)
-            .or(user_predictions)
-            .or(proxy)
-            .or(submit)
-            .or(login)
-            .or(delete)
-            .or(password)
-            .or(warp::fs::dir("web")),
-    );
+    let routes = rate_limit
+        .and(
+            me.or(matches)
+                .or(predictions)
+                .or(user_predictions)
+                .or(submit)
+                .or(login)
+                .or(delete)
+                .or(password),
+        )
+        .or(proxy)
+        .or(warp::fs::dir("web"));
 
     let https_server = warp::serve(routes.recover(handle_rejection))
         .tls()
