@@ -10,7 +10,7 @@ UPCOMING_MATCHES = "statuses=pending&sort=scheduled_asc"
 
 class Match:
     def __init__(self, team_a, team_b, logo_a=None, logo_b=None,
-                 score_a=None, score_b=None, stage=None, group=None, round=None):
+                 score_a=None, score_b=None, stage=None, group=None, round=None, number=None):
         self.team_a = team_a
         self.team_b = team_b
         self.logo_a = logo_a
@@ -20,6 +20,7 @@ class Match:
         self.stage = stage
         self.group = group
         self.round = round
+        self.number = number
 
     def __str__(self):
         return str(self.__dict__)
@@ -64,7 +65,9 @@ def load_matches(url):
             score_a = match["opponents"][0]["score"]
             score_b = match["opponents"][1]["score"]
 
-            match = Match(team_a, team_b, logo_a, logo_b, score_a, score_b, stage, group, round)
+            number = match["number"]
+
+            match = Match(team_a, team_b, logo_a, logo_b, score_a, score_b, stage, group, round, number)
             matches.append(match)
         if len(data) < range_end - range_start:
             break
@@ -77,6 +80,7 @@ def main():
     past_matches = load_matches(MATCHES_URL + PAST_MATCHES)
     upcoming_matches = load_matches(MATCHES_URL + UPCOMING_MATCHES)
     matches = past_matches + upcoming_matches
+    matches.sort(key=lambda x: x.number)
 
     con = sqlite3.connect("db.sqlite3")
 

@@ -27,5 +27,5 @@ CREATE TABLE matches
     LogoB   TEXT NOT NULL,
     Section TEXT NOT NULL,
     ScoreA  int,
-    ScoreB  int,
+    ScoreB  int
 );
