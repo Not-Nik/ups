@@ -178,9 +178,10 @@
   margin-top: 0.25rem;
   width: 100%;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 0;
   transition: color 0.15s;
 }
 
@@ -188,10 +189,29 @@
 .toggle-btn::after {
   content: '';
   display: block;
-  width: 20px;
-  height: 1px;
+  width: 8px;
+  height: 1.5px;
   background: currentColor;
   border-radius: 1px;
+  transition: transform 0.2s;
+}
+
+.toggle-btn::before {
+  transform-origin: right center;
+  transform: translateY(3px) rotate(45deg);
+}
+
+.toggle-btn::after {
+  transform-origin: left center;
+  transform: translateY(3px) rotate(-45deg);
+}
+
+.toggle-btn.open::before {
+  transform: translateY(-3px) rotate(-45deg);
+}
+
+.toggle-btn.open::after {
+  transform: translateY(-3px) rotate(45deg);
 }
 
 .toggle-btn:hover,
