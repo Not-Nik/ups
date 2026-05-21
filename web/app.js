@@ -456,74 +456,88 @@ async function loadCurrentUser() {
     }
 }
 
+// Build the list of grid elements to hide before rendering the screenshot.
+// Skips tab-hidden elements (d-none), hides whole sections with no predictions,
+// and drops dividers that would end up leading the visible content.
+function collectImageHides() {
+    const toHide = [];
+    let sectionEls = [], hasSubmitted = false, anyKept = false;
+    const flush = () => {
+        if (!sectionEls.length) return;
+        if (hasSubmitted) {
+            if (!anyKept) {
+                while (sectionEls.length && sectionEls[0].classList.contains('section-divider')) {
+                    toHide.push(sectionEls.shift());
+                }
+            }
+            anyKept = true;
+        } else {
+            toHide.push(...sectionEls);
+        }
+        sectionEls = [];
+        hasSubmitted = false;
+    };
+    for (const el of $('grid').children) {
+        if (el.classList.contains('d-none')) continue;
+        if (el.classList.contains('section-divider')) {
+            flush();
+            sectionEls.push(el);
+        } else if (el.classList.contains('section-header')) {
+            sectionEls.push(el);
+        } else {
+            sectionEls.push(el);
+            const i = +el.dataset.index;
+            if (i in state.scores || state.submitted.has(i)) hasSubmitted = true;
+        }
+    }
+    flush();
+    return toHide;
+}
+
+async function saveImage() {
+    const toHide = collectImageHides();
+    toHide.forEach(el => { el.style.display = 'none'; });
+    try {
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
+        const canvas = await html2canvas($('grid'), {
+            backgroundColor: bg,
+            scale: window.devicePixelRatio,
+            proxy: '/api/proxy',
+            useCORS: false,
+        });
+        const pad = 16 * window.devicePixelRatio;
+        const padded = document.createElement('canvas');
+        padded.width = canvas.width + pad * 2;
+        padded.height = canvas.height + pad * 2;
+        const ctx = padded.getContext('2d');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, padded.width, padded.height);
+        ctx.drawImage(canvas, pad, pad);
+        try {
+            const wm = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = '/pulow.png';
+            });
+            const wmH = 32 * window.devicePixelRatio;
+            const wmW = (wm.naturalWidth / wm.naturalHeight) * wmH;
+            ctx.globalAlpha = 0.5;
+            ctx.drawImage(wm, padded.width - wmW - pad / 2, padded.height - wmH - pad / 2, wmW, wmH);
+            ctx.globalAlpha = 1;
+        } catch { /* watermark is non-critical */ }
+        Object.assign(document.createElement('a'), {
+            download: 'predictions.png',
+            href: padded.toDataURL('image/png'),
+        }).click();
+    } finally {
+        toHide.forEach(el => { el.style.display = ''; });
+    }
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', async () => {
-    $('save-image-btn').addEventListener('click', async () => {
-        // Collect elements belonging to sections with no submitted predictions
-        const toHide = [];
-        let sectionEls = [], hasSubmitted = false;
-        const flush = () => {
-            if (sectionEls.length && !hasSubmitted) toHide.push(...sectionEls);
-            sectionEls = [];
-            hasSubmitted = false;
-        };
-        for (const el of $('grid').children) {
-            if (el.classList.contains('section-divider')) {
-                flush();
-                sectionEls.push(el);
-            } else if (el.classList.contains('section-header')) {
-                sectionEls.push(el);
-            } else {
-                sectionEls.push(el);
-                const i = +el.dataset.index;
-                if (i in state.scores || state.submitted.has(i)) hasSubmitted = true;
-            }
-        }
-        flush();
-
-        toHide.forEach(el => {
-            el.style.display = 'none';
-        });
-        try {
-            const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
-            const canvas = await html2canvas($('grid'), {
-                backgroundColor: bg,
-                scale: window.devicePixelRatio,
-                proxy: '/api/proxy',
-                useCORS: false
-            });
-            const pad = 16 * window.devicePixelRatio;
-            const padded = document.createElement('canvas');
-            padded.width = canvas.width + pad * 2;
-            padded.height = canvas.height + pad * 2;
-            const ctx = padded.getContext('2d');
-            ctx.fillStyle = bg;
-            ctx.fillRect(0, 0, padded.width, padded.height);
-            ctx.drawImage(canvas, pad, pad);
-            try {
-                const wm = await new Promise((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => resolve(img);
-                    img.onerror = reject;
-                    img.src = '/pulow.png';
-                });
-                const wmH = 32 * window.devicePixelRatio;
-                const wmW = (wm.naturalWidth / wm.naturalHeight) * wmH;
-                ctx.globalAlpha = 0.5;
-                ctx.drawImage(wm, padded.width - wmW - pad / 2, padded.height - wmH - pad / 2, wmW, wmH);
-                ctx.globalAlpha = 1;
-            } catch { /* watermark is non-critical */
-            }
-            Object.assign(document.createElement('a'), {
-                download: 'predictions.png',
-                href: padded.toDataURL('image/png'),
-            }).click();
-        } finally {
-            toHide.forEach(el => {
-                el.style.display = '';
-            });
-        }
-    });
+    $('save-image-btn').addEventListener('click', saveImage);
 
     $('submit-all-btn').addEventListener('click', () => doSubmit(state.pendingIndices()));
     const shakeEl = el => {
