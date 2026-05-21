@@ -13,7 +13,7 @@ mod structures;
 use crate::error::*;
 use crate::structures::ProxyQuery;
 use serde_derive::Serialize;
-use sqlx::{Connection, SqliteConnection};
+use sqlx::{Connection, Executor, SqliteConnection};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -57,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
     let db = Arc::new(Mutex::new(SqliteConnection::connect("db.sqlite3").await?));
+    db.lock().await.execute("PRAGMA foreign_keys = ON;").await?;
     let conn = warp::any().map(move || db.clone());
 
     let me = warp::path!("api" / "me")

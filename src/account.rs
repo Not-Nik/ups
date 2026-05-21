@@ -66,17 +66,7 @@ pub async fn delete_account(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
 ) -> sqlx::Result<()> {
-    sqlx::query("DELETE FROM sessions WHERE Name = ?")
-        .bind(name)
-        .execute(conn.deref_mut())
-        .await?;
-
     sqlx::query("DELETE FROM users WHERE Name = ?")
-        .bind(name)
-        .execute(conn.deref_mut())
-        .await?;
-
-    sqlx::query("DELETE FROM predictions WHERE Name = ?")
         .bind(name)
         .execute(conn.deref_mut())
         .await?;

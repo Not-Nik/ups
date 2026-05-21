@@ -6,13 +6,13 @@ CREATE TABLE users
 
 CREATE TABLE sessions
 (
-    Name  TEXT NOT NULL,
+    Name  TEXT NOT NULL REFERENCES users (Name) ON DELETE CASCADE,
     Token TEXT PRIMARY KEY
 );
 
 CREATE TABLE predictions
 (
-    Name    TEXT NOT NULL,
+    Name    TEXT NOT NULL REFERENCES users (Name) ON DELETE CASCADE,
     MatchID int  NOT NULL,
     ScoreA  int  NOT NULL,
     ScoreB  int  NOT NULL
