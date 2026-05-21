@@ -33,7 +33,14 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     let code;
     let message;
 
-    if let Some(_) = err.find::<InternalError>() {
+    if err.is_not_found() {
+        code = warp::http::StatusCode::NOT_FOUND;
+        return Ok(warp::reply::with_status(
+            warp::reply::html(std::fs::read_to_string("web/404.html").unwrap_or("404".into()))
+                .into_response(),
+            code,
+        ));
+    } else if let Some(_) = err.find::<InternalError>() {
         code = warp::http::StatusCode::INTERNAL_SERVER_ERROR;
         message = "InternalServerError";
     } else if let Some(_) = err.find::<BadRequest>() {
@@ -57,7 +64,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
         err: message.into(),
     });
 
-    Ok(warp::reply::with_status(json, code))
+    Ok(warp::reply::with_status(json.into_response(), code))
 }
 
 // Keyed by client IP. Use NotKeyed if you want a single global bucket.
@@ -91,46 +98,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = warp::any().map(move || db.clone());
 
     let me = warp::path!("api" / "me")
+        .and(warp::get())
         .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::me);
 
     let matches = warp::path!("api" / "matches")
+        .and(warp::get())
         .and(conn.clone())
         .and_then(endpoints::matches);
 
     let predictions = warp::path!("api" / "predictions" / u32)
+        .and(warp::get())
         .and(conn.clone())
         .and_then(endpoints::predictions);
 
     let user_predictions = warp::path!("api" / "predictions" / "me")
+        .and(warp::get())
         .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::user_predictions);
 
     let submit = warp::path!("api" / "submit")
+        .and(warp::post())
         .and(warp::body::json())
         .and(warp::header::optional("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::submit);
 
     let login = warp::path!("api" / "login")
+        .and(warp::post())
         .and(warp::body::json())
         .and(conn.clone())
         .and_then(endpoints::login);
 
     let delete = warp::path!("api" / "delete")
+        .and(warp::post())
         .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::delete);
 
     let password = warp::path!("api" / "password")
+        .and(warp::post())
         .and(warp::header("Authorization"))
         .and(warp::body::json())
         .and(conn.clone())
         .and_then(endpoints::password);
 
     let proxy = warp::path!("api" / "proxy")
+        .and(warp::get())
         .and(warp::query::<ProxyQuery>())
         .and_then(endpoints::proxy);
 
@@ -139,18 +155,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let limiter: Arc<IpRateLimiter> = Arc::new(RateLimiter::keyed(quota));
     let rate_limit = warp::any().and(with_rate_limit(limiter.clone()));
 
-    let get_routes = warp::get().and(rate_limit.clone()).and(
+    let routes = rate_limit.and(
         me.or(matches)
             .or(predictions)
             .or(user_predictions)
-            .or(warp::fs::dir("web"))
-            .or(proxy),
+            .or(proxy)
+            .or(submit)
+            .or(login)
+            .or(delete)
+            .or(password)
+            .or(warp::fs::dir("web")),
     );
-    let post_routes = warp::post()
-        .and(rate_limit.clone())
-        .and(submit.or(login).or(delete).or(password));
 
-    let https_server = warp::serve(get_routes.or(post_routes).recover(handle_rejection))
+    let https_server = warp::serve(routes.recover(handle_rejection))
         .tls()
         .cert_path("certs/fullchain.pem")
         .key_path("certs/privkey.pem")
