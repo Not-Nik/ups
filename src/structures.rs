@@ -50,6 +50,12 @@ pub struct Token {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct Login {
+    pub name: String,
+    pub password: String,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct Password {
     pub password: String,
 }

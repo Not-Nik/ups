@@ -260,14 +260,17 @@ function markSubmitted(index) {
 // Name modal
 const nameModal = {
   _resolve: null,
+  _loginMode: false,
 
   prompt(errorMsg = null) {
+    this._loginMode = false;
     return new Promise(resolve => {
       this._resolve = resolve;
       const input = $('name-input');
       const error = $('modal-error');
       $('modal-title').textContent = 'Who are you?';
       $('modal-subtitle').textContent = 'Enter a name to save your prediction.';
+      $('modal-submit').textContent = 'Submit';
       input.disabled = false;
       $('password-input').classList.add('d-none');
       $('modal-actions-1').classList.remove('d-none');
@@ -283,6 +286,28 @@ const nameModal = {
         input.classList.add('shake');
       }
       input.focus();
+    });
+  },
+
+  promptLogin() {
+    this._loginMode = true;
+    return new Promise(resolve => {
+      this._resolve = resolve;
+      $('modal-title').textContent = 'Log in';
+      $('modal-subtitle').textContent = 'Enter your name and password.';
+      $('modal-submit').textContent = 'Log in';
+      $('modal-error').classList.add('d-none');
+      $('modal-submit').disabled = false;
+      $('modal-cancel').disabled = false;
+      $('name-input').value = '';
+      $('name-input').disabled = false;
+      $('password-input').value = '';
+      $('password-input').classList.remove('d-none');
+      $('modal-actions-1').classList.remove('d-none');
+      $('modal-actions-2').classList.add('d-none');
+      $('modal-cookie').classList.add('d-none');
+      show($('name-modal'));
+      $('name-input').focus();
     });
   },
 
@@ -311,6 +336,8 @@ const nameModal = {
   },
 
   close(result) {
+    this._loginMode = false;
+    $('modal-submit').textContent = 'Submit';
     hide($('name-modal'));
     this.resolve(result);
   },
@@ -417,7 +444,8 @@ async function loadCurrentUser() {
   try {
     const data = await fetchJSON('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
     $('user-name').textContent = data.name;
-    $('user-menu').classList.remove('d-none');
+    show($('user-menu'));
+    hide($('login-btn'));
   } catch {
     // non-critical — fail silently
   }
@@ -475,28 +503,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   $('submit-all-btn').addEventListener('click', () => doSubmit(state.pendingIndices()));
+  const shakeEl = el => { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); };
+
+  const submitLogin = async () => {
+    const name = $('name-input').value.trim();
+    const password = $('password-input').value;
+    if (!name) { shakeEl($('name-input')); return; }
+    $('modal-submit').disabled = true;
+    $('modal-cancel').disabled = true;
+    try {
+      const data = await fetchJSON('/api/login', { method: 'POST', body: { name, password } });
+      saveToken(data.token);
+      nameModal.close(null);
+      loadCurrentUser();
+    } catch {
+      $('modal-submit').disabled = false;
+      $('modal-cancel').disabled = false;
+      const err = $('modal-error');
+      err.textContent = 'Invalid name or password.';
+      err.classList.remove('d-none');
+      shakeEl($('name-input'));
+    }
+  };
+
   $('modal-submit').addEventListener('click', () => {
+    if (nameModal._loginMode) { submitLogin(); return; }
     const name = $('name-input').value.trim();
     if (name) nameModal.resolve(name);
   });
   $('modal-cancel').addEventListener('click', () => nameModal.close(null));
   $('name-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const name = $('name-input').value.trim();
-      if (name) nameModal.resolve(name);
-    }
+    if (e.key !== 'Enter') return;
+    if (nameModal._loginMode) { $('password-input').focus(); return; }
+    const name = $('name-input').value.trim();
+    if (name) nameModal.resolve(name);
   });
   $('password-skip').addEventListener('click', () => nameModal.resolve(null));
 
-  const shakePassword = () => {
-    $('password-input').classList.remove('shake');
-    void $('password-input').offsetWidth;
-    $('password-input').classList.add('shake');
-  };
-
   const submitPassword = async () => {
     const password = $('password-input').value;
-    if (!password) { shakePassword(); return; }
+    if (!password) { shakeEl($('password-input')); return; }
     $('password-submit').disabled = true;
     $('password-skip').disabled = true;
     try {
@@ -507,19 +553,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       if (!res.ok) throw new Error();
       nameModal.resolve(null);
-    } catch (error) {
-  console.error(error);
+    } catch {
       $('password-submit').disabled = false;
       $('password-skip').disabled = false;
       const err = $('modal-error');
       err.textContent = 'Failed to set password. Please try again.';
       err.classList.remove('d-none');
-      shakePassword();
+      shakeEl($('password-input'));
     }
   };
 
   $('password-submit').addEventListener('click', submitPassword);
-  $('password-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPassword(); });
+  $('password-input').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (nameModal._loginMode) submitLogin();
+    else submitPassword();
+  });
 
   $('user-btn').addEventListener('click', e => {
     e.stopPropagation();
@@ -538,6 +587,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.addEventListener('click', () => $('user-dropdown').classList.add('d-none'));
 
+  $('login-btn').addEventListener('click', () => nameModal.promptLogin());
+
   try {
     const matches = await fetchJSON('/api/matches');
     renderGrid(matches);
@@ -546,5 +597,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch {
     $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load matches. Please refresh.</p>';
   }
+  if (!getToken()) show($('login-btn'));
   loadCurrentUser();
 });

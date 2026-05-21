@@ -18,6 +18,11 @@ pub fn create_token(name: &String) -> String {
     token.iter().map(|b| format!("{:02X}", b)).collect()
 }
 
+pub fn hash_password(name: &String, password: &String) -> String {
+    let password_hash = Sha256::digest(format!("{name}{password}"));
+    password_hash.iter().map(|b| format!("{:02X}", b)).collect()
+}
+
 pub async fn exists_account(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
@@ -30,6 +35,21 @@ pub async fn exists_account(
     res.try_get(0)
 }
 
+pub async fn create_session(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    name: &String,
+) -> sqlx::Result<String> {
+    let token = create_token(name);
+
+    sqlx::query("INSERT INTO sessions (Name, Token) VALUES (?, ?)")
+        .bind(name)
+        .bind(token.clone())
+        .execute(conn.deref_mut())
+        .await?;
+
+    Ok(token)
+}
+
 pub async fn create_account(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
@@ -39,19 +59,7 @@ pub async fn create_account(
         .execute(conn.deref_mut())
         .await?;
 
-    debug!("Created account: {name}");
-
-    let token = create_token(name);
-
-    sqlx::query("INSERT INTO sessions (Name, Token) VALUES (?, ?)")
-        .bind(name)
-        .bind(token.clone())
-        .execute(conn.deref_mut())
-        .await?;
-
-    debug!("Created session: {token}");
-
-    Ok(token)
+    create_session(conn, name).await
 }
 
 pub async fn delete_account(
@@ -76,6 +84,24 @@ pub async fn delete_account(
     Ok(())
 }
 
+pub async fn login_account(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    name: &String,
+    password: &String,
+) -> sqlx::Result<Option<String>> {
+    let to_match: String = sqlx::query("SELECT Password FROM users WHERE Name = ?")
+        .bind(name)
+        .fetch_one(conn.deref_mut())
+        .await?
+        .try_get(0)?;
+
+    if to_match != hash_password(name, password) {
+        return Ok(None);
+    }
+
+    create_session(conn, name).await.map(Some)
+}
+
 pub async fn verify_session(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     token: &str,
@@ -96,8 +122,7 @@ pub async fn set_password(
     name: &String,
     password: &String,
 ) -> sqlx::Result<()> {
-    let password_hash = Sha256::digest(format!("{name}{password}"));
-    let hash: String = password_hash.iter().map(|b| format!("{:02X}", b)).collect();
+    let hash = hash_password(name, password);
 
     sqlx::query("UPDATE users SET Password = ? WHERE Name = ?")
         .bind(hash)

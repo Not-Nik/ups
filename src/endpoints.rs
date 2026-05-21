@@ -5,7 +5,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use crate::account::{
-    create_account, delete_account, exists_account, set_password, verify_session,
+    create_account, delete_account, exists_account, login_account, set_password, verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::structures::*;
@@ -162,6 +162,22 @@ pub async fn delete(
         .map_err(|_| warp::reject::custom(InternalError))?;
 
     Ok(warp::reply::reply())
+}
+
+pub async fn login(
+    login: Login,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let Some(token) = login_account(&mut conn_lock, &login.name, &login.password)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?
+    else {
+        Err(warp::reject::custom(AccessDenied))?
+    };
+
+    Ok(warp::reply::json(&Token { token }))
 }
 
 pub async fn password(

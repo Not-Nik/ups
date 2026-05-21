@@ -83,6 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::submit);
 
+    let login = warp::path!("api" / "login")
+        .and(warp::body::json())
+        .and(conn.clone())
+        .and_then(endpoints::login);
+
     let delete = warp::path!("api" / "delete")
         .and(warp::header("Authorization"))
         .and(conn.clone())
@@ -105,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .or(warp::fs::dir("web"))
             .or(proxy),
     );
-    let post_routes = warp::post().and(submit.or(delete).or(password));
+    let post_routes = warp::post().and(submit.or(login).or(delete).or(password));
 
     let https_server = warp::serve(get_routes.or(post_routes).recover(handle_rejection))
         .tls()
