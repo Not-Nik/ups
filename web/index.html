@@ -23,10 +23,10 @@
     <meta name="theme-color" content="#F3900E"/>
     <script>
         {
-          const t = localStorage.getItem('ups_theme');
-          document.documentElement.dataset.bsTheme = t === 'system'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : (t || 'dark');
+            const t = localStorage.getItem('ups_theme');
+            document.documentElement.dataset.bsTheme = t === 'system'
+                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                : (t || 'dark');
         }
     </script>
     <link href="vendor/bootstrap.min.css" rel="stylesheet">
@@ -87,7 +87,8 @@
             <button id="password-skip" class="btn btn-secondary btn-sm">Skip</button>
             <button id="password-submit" class="btn btn-danger btn-sm">Set password</button>
         </div>
-        <p id="modal-cookie" class="text-secondary text-center mb-0 mt-2" style="font-size:.7rem">By submitting you allow us
+        <p id="modal-cookie" class="text-secondary text-center mb-0 mt-2" style="font-size:.7rem">By submitting you
+            allow us
             to <a href="privacy.html"
                   target="_blank"
                   class="text-secondary">store cookies</a></p>
@@ -96,7 +97,8 @@
 <div id="logout-modal" class="nm-overlay d-none">
     <div class="nm-box">
         <h2 class="h6 fw-bold mb-1">Log out?</h2>
-        <p class="text-secondary small mb-3">There is no way to log back in — your account token will be permanently removed from this device.</p>
+        <p class="text-secondary small mb-3">There is no way to log back in — your account token will be permanently
+            removed from this device.</p>
         <div class="d-flex gap-2 justify-content-end">
             <button id="logout-cancel" class="btn btn-secondary btn-sm">Cancel</button>
             <button id="logout-confirm" class="btn btn-danger btn-sm">Log out</button>

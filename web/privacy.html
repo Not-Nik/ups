@@ -29,10 +29,10 @@
     <meta name="theme-color" content="#F3900E"/>
     <script>
         {
-          const t = localStorage.getItem('ups_theme');
-          document.documentElement.dataset.bsTheme = t === 'system'
-            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : (t || 'dark');
+            const t = localStorage.getItem('ups_theme');
+            document.documentElement.dataset.bsTheme = t === 'system'
+                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                : (t || 'dark');
         }
     </script>
     <link href="vendor/bootstrap.min.css" rel="stylesheet">
