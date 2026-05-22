@@ -167,7 +167,9 @@ function createCard(match, index, day) {
     card.innerHTML = `
       <div class="card-body">
         ${rows.join('')}
-        <button class="toggle-btn" aria-label="Show predictions"></button>
+        <div class="toggle-row">
+          <button class="toggle-btn" aria-label="Show predictions"></button>
+        </div>
         <div class="predictions-panel"><div class="predictions-inner"></div></div>
       </div>`;
 
