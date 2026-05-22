@@ -1,129 +1,175 @@
-// DOM helpers
+// ============== DOM helpers ==============
 const $ = id => document.getElementById(id);
 const show = el => el.classList.remove('d-none');
 const hide = el => el.classList.add('d-none');
+const setHidden = (el, hidden) => el.classList.toggle('d-none', hidden);
+const onClick = (id, fn) => $(id).addEventListener('click', fn);
+const onEnter = (id, fn) => $(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') fn(e);
+});
 
-// Escape HTML for safe innerHTML insertion
-function escapeHtml(str) {
+const makeEl = (tag, {dataset, ...props} = {}) => {
+    const el = Object.assign(document.createElement(tag), props);
+    if (dataset) Object.assign(el.dataset, dataset);
+    return el;
+};
+
+// Restart the shake animation by toggling the class across a forced reflow.
+function shakeEl(el) {
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+}
+
+const escapeHtml = str => {
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
-}
-
-// Escape HTML attribute values (escapeHtml + quotes)
+};
 const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 
-// Generic JSON fetch — throws on non-ok with parsed error code
-async function fetchJSON(url, {method = 'GET', body, headers = {}} = {}) {
-    const options = {method, headers: {...headers}};
+const loadImage = src => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+});
+
+const firstInt = s => {
+    const m = s.match(/\d+/);
+    return m ? parseInt(m[0], 10) : NaN;
+};
+
+function groupBy(items, key) {
+    const map = new Map();
+    items.forEach((item, i) => {
+        const k = key(item, i);
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push([item, i]);
+    });
+    return map;
+}
+
+// ============== Auth & API ==============
+const getToken = () => localStorage.getItem('ups_token');
+const saveToken = t => localStorage.setItem('ups_token', t);
+
+// JSON fetch with auto-auth. Returns parsed body ({} when the response has none).
+// Throws on !res.ok with `code` populated from a { err } body when present.
+async function api(url, {method = 'GET', body} = {}) {
+    const init = {method, headers: {}};
+    const token = getToken();
+    if (token) init.headers['Authorization'] = `Bearer ${token}`;
     if (body !== undefined) {
-        options.headers['Content-Type'] = 'application/json';
-        options.body = JSON.stringify(body);
+        init.headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(body);
     }
-    const res = await fetch(url, options);
-    const data = await res.json();
+    const res = await fetch(url, init);
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw Object.assign(new Error('Request failed'), {code: data.err});
     return data;
 }
 
-// State
+async function withDisabled(ids, fn) {
+    ids.forEach(id => { $(id).disabled = true; });
+    try { return await fn(); }
+    finally { ids.forEach(id => { $(id).disabled = false; }); }
+}
+
+// Run an async function, swallowing errors and returning undefined on failure.
+const tryFetch = async fn => { try { return await fn(); } catch { return undefined; } };
+
+// ============== State ==============
+const SIDES = ['a', 'b'];
+const OTHER_SIDE = {a: 'b', b: 'a'};
+
 const state = {
     matches: [],
-    scores: {},       // { index: [scoreA, scoreB] } — set only when both inputs are valid ints
+    scores: {},   // { index: [scoreA, scoreB] } — set only when both inputs are valid ints
     submitted: new Set(),
     pendingIndices() {
         return Object.keys(this.scores).map(Number).filter(i => !this.submitted.has(i));
     },
 };
 
-// Auth
-const getToken = () => localStorage.getItem('ups_token');
-const saveToken = token => localStorage.setItem('ups_token', token);
+const findCard = index => document.querySelector(`.card[data-index="${index}"]`);
 
-// Validation
-const isValidScore = value => /^\d+$/.test(value.trim());
-const predictionClass = (predicted, actual) =>
-    predicted > actual ? 'prediction-high' : predicted < actual ? 'prediction-low' : 'prediction-exact';
+// ============== Predictions ==============
+const isValidScore = v => /^\d+$/.test(v.trim());
 
-// Submit-all button visibility
+const predictionFor = (predicted, actual) =>
+    predicted > actual ? {cls: 'prediction-high', sign: '>'}
+        : predicted < actual ? {cls: 'prediction-low', sign: '<'}
+            : {cls: 'prediction-exact', sign: '='};
+
+const winnerColor = (a, b) => a > b ? 'text-success' : a < b ? 'text-danger' : '';
+
 function updateSubmitAll() {
     const count = state.pendingIndices().length;
     $('submit-all-count').textContent = count;
-    const visible = count > 0;
-    $('submit-all-container').classList.toggle('d-none', !visible);
-    $('main').classList.toggle('pb-5', visible);
+    setHidden($('submit-all-container'), count === 0);
+    $('main').classList.toggle('pb-5', count > 0);
 }
 
-// Per-card score validation and state sync
 function updateCardState(card, index) {
-    const [a, b] = card.querySelectorAll('.score-input');
-    const valid = isValidScore(a.value) && isValidScore(b.value);
-    if (valid) {
-        state.scores[index] = [parseInt(a.value, 10), parseInt(b.value, 10)];
-    } else {
-        delete state.scores[index];
-    }
+    const values = [...card.querySelectorAll('.score-input')].map(i => i.value);
+    if (values.every(isValidScore)) state.scores[index] = values.map(Number);
+    else delete state.scores[index];
     updateSubmitAll();
 }
 
-// Prediction row template
-const predictionRowHTML = p =>
-    `<div class="d-flex justify-content-between align-items-baseline gap-3 py-1">
-    <span class="small text-truncate">${escapeHtml(p.name)}</span>
-    <span class="small fw-semibold text-secondary text-nowrap flex-shrink-0">${p.score_a} : ${p.score_b}</span>
+// ============== Cards ==============
+const predictionRowHTML = ({name, score_a, score_b}) => `
+  <div class="d-flex justify-content-between align-items-baseline gap-3 py-1">
+    <span class="small text-truncate">${escapeHtml(name)}</span>
+    <span class="small fw-semibold text-secondary text-nowrap flex-shrink-0">${score_a} : ${score_b}</span>
   </div>`;
 
-// Predictions panel toggle
+const statusMsg = (cls, text) => `<p class="${cls} small text-center my-2">${text}</p>`;
+
 async function togglePredictions(matchId, panel, btn) {
-    if (panel.classList.contains('open')) {
-        panel.classList.remove('open');
-        btn.classList.remove('open');
-        return;
-    }
+    const opening = !panel.classList.contains('open');
+    [panel, btn].forEach(el => el.classList.toggle('open', opening));
+    if (!opening) return;
 
-    btn.classList.add('open');
-    panel.classList.add('open');
     const inner = panel.querySelector('.predictions-inner');
-    inner.innerHTML = '<p class="text-secondary small text-center my-2">Loading…</p>';
-
+    inner.innerHTML = statusMsg('text-secondary', 'Loading…');
     try {
-        const predictions = await fetchJSON(`/api/predictions/${matchId}`);
+        const predictions = await api(`/api/predictions/${matchId}`);
         inner.innerHTML = predictions.length
             ? predictions.map(predictionRowHTML).join('')
-            : '<p class="text-secondary small text-center my-2">No predictions yet.</p>';
+            : statusMsg('text-secondary', 'No predictions yet.');
     } catch {
-        inner.innerHTML = '<p class="text-danger small text-center my-2">Failed to load.</p>';
+        inner.innerHTML = statusMsg('text-danger', 'Failed to load.');
     }
 }
 
-// Card creation
-function createCard(match, index) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.dataset.index = index;
+const teamRowHTML = ({name, logo, score, color, side}) => `
+  <div class="team-row${side === 1 ? ' mt-1' : ''}">
+    ${logo ? `<img src="${escapeAttr(logo)}" class="team-logo" alt="">` : ''}
+    <span class="team-name fw-semibold small ${color}">${escapeHtml(name)}</span>
+    <input type="text" class="form-control score-input" data-side="${side}" inputmode="numeric" placeholder="0">
+    ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${score}</span>` : ''}
+  </div>`;
 
+function createCard(match, index, day) {
+    const card = makeEl('div', {className: 'card', dataset: {index, day}});
     const hasFinal = match.score_a != null && match.score_b != null;
-    const clrA = hasFinal ? (match.score_a > match.score_b ? 'text-success' : match.score_a < match.score_b ? 'text-danger' : '') : '';
-    const clrB = hasFinal ? (match.score_b > match.score_a ? 'text-success' : match.score_b < match.score_a ? 'text-danger' : '') : '';
+
+    const rows = SIDES.map((k, side) => teamRowHTML({
+        name: match[`team_${k}`],
+        logo: match[`logo_${k}`],
+        score: match[`score_${k}`],
+        color: hasFinal ? winnerColor(match[`score_${k}`], match[`score_${OTHER_SIDE[k]}`]) : '',
+        side,
+    }));
 
     card.innerHTML = `
-    <div class="card-body">
-      <div class="team-row">
-        ${match.logo_a ? `<img src="${escapeAttr(match.logo_a)}" class="team-logo" alt="">` : ''}
-        <span class="team-name fw-semibold small ${clrA}">${escapeHtml(match.team_a)}</span>
-        <input type="text" class="form-control score-input" data-side="0" inputmode="numeric" placeholder="0">
-        ${match.score_a != null ? `<span class="actual-score small ${clrA || 'text-secondary'}">${match.score_a}</span>` : ''}
-      </div>
-      <div class="team-row mt-1">
-        ${match.logo_b ? `<img src="${escapeAttr(match.logo_b)}" class="team-logo" alt="">` : ''}
-        <span class="team-name fw-semibold small ${clrB}">${escapeHtml(match.team_b)}</span>
-        <input type="text" class="form-control score-input" data-side="1" inputmode="numeric" placeholder="0">
-        ${match.score_b != null ? `<span class="actual-score small ${clrB || 'text-secondary'}">${match.score_b}</span>` : ''}
-      </div>
-      <button class="toggle-btn" aria-label="Show predictions"></button>
-      <div class="predictions-panel"><div class="predictions-inner"></div></div>
-    </div>
-  `;
+      <div class="card-body">
+        ${rows.join('')}
+        <button class="toggle-btn" aria-label="Show predictions"></button>
+        <div class="predictions-panel"><div class="predictions-inner"></div></div>
+      </div>`;
 
     const toggleBtn = card.querySelector('.toggle-btn');
     const panel = card.querySelector('.predictions-panel');
@@ -131,36 +177,52 @@ function createCard(match, index) {
     card.querySelectorAll('.score-input').forEach(input =>
         input.addEventListener('input', () => updateCardState(card, index))
     );
-
     return card;
 }
 
-function sectionOrder(a, b) {
-    const pa = a.split('/'), pb = b.split('/');
+function markSubmitted(index) {
+    state.submitted.add(index);
+    delete state.scores[index];
 
-    // Last segment: higher numbers first
-    const lastA = pa.at(-1) ?? '', lastB = pb.at(-1) ?? '';
-    const numA = parseInt(lastA.match(/\d+/)?.[0], 10);
-    const numB = parseInt(lastB.match(/\d+/)?.[0], 10);
-    const lastCmp = (!isNaN(numA) && !isNaN(numB)) ? numB - numA : lastB.localeCompare(lastA);
-    if (lastCmp !== 0) return lastCmp;
+    const card = findCard(index);
+    if (!card) return;
 
-    // First segment: Erste < Zweite < Dritte
-    const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
-    const firstCmp = ligaRank(pa[0] ?? '') - ligaRank(pb[0] ?? '');
-    if (firstCmp !== 0) return firstCmp;
-
-    // Second segment: alphabetical
-    return (pa[1] ?? '').localeCompare(pb[1] ?? '');
+    card.querySelectorAll('.score-input').forEach(input => { input.disabled = true; });
+    if (!card.querySelector('.submitted-badge')) {
+        card.querySelector('.toggle-btn').insertAdjacentHTML('afterend',
+            '<span class="submitted-badge text-success small">✓</span>');
+    }
+    updateSubmitAll();
 }
 
+// ============== Section/day ordering ==============
+const dayOf = sec => sec.split('/').at(-1) ?? sec;
+const letters = s => s.replace(/\d+/g, '').trim();
+
+function sectionOrder(a, b) {
+    const pa = a.split('/'), pb = b.split('/');
+    const lastA = pa.at(-1) ?? '', lastB = pb.at(-1) ?? '';
+    const na = firstInt(lastA), nb = firstInt(lastB);
+    const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
+    return ((!isNaN(na) && !isNaN(nb)) ? nb - na : lastB.localeCompare(lastA))
+        || ligaRank(pa[0] ?? '') - ligaRank(pb[0] ?? '')
+        || (pa[1] ?? '').localeCompare(pb[1] ?? '');
+}
+
+function compareDays(a, b) {
+    const lettersCmp = letters(a).localeCompare(letters(b));
+    if (lettersCmp) return lettersCmp;
+    const na = firstInt(a), nb = firstInt(b);
+    return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
+}
+
+// ============== Tabs ==============
 function activateTab(day) {
     $('tabs-bar').querySelectorAll('.tab-btn').forEach(btn => {
-        const active = btn.dataset.day === day;
-        btn.className = `tab-btn btn btn-sm ${active ? 'btn-secondary' : 'btn-outline-secondary'}`;
+        btn.className = `tab-btn btn btn-sm ${btn.dataset.day === day ? 'btn-secondary' : 'btn-outline-secondary'}`;
     });
     $('grid').querySelectorAll('[data-day]').forEach(el => {
-        el.classList.toggle('d-none', el.dataset.day !== day);
+        setHidden(el, el.dataset.day !== day);
     });
 }
 
@@ -168,40 +230,25 @@ function renderTabs(days) {
     const bar = $('tabs-bar');
     bar.innerHTML = '';
     days.forEach(day => {
-        const btn = document.createElement('button');
-        btn.className = 'tab-btn btn btn-sm btn-outline-secondary';
-        btn.textContent = day;
-        btn.dataset.day = day;
+        const btn = makeEl('button', {
+            className: 'tab-btn btn btn-sm btn-outline-secondary',
+            textContent: day,
+            dataset: {day},
+        });
         btn.addEventListener('click', () => activateTab(day));
         bar.appendChild(btn);
     });
 }
 
+// ============== Grid render ==============
 function renderGrid(matches) {
     state.matches = matches;
     const grid = $('grid');
     grid.innerHTML = '';
 
-    const groups = new Map();
-    matches.forEach((match, i) => {
-        const sec = match.section ?? '';
-        if (!groups.has(sec)) groups.set(sec, []);
-        groups.get(sec).push([match, i]);
-    });
-
+    const groups = groupBy(matches, m => m.section ?? '');
     const sortedSections = [...groups.keys()].sort(sectionOrder);
-    const dayOf = sec => sec.split('/').at(-1) ?? sec;
-
-    const days = [...new Set(sortedSections.map(dayOf))].sort((a, b) => {
-        const la = a.replace(/\d+/g, '').trim();
-        const lb = b.replace(/\d+/g, '').trim();
-        const lCmp = la.localeCompare(lb);
-        if (lCmp !== 0) return lCmp;
-        const na = parseInt(a.match(/\d+/)?.[0], 10);
-        const nb = parseInt(b.match(/\d+/)?.[0], 10);
-        return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
-    });
-
+    const days = [...new Set(sortedSections.map(dayOf))].sort(compareDays);
     renderTabs(days);
 
     sortedSections.forEach((sec, si) => {
@@ -209,127 +256,91 @@ function renderGrid(matches) {
         const prevDay = si > 0 ? dayOf(sortedSections[si - 1]) : null;
 
         if (si > 0 && prevDay === day) {
-            const hr = document.createElement('div');
-            hr.className = 'section-divider';
-            hr.dataset.day = day;
-            grid.appendChild(hr);
+            grid.appendChild(makeEl('div', {className: 'section-divider', dataset: {day}}));
         }
-
         if (sec) {
-            const h = document.createElement('div');
-            h.className = 'section-header';
-            h.textContent = sec;
-            h.dataset.day = day;
-            grid.appendChild(h);
+            grid.appendChild(makeEl('div', {className: 'section-header', textContent: sec, dataset: {day}}));
         }
-
-        groups.get(sec).forEach(([match, i]) => {
-            const card = createCard(match, i);
-            card.dataset.day = day;
-            grid.appendChild(card);
-        });
+        groups.get(sec).forEach(([match, i]) => grid.appendChild(createCard(match, i, day)));
     });
 
+    // Default to the lowest-ranked day still missing scores.
     const defaultDay = days.find(day =>
         matches.some(m => dayOf(m.section ?? '') === day && (m.score_a == null || m.score_b == null))
     ) ?? days.at(-1);
     if (defaultDay) activateTab(defaultDay);
 }
 
-// Mark a card as submitted: lock inputs, show checkmark
-function markSubmitted(index) {
-    state.submitted.add(index);
-    delete state.scores[index];
+// ============== Modal ==============
+const MODAL_MODES = {
+    name: {
+        title: 'Who are you?',
+        subtitle: 'Enter a name to save your prediction.',
+        showCookie: true,
+    },
+    login: {
+        title: 'Log in',
+        subtitle: 'Enter your name and password.',
+        submitLabel: 'Log in',
+        showPassword: true,
+    },
+    password: {
+        title: 'Set a password?',
+        subtitle: 'Optionally protect your account with a password.',
+        nameDisabled: true,
+        showPassword: true,
+        actions: 'password',
+        focusId: 'password-input',
+    },
+};
 
-    const card = document.querySelector(`.card[data-index="${index}"]`);
-    if (!card) return;
-
-    card.querySelectorAll('.score-input').forEach(input => {
-        input.disabled = true;
-    });
-    if (!card.querySelector('.submitted-badge')) {
-        card.querySelector('.toggle-btn').insertAdjacentElement('afterend',
-            Object.assign(document.createElement('span'), {
-                className: 'submitted-badge text-success small',
-                textContent: '✓',
-            })
-        );
-    }
-
-    updateSubmitAll();
-}
-
-// Name modal
 const nameModal = {
     _resolve: null,
-    _loginMode: false,
+    mode: null,
 
-    prompt(errorMsg = null) {
-        this._loginMode = false;
-        return new Promise(resolve => {
-            this._resolve = resolve;
-            const input = $('name-input');
-            const error = $('modal-error');
-            $('modal-title').textContent = 'Who are you?';
-            $('modal-subtitle').textContent = 'Enter a name to save your prediction.';
-            $('modal-submit').textContent = 'Submit';
-            input.disabled = false;
-            $('password-input').classList.add('d-none');
-            $('modal-actions-1').classList.remove('d-none');
-            $('modal-actions-2').classList.add('d-none');
-            $('modal-cookie').classList.remove('d-none');
-            input.value = '';
-            error.textContent = errorMsg ?? '';
-            error.classList.toggle('d-none', !errorMsg);
-            show($('name-modal'));
-            if (errorMsg) {
-                input.classList.remove('shake');
-                void input.offsetWidth;
-                input.classList.add('shake');
-            }
-            input.focus();
-        });
+    open(mode, opts = {}) {
+        const cfg = {...MODAL_MODES[mode], ...opts};
+        this.mode = mode;
+
+        const modal = $('name-modal');
+        const nameInput = $('name-input');
+        const passwordInput = $('password-input');
+
+        $('modal-title').textContent = cfg.title;
+        $('modal-subtitle').textContent = cfg.subtitle;
+        $('modal-submit').textContent = cfg.submitLabel ?? 'Submit';
+
+        nameInput.value = cfg.nameValue ?? '';
+        nameInput.disabled = !!cfg.nameDisabled;
+
+        passwordInput.value = '';
+        setHidden(passwordInput, !cfg.showPassword);
+
+        const altActions = cfg.actions === 'password';
+        setHidden($('modal-actions-1'), altActions);
+        setHidden($('modal-actions-2'), !altActions);
+        setHidden($('modal-cookie'), !cfg.showCookie);
+
+        if (cfg.errorMsg) this.showError(cfg.errorMsg);
+        else hide($('modal-error'));
+
+        modal.querySelectorAll('button').forEach(b => { b.disabled = false; });
+
+        show(modal);
+        if (cfg.shake) shakeEl(nameInput);
+        (cfg.focusId ? $(cfg.focusId) : nameInput).focus();
+
+        return new Promise(resolve => { this._resolve = resolve; });
     },
 
-    promptLogin() {
-        this._loginMode = true;
-        return new Promise(resolve => {
-            this._resolve = resolve;
-            $('modal-title').textContent = 'Log in';
-            $('modal-subtitle').textContent = 'Enter your name and password.';
-            $('modal-submit').textContent = 'Log in';
-            $('modal-error').classList.add('d-none');
-            $('modal-submit').disabled = false;
-            $('modal-cancel').disabled = false;
-            $('name-input').value = '';
-            $('name-input').disabled = false;
-            $('password-input').value = '';
-            $('password-input').classList.remove('d-none');
-            $('modal-actions-1').classList.remove('d-none');
-            $('modal-actions-2').classList.add('d-none');
-            $('modal-cookie').classList.add('d-none');
-            show($('name-modal'));
-            $('name-input').focus();
-        });
-    },
+    prompt(errorMsg = null) { return this.open('name', {errorMsg, shake: !!errorMsg}); },
+    promptLogin() { return this.open('login'); },
+    promptPassword(name) { return this.open('password', {nameValue: name}); },
 
-    promptPassword(name) {
-        return new Promise(resolve => {
-            this._resolve = resolve;
-            $('modal-title').textContent = 'Set a password?';
-            $('modal-subtitle').textContent = 'Optionally protect your account with a password.';
-            $('modal-error').classList.add('d-none');
-            $('name-input').value = name;
-            $('name-input').disabled = true;
-            $('password-input').value = '';
-            $('password-input').classList.remove('d-none');
-            $('modal-actions-1').classList.add('d-none');
-            $('modal-actions-2').classList.remove('d-none');
-            $('password-submit').disabled = false;
-            $('password-skip').disabled = false;
-            $('modal-cookie').classList.add('d-none');
-            $('password-input').focus();
-        });
+    showError(msg) {
+        const err = $('modal-error');
+        err.textContent = msg;
+        show(err);
     },
 
     resolve(result) {
@@ -338,19 +349,16 @@ const nameModal = {
     },
 
     close(result) {
-        this._loginMode = false;
-        $('modal-submit').textContent = 'Submit';
+        this.mode = null;
         hide($('name-modal'));
         this.resolve(result);
     },
 };
 
-// API
-async function submitPredictions(predictions, name) {
-    const token = getToken();
-    const body = token ? {predictions} : {predictions, name};
-    const headers = token ? {'Authorization': `Bearer ${token}`} : {};
-    const data = await fetchJSON('/api/submit', {method: 'POST', body, headers});
+// ============== Submission ==============
+async function submitPredictions(predictions, name = null) {
+    const body = getToken() ? {predictions} : {predictions, name};
+    const data = await api('/api/submit', {method: 'POST', body});
     if (data.token) {
         saveToken(data.token);
         loadCurrentUser();
@@ -358,28 +366,24 @@ async function submitPredictions(predictions, name) {
     return !!data.token;
 }
 
-// Core submission
+const failSubmission = () => alert('Submission failed. Please try again.');
+
 async function doSubmit(indices) {
-    const predictions = indices.map(i => ({
-        id: state.matches[i].id,
-        score_a: state.scores[i][0],
-        score_b: state.scores[i][1],
-    }));
+    const predictions = indices.map(i => {
+        const [score_a, score_b] = state.scores[i];
+        return {id: state.matches[i].id, score_a, score_b};
+    });
 
     if (getToken()) {
         try {
-            await submitPredictions(predictions, null);
+            await submitPredictions(predictions);
             indices.forEach(markSubmitted);
-        } catch {
-            alert('Submission failed. Please try again.');
-        }
+        } catch { failSubmission(); }
         return;
     }
 
     let name = await nameModal.prompt();
-    if (!name) return;
-
-    while (true) {
+    while (name) {
         try {
             const isNew = await submitPredictions(predictions, name);
             if (isNew) await nameModal.promptPassword(name);
@@ -387,84 +391,71 @@ async function doSubmit(indices) {
             indices.forEach(markSubmitted);
             return;
         } catch (e) {
-            if (e.code === 'AccountExists') {
-                name = await nameModal.prompt('That name is already taken. Please choose another.');
-                if (!name) return;
-            } else {
+            if (e.code !== 'AccountExists') {
                 nameModal.close(null);
-                alert('Submission failed. Please try again.');
+                failSubmission();
                 return;
             }
+            name = await nameModal.prompt('That name is already taken. Please choose another.');
         }
     }
 }
 
+// ============== Past predictions / finished matches ==============
+const predSignHTML = ({cls, sign}) => `<span class="pred-sign small ${cls}">${sign}</span>`;
+
+function applyPastPrediction(p) {
+    const index = state.matches.findIndex(m => m.id === p.id);
+    if (index === -1) return;
+    const card = findCard(index);
+    if (!card) return;
+
+    const match = state.matches[index];
+    const hasFinal = match.score_a != null && match.score_b != null;
+
+    [...card.querySelectorAll('.score-input')].forEach((input, i) => {
+        const k = SIDES[i];
+        input.value = p[`score_${k}`];
+        if (hasFinal) {
+            const pred = predictionFor(p[`score_${k}`], match[`score_${k}`]);
+            input.classList.add(pred.cls);
+            input.insertAdjacentHTML('afterend', predSignHTML(pred));
+        }
+    });
+    markSubmitted(index);
+}
+
 async function loadPastPredictions() {
-    const token = getToken();
-    if (!token) return;
-    try {
-        const predictions = await fetchJSON('/api/predictions/me', {headers: {'Authorization': `Bearer ${token}`}});
-        predictions.forEach(p => {
-            const index = state.matches.findIndex(m => m.id === p.id);
-            if (index === -1) return;
-            const match = state.matches[index];
-            const card = document.querySelector(`.card[data-index="${index}"]`);
-            if (!card) return;
-            const [a, b] = card.querySelectorAll('.score-input');
-            a.value = p.score_a;
-            b.value = p.score_b;
-            if (match.score_a != null && match.score_b != null) {
-                const clsA = predictionClass(p.score_a, match.score_a);
-                const clsB = predictionClass(p.score_b, match.score_b);
-                const sign = cls => cls === 'prediction-high' ? '>' : cls === 'prediction-low' ? '<' : '=';
-                const mkSign = cls => Object.assign(document.createElement('span'), {
-                    className: `pred-sign small ${cls}`,
-                    textContent: sign(cls),
-                });
-                a.classList.add(clsA);
-                b.classList.add(clsB);
-                a.insertAdjacentElement('afterend', mkSign(clsA));
-                b.insertAdjacentElement('afterend', mkSign(clsB));
-            }
-            markSubmitted(index);
-        });
-    } catch {
-        // past predictions are non-critical — fail silently
-    }
+    if (!getToken()) return;
+    const predictions = await tryFetch(() => api('/api/predictions/me'));
+    predictions?.forEach(applyPastPrediction);
 }
 
 function applyFinalScoreStates() {
     state.matches.forEach((match, index) => {
         if (match.score_a == null || match.score_b == null) return;
         if (state.submitted.has(index)) return;
-        const card = document.querySelector(`.card[data-index="${index}"]`);
-        if (!card) return;
-        card.querySelectorAll('.score-input').forEach(el => el.remove());
+        findCard(index)?.querySelectorAll('.score-input').forEach(el => el.remove());
     });
 }
 
 async function loadCurrentUser() {
-    const token = getToken();
-    if (!token) return;
-    try {
-        const data = await fetchJSON('/api/me', {headers: {'Authorization': `Bearer ${token}`}});
-        $('user-name').textContent = data.name;
-        show($('user-menu'));
-        hide($('login-btn'));
-    } catch {
-        // non-critical — fail silently
-    }
+    if (!getToken()) return;
+    const data = await tryFetch(() => api('/api/me'));
+    if (!data) return;
+    $('user-name').textContent = data.name;
+    show($('user-menu'));
+    hide($('login-btn'));
 }
 
-// Build the list of grid elements to hide before rendering the screenshot.
-// Skips tab-hidden elements (d-none), hides whole sections with no predictions,
-// and drops dividers that would end up leading the visible content.
+// ============== Save as image ==============
 function collectImageHides() {
     const toHide = [];
     let sectionEls = [], hasSubmitted = false, anyKept = false;
     const flush = () => {
         if (!sectionEls.length) return;
         if (hasSubmitted) {
+            // Drop the divider that would lead the very first kept section.
             if (!anyKept) {
                 while (sectionEls.length && sectionEls[0].classList.contains('section-divider')) {
                     toHide.push(sectionEls.shift());
@@ -494,39 +485,39 @@ function collectImageHides() {
     return toHide;
 }
 
+async function renderGridCanvas() {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
+    const canvas = await html2canvas($('grid'), {
+        backgroundColor: bg,
+        scale: window.devicePixelRatio,
+        proxy: '/api/proxy',
+        useCORS: false,
+    });
+    const pad = 16 * window.devicePixelRatio;
+    const padded = makeEl('canvas');
+    padded.width = canvas.width + pad * 2;
+    padded.height = canvas.height + pad * 2;
+    const ctx = padded.getContext('2d');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, padded.width, padded.height);
+    ctx.drawImage(canvas, pad, pad);
+    try {
+        const wm = await loadImage('/pulow.png');
+        const wmH = 32 * window.devicePixelRatio;
+        const wmW = (wm.naturalWidth / wm.naturalHeight) * wmH;
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(wm, padded.width - wmW - pad / 2, padded.height - wmH - pad / 2, wmW, wmH);
+        ctx.globalAlpha = 1;
+    } catch { /* watermark is non-critical */ }
+    return padded;
+}
+
 async function saveImage() {
     const toHide = collectImageHides();
     toHide.forEach(el => { el.style.display = 'none'; });
     try {
-        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
-        const canvas = await html2canvas($('grid'), {
-            backgroundColor: bg,
-            scale: window.devicePixelRatio,
-            proxy: '/api/proxy',
-            useCORS: false,
-        });
-        const pad = 16 * window.devicePixelRatio;
-        const padded = document.createElement('canvas');
-        padded.width = canvas.width + pad * 2;
-        padded.height = canvas.height + pad * 2;
-        const ctx = padded.getContext('2d');
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, padded.width, padded.height);
-        ctx.drawImage(canvas, pad, pad);
-        try {
-            const wm = await new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = '/pulow.png';
-            });
-            const wmH = 32 * window.devicePixelRatio;
-            const wmW = (wm.naturalWidth / wm.naturalHeight) * wmH;
-            ctx.globalAlpha = 0.5;
-            ctx.drawImage(wm, padded.width - wmW - pad / 2, padded.height - wmH - pad / 2, wmW, wmH);
-            ctx.globalAlpha = 1;
-        } catch { /* watermark is non-critical */ }
-        Object.assign(document.createElement('a'), {
+        const padded = await renderGridCanvas();
+        makeEl('a', {
             download: 'predictions.png',
             href: padded.toDataURL('image/png'),
         }).click();
@@ -535,115 +526,86 @@ async function saveImage() {
     }
 }
 
-// Init
-document.addEventListener('DOMContentLoaded', async () => {
-    $('save-image-btn').addEventListener('click', saveImage);
+// ============== Modal action handlers ==============
+const resolveNameInput = () => {
+    const name = $('name-input').value.trim();
+    if (name) nameModal.resolve(name);
+};
 
-    $('submit-all-btn').addEventListener('click', () => doSubmit(state.pendingIndices()));
-    const shakeEl = el => {
-        el.classList.remove('shake');
-        void el.offsetWidth;
-        el.classList.add('shake');
-    };
+const ifLogin = (yes, no) => () => (nameModal.mode === 'login' ? yes : no)();
 
-    const submitLogin = async () => {
-        const name = $('name-input').value.trim();
-        const password = $('password-input').value;
-        if (!name) {
-            shakeEl($('name-input'));
-            return;
-        }
-        $('modal-submit').disabled = true;
-        $('modal-cancel').disabled = true;
-        try {
-            const data = await fetchJSON('/api/login', {method: 'POST', body: {name, password}});
-            saveToken(data.token);
-            nameModal.close(null);
-            loadCurrentUser();
-        } catch {
-            $('modal-submit').disabled = false;
-            $('modal-cancel').disabled = false;
-            const err = $('modal-error');
-            err.textContent = 'Invalid name or password.';
-            err.classList.remove('d-none');
-            shakeEl($('name-input'));
-        }
-    };
+async function attemptLogin() {
+    const nameInput = $('name-input');
+    const name = nameInput.value.trim();
+    const password = $('password-input').value;
+    if (!name) { shakeEl(nameInput); return; }
+    try {
+        const data = await withDisabled(['modal-submit', 'modal-cancel'], () =>
+            api('/api/login', {method: 'POST', body: {name, password}})
+        );
+        saveToken(data.token);
+        nameModal.close(null);
+        loadCurrentUser();
+    } catch {
+        nameModal.showError('Invalid name or password.');
+        shakeEl(nameInput);
+    }
+}
 
-    $('modal-submit').addEventListener('click', () => {
-        if (nameModal._loginMode) {
-            submitLogin();
-            return;
-        }
-        const name = $('name-input').value.trim();
-        if (name) nameModal.resolve(name);
-    });
-    $('modal-cancel').addEventListener('click', () => nameModal.close(null));
-    $('name-input').addEventListener('keydown', e => {
-        if (e.key !== 'Enter') return;
-        if (nameModal._loginMode) {
-            $('password-input').focus();
-            return;
-        }
-        const name = $('name-input').value.trim();
-        if (name) nameModal.resolve(name);
-    });
-    $('password-skip').addEventListener('click', () => nameModal.resolve(null));
+async function attemptSetPassword() {
+    const passwordInput = $('password-input');
+    const password = passwordInput.value;
+    if (!password) { shakeEl(passwordInput); return; }
+    try {
+        await withDisabled(['password-submit', 'password-skip'], () =>
+            api('/api/password', {method: 'POST', body: {password}})
+        );
+        nameModal.resolve(null);
+    } catch {
+        nameModal.showError('Failed to set password. Please try again.');
+        shakeEl(passwordInput);
+    }
+}
 
-    const submitPassword = async () => {
-        const password = $('password-input').value;
-        if (!password) {
-            shakeEl($('password-input'));
-            return;
-        }
-        $('password-submit').disabled = true;
-        $('password-skip').disabled = true;
-        try {
-            const res = await fetch('/api/password', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}`},
-                body: JSON.stringify({password}),
-            });
-            if (!res.ok) throw new Error();
-            nameModal.resolve(null);
-        } catch {
-            $('password-submit').disabled = false;
-            $('password-skip').disabled = false;
-            const err = $('modal-error');
-            err.textContent = 'Failed to set password. Please try again.';
-            err.classList.remove('d-none');
-            shakeEl($('password-input'));
-        }
-    };
+// ============== Init ==============
+function bindEvents() {
+    onClick('save-image-btn', saveImage);
+    onClick('submit-all-btn', () => doSubmit(state.pendingIndices()));
 
-    $('password-submit').addEventListener('click', submitPassword);
-    $('password-input').addEventListener('keydown', e => {
-        if (e.key !== 'Enter') return;
-        if (nameModal._loginMode) submitLogin();
-        else submitPassword();
-    });
+    onClick('modal-submit', ifLogin(attemptLogin, resolveNameInput));
+    onClick('modal-cancel', () => nameModal.close(null));
+    onEnter('name-input', ifLogin(() => $('password-input').focus(), resolveNameInput));
 
-    $('user-btn').addEventListener('click', e => {
+    onClick('password-skip', () => nameModal.resolve(null));
+    onClick('password-submit', attemptSetPassword);
+    onEnter('password-input', ifLogin(attemptLogin, attemptSetPassword));
+
+    const userDropdown = $('user-dropdown');
+    const logoutModal = $('logout-modal');
+
+    onClick('user-btn', e => {
         e.stopPropagation();
-        $('user-dropdown').classList.toggle('d-none');
+        userDropdown.classList.toggle('d-none');
     });
-    $('logout-btn').addEventListener('click', () => {
-        $('user-dropdown').classList.add('d-none');
-        show($('logout-modal'));
+    document.addEventListener('click', () => hide(userDropdown));
+
+    onClick('logout-btn', () => {
+        hide(userDropdown);
+        show(logoutModal);
     });
-    $('logout-cancel').addEventListener('click', () => hide($('logout-modal')));
-    $('logout-confirm').addEventListener('click', () => {
+    onClick('logout-cancel', () => hide(logoutModal));
+    onClick('logout-confirm', () => {
         localStorage.removeItem('ups_token');
-        hide($('logout-modal'));
-        $('user-menu').classList.add('d-none');
         location.reload();
     });
-    document.addEventListener('click', () => $('user-dropdown').classList.add('d-none'));
 
-    $('login-btn').addEventListener('click', () => nameModal.promptLogin());
+    onClick('login-btn', () => nameModal.promptLogin());
+}
 
+document.addEventListener('DOMContentLoaded', async () => {
+    bindEvents();
     try {
-        const matches = await fetchJSON('/api/matches');
+        const matches = await api('/api/matches');
         renderGrid(matches);
         await loadPastPredictions();
         applyFinalScoreStates();
