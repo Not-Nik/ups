@@ -357,6 +357,65 @@ const nameModal = {
     },
 };
 
+// ============== Image dialog ==============
+const activeDay = () => $('tabs-bar').querySelector('.btn-secondary')?.dataset.day ?? null;
+
+const sectionsForDay = day => {
+    const set = new Set();
+    state.matches.forEach(m => {
+        const sec = m.section ?? '';
+        if (sec && dayOf(sec) === day) set.add(sec);
+    });
+    return [...set].sort(sectionOrder);
+};
+
+const userHasPredictionInSection = section =>
+    state.matches.some((m, i) =>
+        m.section === section && (i in state.scores || state.submitted.has(i))
+    );
+
+const imageDialog = {
+    open() {
+        const day = activeDay();
+        const sections = sectionsForDay(day);
+        const withPredictions = sections.filter(userHasPredictionInSection);
+        const preChecked = new Set(withPredictions.length ? withPredictions : sections);
+
+        const list = $('image-section-list');
+        list.replaceChildren();
+        sections.forEach((section, i) => {
+            const id = `image-section-${i}`;
+            const checked = preChecked.has(section) ? ' checked' : '';
+            list.insertAdjacentHTML('beforeend', `
+                <div class="form-check">
+                    <input type="checkbox" id="${escapeAttr(id)}" class="form-check-input" data-section="${escapeAttr(section)}"${checked}>
+                    <label for="${escapeAttr(id)}" class="form-check-label small">${escapeHtml(section)}</label>
+                </div>`);
+        });
+
+        $('image-include-predictions').checked = true;
+        this.updateSaveEnabled();
+        show($('image-modal'));
+    },
+
+    close() { hide($('image-modal')); },
+
+    updateSaveEnabled() {
+        const any = !!$('image-section-list').querySelector('input[type="checkbox"]:checked');
+        $('image-modal-save').disabled = !any;
+    },
+
+    readOptions() {
+        const sections = new Set();
+        $('image-section-list').querySelectorAll('input[type="checkbox"]:checked')
+            .forEach(cb => sections.add(cb.dataset.section));
+        return {
+            sections,
+            includePredictions: $('image-include-predictions').checked,
+        };
+    },
+};
+
 // ============== Submission ==============
 async function submitPredictions(predictions, name = null) {
     const body = getToken() ? {predictions} : {predictions, name};
@@ -451,12 +510,12 @@ async function loadCurrentUser() {
 }
 
 // ============== Save as image ==============
-function collectImageHides() {
+function collectImageHides({sections, includePredictions}) {
     const toHide = [];
-    let sectionEls = [], hasSubmitted = false, anyKept = false;
+    let sectionEls = [], keep = false, anyKept = false;
     const flush = () => {
         if (!sectionEls.length) return;
-        if (hasSubmitted) {
+        if (keep) {
             // Drop the divider that would lead the very first kept section.
             if (!anyKept) {
                 while (sectionEls.length && sectionEls[0].classList.contains('section-divider')) {
@@ -468,23 +527,46 @@ function collectImageHides() {
             toHide.push(...sectionEls);
         }
         sectionEls = [];
-        hasSubmitted = false;
+        keep = false;
     };
+    // A batch is [divider?, header, ...cards] — the divider belongs to the
+    // following section, so its keep/drop decision is set by the header we
+    // haven't read yet. Only flush at the next divider or at end of grid.
+    let currentSection = '';
     for (const el of $('grid').children) {
         if (el.classList.contains('d-none')) continue;
         if (el.classList.contains('section-divider')) {
             flush();
             sectionEls.push(el);
         } else if (el.classList.contains('section-header')) {
+            currentSection = el.textContent;
+            keep = sections.has(currentSection);
             sectionEls.push(el);
         } else {
+            if (!sectionEls.length) keep = sections.has(currentSection);
             sectionEls.push(el);
-            const i = +el.dataset.index;
-            if (i in state.scores || state.submitted.has(i)) hasSubmitted = true;
         }
     }
     flush();
+
+    // Submitted-badges are a UI affordance and never belong in the image; score
+    // inputs and prediction signs are stripped only when the user opts out.
+    const selector = includePredictions
+        ? '.submitted-badge'
+        : '.score-input, .pred-sign, .submitted-badge';
+    forEachKeptCard(toHide, card => {
+        card.querySelectorAll(selector).forEach(n => toHide.push(n));
+    });
+
     return toHide;
+}
+
+function forEachKeptCard(toHide, fn) {
+    const hidden = new Set(toHide);
+    for (const el of $('grid').children) {
+        if (hidden.has(el) || el.classList.contains('d-none')) continue;
+        if (el.classList.contains('card')) fn(el);
+    }
 }
 
 async function renderGridCanvas() {
@@ -514,9 +596,22 @@ async function renderGridCanvas() {
     return padded;
 }
 
-async function saveImage() {
-    const toHide = collectImageHides();
+async function saveImage({sections, includePredictions}) {
+    const toHide = collectImageHides({sections, includePredictions});
     toHide.forEach(el => { el.style.display = 'none'; });
+
+    // Submitted predictions live in disabled inputs — re-enable them just for
+    // the render so they appear in their normal active styling, not greyed out.
+    const reEnabled = [];
+    if (includePredictions) {
+        forEachKeptCard(toHide, card => {
+            card.querySelectorAll('.score-input:disabled').forEach(input => {
+                input.disabled = false;
+                reEnabled.push(input);
+            });
+        });
+    }
+
     try {
         const padded = await renderGridCanvas();
         makeEl('a', {
@@ -525,6 +620,7 @@ async function saveImage() {
         }).click();
     } finally {
         toHide.forEach(el => { el.style.display = ''; });
+        reEnabled.forEach(input => { input.disabled = true; });
     }
 }
 
@@ -571,7 +667,14 @@ async function attemptSetPassword() {
 
 // ============== Init ==============
 function bindEvents() {
-    onClick('save-image-btn', saveImage);
+    onClick('save-image-btn', () => imageDialog.open());
+    onClick('image-modal-cancel', () => imageDialog.close());
+    onClick('image-modal-save', () => {
+        const opts = imageDialog.readOptions();
+        imageDialog.close();
+        saveImage(opts);
+    });
+    $('image-section-list').addEventListener('change', () => imageDialog.updateSaveEnabled());
     onClick('submit-all-btn', () => doSubmit(state.pendingIndices()));
 
     onClick('modal-submit', ifLogin(attemptLogin, resolveNameInput));
