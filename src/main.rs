@@ -150,7 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::query::<ProxyQuery>())
         .and_then(endpoints::proxy);
 
-    let quota = Quota::per_minute(nonzero!(60u32)).allow_burst(nonzero!(20u32));
+    let quota = Quota::per_minute(nonzero!(100u32)).allow_burst(nonzero!(50u32));
     let limiter: Arc<IpRateLimiter> = Arc::new(RateLimiter::keyed(quota));
     let rate_limit = warp::any().and(with_rate_limit(limiter.clone()));
 
