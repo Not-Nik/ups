@@ -55,7 +55,9 @@ const getToken = () => localStorage.getItem('ups_token');
 const saveToken = t => localStorage.setItem('ups_token', t);
 
 // JSON fetch with auto-auth. Returns parsed body ({} when the response has none).
-// Throws on !res.ok with `code` populated from a { err } body when present.
+// Throws on !res.ok with `code` populated from a { err } body and `rateLimited`
+// flagged when the server reports {err: "RateLimited"} — the helper also
+// surfaces a toast so the user sees something even when the caller swallows.
 async function api(url, {method = 'GET', body} = {}) {
     const init = {method, headers: {}};
     const token = getToken();
@@ -66,8 +68,22 @@ async function api(url, {method = 'GET', body} = {}) {
     }
     const res = await fetch(url, init);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error('Request failed'), {code: data.err});
+    if (!res.ok) {
+        const code = data.err;
+        const rateLimited = code === 'RateLimited';
+        if (rateLimited) showToast('Too many requests — please wait a moment and try again.');
+        throw Object.assign(new Error('Request failed'), {code, rateLimited});
+    }
     return data;
+}
+
+let toastTimer = null;
+function showToast(msg, duration = 4000) {
+    const toast = $('toast');
+    toast.textContent = msg;
+    show(toast);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => hide(toast), duration);
 }
 
 async function withDisabled(ids, fn) {
@@ -452,7 +468,7 @@ async function doSubmit(indices) {
         try {
             await submitPredictions(predictions);
             indices.forEach(markSubmitted);
-        } catch { failSubmission(); }
+        } catch (e) { if (!e.rateLimited) failSubmission(); }
         return;
     }
 
@@ -465,6 +481,10 @@ async function doSubmit(indices) {
             indices.forEach(markSubmitted);
             return;
         } catch (e) {
+            if (e.rateLimited) {
+                nameModal.close(null);
+                return;
+            }
             if (e.code !== 'AccountExists') {
                 nameModal.close(null);
                 failSubmission();
@@ -657,7 +677,8 @@ async function attemptLogin() {
         saveToken(data.token);
         nameModal.close(null);
         loadCurrentUser();
-    } catch {
+    } catch (e) {
+        if (e.rateLimited) return;
         nameModal.showError('Invalid name or password.');
         shakeEl(nameInput);
     }
@@ -672,7 +693,8 @@ async function attemptSetPassword() {
             api('/api/password', {method: 'POST', body: {password}})
         );
         nameModal.resolve(null);
-    } catch {
+    } catch (e) {
+        if (e.rateLimited) return;
         nameModal.showError('Failed to set password. Please try again.');
         shakeEl(passwordInput);
     }
@@ -680,6 +702,7 @@ async function attemptSetPassword() {
 
 // ============== Init ==============
 function bindEvents() {
+    onClick('toast', () => hide($('toast')));
     onClick('save-image-btn', () => imageDialog.open());
     onClick('image-modal-cancel', () => imageDialog.close());
     onClick('image-modal-save', () => {
