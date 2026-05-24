@@ -97,29 +97,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db.lock().await.execute("PRAGMA foreign_keys = ON;").await?;
     let conn = warp::any().map(move || db.clone());
 
+    let quota = Quota::per_minute(nonzero!(100u32)).allow_burst(nonzero!(50u32));
+    let limiter: Arc<IpRateLimiter> = Arc::new(RateLimiter::keyed(quota));
+    let rate_limit = warp::any().and(with_rate_limit(limiter.clone()));
+
     let me = warp::path!("api" / "me")
+        .and(rate_limit.clone())
         .and(warp::get())
         .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::me);
 
     let matches = warp::path!("api" / "matches")
+        .and(rate_limit.clone())
         .and(warp::get())
         .and(conn.clone())
         .and_then(endpoints::matches);
 
     let predictions = warp::path!("api" / "predictions" / u32)
+        .and(rate_limit.clone())
         .and(warp::get())
         .and(conn.clone())
         .and_then(endpoints::predictions);
 
     let user_predictions = warp::path!("api" / "predictions" / "me")
+        .and(rate_limit.clone())
         .and(warp::get())
         .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::user_predictions);
 
     let submit = warp::path!("api" / "submit")
+        .and(rate_limit.clone())
         .and(warp::post())
         .and(warp::body::json())
         .and(warp::header::optional("Authorization"))
@@ -127,18 +136,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(endpoints::submit);
 
     let login = warp::path!("api" / "login")
+        .and(rate_limit.clone())
         .and(warp::post())
         .and(warp::body::json())
         .and(conn.clone())
         .and_then(endpoints::login);
 
     let delete = warp::path!("api" / "delete")
+        .and(rate_limit.clone())
         .and(warp::post())
         .and(warp::header("Authorization"))
         .and(conn.clone())
         .and_then(endpoints::delete);
 
     let password = warp::path!("api" / "password")
+        .and(rate_limit.clone())
         .and(warp::post())
         .and(warp::header("Authorization"))
         .and(warp::body::json())
@@ -150,20 +162,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::query::<ProxyQuery>())
         .and_then(endpoints::proxy);
 
-    let quota = Quota::per_minute(nonzero!(100u32)).allow_burst(nonzero!(50u32));
-    let limiter: Arc<IpRateLimiter> = Arc::new(RateLimiter::keyed(quota));
-    let rate_limit = warp::any().and(with_rate_limit(limiter.clone()));
-
-    let routes = rate_limit
-        .and(
-            me.or(matches)
-                .or(predictions)
-                .or(user_predictions)
-                .or(submit)
-                .or(login)
-                .or(delete)
-                .or(password),
-        )
+    let routes = me
+        .or(matches)
+        .or(predictions)
+        .or(user_predictions)
+        .or(submit)
+        .or(login)
+        .or(delete)
+        .or(password)
         .or(proxy)
         .or(warp::fs::dir("web"));
 
