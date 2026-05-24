@@ -97,6 +97,13 @@ const findCard = index => document.querySelector(`.card[data-index="${index}"]`)
 // ============== Predictions ==============
 const isValidScore = v => /^\d+$/.test(v.trim());
 
+const findInvalidInputs = () =>
+    [...document.querySelectorAll('.card .score-input:not(:disabled)')]
+        .filter(input => {
+            const v = input.value.trim();
+            return v && !/^\d+$/.test(v);
+        });
+
 const predictionFor = (predicted, actual) =>
     predicted > actual ? {cls: 'prediction-high', sign: '>'}
         : predicted < actual ? {cls: 'prediction-low', sign: '<'}
@@ -177,7 +184,10 @@ function createCard(match, index, day) {
     const panel = card.querySelector('.predictions-panel');
     toggleBtn.addEventListener('click', () => togglePredictions(match.id, panel, toggleBtn));
     card.querySelectorAll('.score-input').forEach(input =>
-        input.addEventListener('input', () => updateCardState(card, index))
+        input.addEventListener('input', () => {
+            input.classList.remove('invalid');
+            updateCardState(card, index);
+        })
     );
     return card;
 }
@@ -221,7 +231,10 @@ function compareDays(a, b) {
 // ============== Tabs ==============
 function activateTab(day) {
     $('tabs-bar').querySelectorAll('.tab-btn').forEach(btn => {
-        btn.className = `tab-btn btn btn-sm ${btn.dataset.day === day ? 'btn-secondary' : 'btn-outline-secondary'}`;
+        const isActive = btn.dataset.day === day;
+        btn.classList.toggle('btn-secondary', isActive);
+        btn.classList.toggle('btn-outline-secondary', !isActive);
+        if (isActive) btn.classList.remove('invalid-day');
     });
     $('grid').querySelectorAll('[data-day]').forEach(el => {
         setHidden(el, el.dataset.day !== day);
@@ -675,7 +688,27 @@ function bindEvents() {
         saveImage(opts);
     });
     $('image-section-list').addEventListener('change', () => imageDialog.updateSaveEnabled());
-    onClick('submit-all-btn', () => doSubmit(state.pendingIndices()));
+    onClick('submit-all-btn', () => {
+        const invalid = findInvalidInputs();
+        if (invalid.length) {
+            const hiddenDays = new Set();
+            invalid.forEach(input => {
+                input.classList.add('invalid');
+                const card = input.closest('.card');
+                if (card.classList.contains('d-none')) hiddenDays.add(card.dataset.day);
+                else shakeEl(input);
+            });
+            hiddenDays.forEach(day => {
+                const tab = $('tabs-bar').querySelector(`.tab-btn[data-day="${CSS.escape(day)}"]`);
+                if (tab) {
+                    tab.classList.add('invalid-day');
+                    shakeEl(tab);
+                }
+            });
+            return;
+        }
+        doSubmit(state.pendingIndices());
+    });
 
     onClick('modal-submit', ifLogin(attemptLogin, resolveNameInput));
     onClick('modal-cancel', () => nameModal.close(null));

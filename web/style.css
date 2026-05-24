@@ -153,6 +153,27 @@
     color: var(--bs-success);
 }
 
+.score-input.invalid,
+.score-input.invalid:focus {
+    border-color: var(--bs-danger);
+    color: var(--bs-danger);
+}
+
+.score-input.invalid:focus {
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-danger-rgb), 0.25);
+}
+
+.tab-btn.invalid-day {
+    color: var(--bs-danger);
+    border-color: var(--bs-danger);
+}
+
+.tab-btn.invalid-day:hover {
+    color: #fff;
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
+}
+
 .score-input.prediction-high,
 .score-input.prediction-high:disabled {
     border-color: #5b8dee;
