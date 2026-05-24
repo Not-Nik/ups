@@ -49,6 +49,18 @@ pub async fn create_session(
     Ok(token)
 }
 
+pub async fn delete_session(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    token: &str,
+) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM sessions WHERE Token = ?")
+        .bind(token)
+        .execute(conn.deref_mut())
+        .await?;
+
+    Ok(())
+}
+
 pub async fn create_account(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,

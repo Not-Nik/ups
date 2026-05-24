@@ -149,6 +149,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::login);
 
+    let logout = warp::path!("api" / "logout")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(warp::header("Authorization"))
+        .and(conn.clone())
+        .and_then(endpoints::logout);
+
     let delete = warp::path!("api" / "delete")
         .and(rate_limit.clone())
         .and(warp::post())
@@ -176,6 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(user_predictions)
         .or(submit)
         .or(login)
+        .or(logout)
         .or(delete)
         .or(password)
         .or(proxy)

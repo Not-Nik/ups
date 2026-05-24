@@ -1,8 +1,7 @@
-// ============== DOM helpers ==============
-const $ = id => document.getElementById(id);
-const show = el => el.classList.remove('d-none');
-const hide = el => el.classList.add('d-none');
-const setHidden = (el, hidden) => el.classList.toggle('d-none', hidden);
+// DOM helpers, $, show/hide/setHidden, getToken/saveToken, api(), tryFetch(),
+// showToast() and theming all live in common.js (loaded before this script).
+
+// ============== DOM helpers (app-only) ==============
 const onClick = (id, fn) => $(id).addEventListener('click', fn);
 const onEnter = (id, fn) => $(id).addEventListener('keydown', e => {
     if (e.key === 'Enter') fn(e);
@@ -50,50 +49,11 @@ function groupBy(items, key) {
     return map;
 }
 
-// ============== Auth & API ==============
-const getToken = () => localStorage.getItem('ups_token');
-const saveToken = t => localStorage.setItem('ups_token', t);
-
-// JSON fetch with auto-auth. Returns parsed body ({} when the response has none).
-// Throws on !res.ok with `code` populated from a { err } body and `rateLimited`
-// flagged when the server reports {err: "RateLimited"} — the helper also
-// surfaces a toast so the user sees something even when the caller swallows.
-async function api(url, {method = 'GET', body} = {}) {
-    const init = {method, headers: {}};
-    const token = getToken();
-    if (token) init.headers['Authorization'] = `Bearer ${token}`;
-    if (body !== undefined) {
-        init.headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(body);
-    }
-    const res = await fetch(url, init);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-        const code = data.err;
-        const rateLimited = code === 'RateLimited';
-        if (rateLimited) showToast('Too many requests — please wait a moment and try again.');
-        throw Object.assign(new Error('Request failed'), {code, rateLimited});
-    }
-    return data;
-}
-
-let toastTimer = null;
-function showToast(msg, duration = 4000) {
-    const toast = $('toast');
-    toast.textContent = msg;
-    show(toast);
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => hide(toast), duration);
-}
-
 async function withDisabled(ids, fn) {
     ids.forEach(id => { $(id).disabled = true; });
     try { return await fn(); }
     finally { ids.forEach(id => { $(id).disabled = false; }); }
 }
-
-// Run an async function, swallowing errors and returning undefined on failure.
-const tryFetch = async fn => { try { return await fn(); } catch { return undefined; } };
 
 // ============== State ==============
 const SIDES = ['a', 'b'];
@@ -767,7 +727,6 @@ async function attemptSetPassword() {
 
 // ============== Init ==============
 function bindEvents() {
-    onClick('toast', () => hide($('toast')));
     onClick('expand-all-btn', toggleAllPredictions);
     onClick('save-image-btn', () => imageDialog.open());
     onClick('image-modal-cancel', () => imageDialog.close());
@@ -821,7 +780,8 @@ function bindEvents() {
         show(logoutModal);
     });
     onClick('logout-cancel', () => hide(logoutModal));
-    onClick('logout-confirm', () => {
+    onClick('logout-confirm', async () => {
+        await tryFetch(() => api('/api/logout', {method: 'POST'}));
         localStorage.removeItem('ups_token');
         location.reload();
     });

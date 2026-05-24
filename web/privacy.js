@@ -12,7 +12,8 @@ clearStorageBtn.addEventListener('click', () => {
     clearStorageConf.style.display = '';
 });
 
-clearStorageConf.addEventListener('click', () => {
+clearStorageConf.addEventListener('click', async () => {
+    if (getToken()) await tryFetch(() => api('/api/logout', {method: 'POST'}));
     localStorage.clear();
     clearServerBtn.disabled = true;
     clearStorageConf.style.display = 'none';
