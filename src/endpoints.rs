@@ -50,13 +50,26 @@ pub async fn matches(
     Ok(warp::reply::json(&matches))
 }
 
-pub async fn predictions(
+pub async fn prediction(
     id: u32,
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let predictions = get_predictions(&mut conn_lock, id)
+    let predictions = get_predictions(&mut conn_lock, vec![id])
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&predictions))
+}
+
+pub async fn predictions(
+    ids: Vec<u32>,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let predictions = get_predictions(&mut conn_lock, ids)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 

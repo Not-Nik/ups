@@ -114,9 +114,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::matches);
 
-    let predictions = warp::path!("api" / "predictions" / u32)
+    let single_prediction = warp::path!("api" / "predictions" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
+        .and(conn.clone())
+        .and_then(endpoints::prediction);
+
+    let multi_prediction = warp::path!("api" / "predictions")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(warp::body::json())
         .and(conn.clone())
         .and_then(endpoints::predictions);
 
@@ -164,7 +171,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = me
         .or(matches)
-        .or(predictions)
+        .or(single_prediction)
+        .or(multi_prediction)
         .or(user_predictions)
         .or(submit)
         .or(login)

@@ -6,7 +6,7 @@
 
 use crate::structures::{Match, Prediction};
 use futures_util::TryStreamExt;
-use sqlx::{Row, SqliteConnection};
+use sqlx::{QueryBuilder, Row, SqliteConnection};
 use std::ops::DerefMut;
 use tokio::sync::MutexGuard;
 
@@ -46,24 +46,32 @@ pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::R
 
 pub async fn get_predictions(
     conn: &mut MutexGuard<'_, SqliteConnection>,
-    id: u32,
+    ids: Vec<u32>,
 ) -> sqlx::Result<Vec<Prediction>> {
-    let mut pred_query =
-        sqlx::query("SELECT Name, ScoreA, ScoreB FROM predictions WHERE MatchID = ?")
-            .bind(id)
-            .fetch(conn.deref_mut());
+    let mut qb = QueryBuilder::new(
+        "SELECT Name, MatchID, ScoreA, ScoreB FROM predictions WHERE MatchID IN (",
+    );
+    for (idx, id) in ids.iter().enumerate() {
+        if idx > 0 {
+            qb.push(", ");
+        }
+        qb.push_bind(id);
+    }
+    qb.push(")");
+    let mut pred_query = qb.build().fetch(conn.deref_mut());
 
     let mut predictions = Vec::new();
 
     while let Some(row) = pred_query.try_next().await? {
         // map the row into a user-defined domain type
         let name: String = row.try_get("Name")?;
+        let id: u64 = row.try_get("MatchID")?;
         let score_a: u64 = row.try_get("ScoreA")?;
         let score_b: u64 = row.try_get("ScoreB")?;
 
         predictions.push(Prediction {
             name,
-            id: id as u64,
+            id,
             score_a,
             score_b,
         });

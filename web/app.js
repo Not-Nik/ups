@@ -150,20 +150,29 @@ const predictionRowHTML = ({name, score_a, score_b}) => `
 
 const statusMsg = (cls, text) => `<p class="${cls} small text-center my-2">${text}</p>`;
 
+const setPanelHTML = (panel, html) => {
+    const inner = panel.querySelector('.predictions-inner');
+    inner.replaceChildren();
+    inner.insertAdjacentHTML('beforeend', html);
+};
+
+const setPanelStatus = (panel, cls, text) => setPanelHTML(panel, statusMsg(cls, text));
+
+const renderPanelPredictions = (panel, predictions) => {
+    if (!predictions.length) return setPanelStatus(panel, 'text-secondary', 'No predictions yet.');
+    setPanelHTML(panel, predictions.map(predictionRowHTML).join(''));
+};
+
 async function togglePredictions(matchId, panel, btn) {
     const opening = !panel.classList.contains('open');
     [panel, btn].forEach(el => el.classList.toggle('open', opening));
     if (!opening) return;
 
-    const inner = panel.querySelector('.predictions-inner');
-    inner.innerHTML = statusMsg('text-secondary', 'Loading…');
+    setPanelStatus(panel, 'text-secondary', 'Loading…');
     try {
-        const predictions = await api(`/api/predictions/${matchId}`);
-        inner.innerHTML = predictions.length
-            ? predictions.map(predictionRowHTML).join('')
-            : statusMsg('text-secondary', 'No predictions yet.');
+        renderPanelPredictions(panel, await api(`/api/predictions/${matchId}`));
     } catch {
-        inner.innerHTML = statusMsg('text-danger', 'Failed to load.');
+        setPanelStatus(panel, 'text-danger', 'Failed to load.');
     }
 }
 
@@ -198,7 +207,10 @@ function createCard(match, index, day) {
 
     const toggleBtn = card.querySelector('.toggle-btn');
     const panel = card.querySelector('.predictions-panel');
-    toggleBtn.addEventListener('click', () => togglePredictions(match.id, panel, toggleBtn));
+    toggleBtn.addEventListener('click', () => {
+        togglePredictions(match.id, panel, toggleBtn);
+        updateExpandAllIcon();
+    });
     card.querySelectorAll('.score-input').forEach(input =>
         input.addEventListener('input', () => {
             input.classList.remove('invalid');
@@ -255,6 +267,59 @@ function activateTab(day) {
     $('grid').querySelectorAll('[data-day]').forEach(el => {
         setHidden(el, el.dataset.day !== day);
     });
+    updateExpandAllIcon();
+}
+
+const visibleToggleBtns = () =>
+    [...document.querySelectorAll('.card:not(.d-none) .toggle-btn')];
+
+function toggleAllPredictions() {
+    const btns = visibleToggleBtns();
+    if (!btns.length) return;
+    const opening = btns.some(btn => !btn.classList.contains('open'));
+
+    const targets = btns
+        .filter(btn => btn.classList.contains('open') !== opening)
+        .map(btn => {
+            const card = btn.closest('.card');
+            return {
+                btn,
+                panel: card.querySelector('.predictions-panel'),
+                matchId: state.matches[+card.dataset.index].id,
+            };
+        });
+
+    if (opening) openAllPredictions(targets);
+    else targets.forEach(({btn, panel}) => [btn, panel].forEach(el => el.classList.remove('open')));
+    updateExpandAllIcon();
+}
+
+async function openAllPredictions(targets) {
+    if (!targets.length) return;
+    targets.forEach(({btn, panel}) => {
+        [btn, panel].forEach(el => el.classList.add('open'));
+        setPanelStatus(panel, 'text-secondary', 'Loading…');
+    });
+    try {
+        const ids = targets.map(t => t.matchId);
+        const all = await api('/api/predictions', {method: 'POST', body: ids});
+        const byId = new Map();
+        all.forEach(p => {
+            if (!byId.has(p.id)) byId.set(p.id, []);
+            byId.get(p.id).push(p);
+        });
+        targets.forEach(({panel, matchId}) =>
+            renderPanelPredictions(panel, byId.get(matchId) ?? [])
+        );
+    } catch {
+        targets.forEach(({panel}) => setPanelStatus(panel, 'text-danger', 'Failed to load.'));
+    }
+}
+
+function updateExpandAllIcon() {
+    const btns = visibleToggleBtns();
+    const allOpen = btns.length > 0 && btns.every(btn => btn.classList.contains('open'));
+    $('expand-all-btn').classList.toggle('open', allOpen);
 }
 
 function renderTabs(days) {
@@ -703,6 +768,7 @@ async function attemptSetPassword() {
 // ============== Init ==============
 function bindEvents() {
     onClick('toast', () => hide($('toast')));
+    onClick('expand-all-btn', toggleAllPredictions);
     onClick('save-image-btn', () => imageDialog.open());
     onClick('image-modal-cancel', () => imageDialog.close());
     onClick('image-modal-save', () => {
