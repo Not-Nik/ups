@@ -169,7 +169,7 @@ function createCard(match, index, day) {
     const panel = card.querySelector('.predictions-panel');
     toggleBtn.addEventListener('click', () => {
         togglePredictions(match.id, panel, toggleBtn);
-        updateExpandAllIcon();
+        refreshExpandIcons();
     });
     card.querySelectorAll('.score-input').forEach(input =>
         input.addEventListener('input', () => {
@@ -227,18 +227,19 @@ function activateTab(day) {
     $('grid').querySelectorAll('[data-day]').forEach(el => {
         setHidden(el, el.dataset.day !== day);
     });
-    updateExpandAllIcon();
+    refreshExpandIcons();
 }
 
 const visibleToggleBtns = () =>
     [...document.querySelectorAll('.card:not(.d-none) .toggle-btn')];
 
-function toggleAllPredictions() {
-    const btns = visibleToggleBtns();
-    if (!btns.length) return;
-    const opening = btns.some(btn => !btn.classList.contains('open'));
+const sectionToggleBtns = sec =>
+    [...$('grid').querySelectorAll(
+        `.card[data-section="${CSS.escape(sec)}"]:not(.d-none) .toggle-btn`
+    )];
 
-    const targets = btns
+function toggleBtnsToTargets(btns, opening) {
+    return btns
         .filter(btn => btn.classList.contains('open') !== opening)
         .map(btn => {
             const card = btn.closest('.card');
@@ -248,10 +249,23 @@ function toggleAllPredictions() {
                 matchId: state.matches[+card.dataset.index].id,
             };
         });
+}
 
+function togglePredictionsForBtns(btns) {
+    if (!btns.length) return;
+    const opening = btns.some(btn => !btn.classList.contains('open'));
+    const targets = toggleBtnsToTargets(btns, opening);
     if (opening) openAllPredictions(targets);
     else targets.forEach(({btn, panel}) => [btn, panel].forEach(el => el.classList.remove('open')));
-    updateExpandAllIcon();
+    refreshExpandIcons();
+}
+
+function toggleAllPredictions() {
+    togglePredictionsForBtns(visibleToggleBtns());
+}
+
+function toggleSectionPredictions(sec) {
+    togglePredictionsForBtns(sectionToggleBtns(sec));
 }
 
 async function openAllPredictions(targets) {
@@ -280,6 +294,40 @@ function updateExpandAllIcon() {
     const btns = visibleToggleBtns();
     const allOpen = btns.length > 0 && btns.every(btn => btn.classList.contains('open'));
     $('expand-all-btn').classList.toggle('open', allOpen);
+}
+
+function updateSectionExpandIcons() {
+    $('grid').querySelectorAll('.section-header').forEach(header => {
+        const btn = header.querySelector('.section-expand-btn');
+        if (!btn) return;
+        const cardBtns = sectionToggleBtns(header.dataset.section);
+        const allOpen = cardBtns.length > 0 && cardBtns.every(b => b.classList.contains('open'));
+        btn.classList.toggle('open', allOpen);
+    });
+}
+
+function refreshExpandIcons() {
+    updateExpandAllIcon();
+    updateSectionExpandIcons();
+}
+
+function createSectionHeader(sec, day) {
+    const header = makeEl('div', {
+        className: 'section-header',
+        dataset: {day, section: sec},
+    });
+    header.insertAdjacentHTML('beforeend', `
+        <span class="section-title">${escapeHtml(sec)}</span>
+        <button class="section-expand-btn btn btn-sm btn-outline-secondary flex-shrink-0"
+                aria-label="Show or hide all predictions in this section"
+                title="Show or hide all predictions in this section">
+            <span class="chevron-icon">
+                <span class="chevron-arrow"></span>
+                <span class="chevron-arrow"></span>
+            </span>
+        </button>`);
+    header.querySelector('.section-expand-btn').addEventListener('click', () => toggleSectionPredictions(sec));
+    return header;
 }
 
 function renderTabs(days) {
@@ -315,9 +363,13 @@ function renderGrid(matches) {
             grid.appendChild(makeEl('div', {className: 'section-divider', dataset: {day}}));
         }
         if (sec) {
-            grid.appendChild(makeEl('div', {className: 'section-header', textContent: sec, dataset: {day}}));
+            grid.appendChild(createSectionHeader(sec, day));
         }
-        groups.get(sec).forEach(([match, i]) => grid.appendChild(createCard(match, i, day)));
+        groups.get(sec).forEach(([match, i]) => {
+            const card = createCard(match, i, day);
+            card.dataset.section = sec;
+            grid.appendChild(card);
+        });
     });
 
     // Default to the lowest-ranked day still missing scores.
@@ -599,7 +651,7 @@ function collectImageHides({sections, includePredictions}) {
             flush();
             sectionEls.push(el);
         } else if (el.classList.contains('section-header')) {
-            currentSection = el.textContent;
+            currentSection = el.dataset.section ?? '';
             keep = sections.has(currentSection);
             sectionEls.push(el);
         } else {
@@ -614,18 +666,21 @@ function collectImageHides({sections, includePredictions}) {
     const selector = includePredictions
         ? '.submitted-badge'
         : '.score-input, .pred-sign, .submitted-badge';
-    forEachKeptCard(toHide, card => {
+    forEachKeptEl(toHide, '.card', card => {
         card.querySelectorAll(selector).forEach(n => toHide.push(n));
+    });
+    forEachKeptEl(toHide, '.section-header', header => {
+        header.querySelectorAll('.section-expand-btn').forEach(n => toHide.push(n));
     });
 
     return toHide;
 }
 
-function forEachKeptCard(toHide, fn) {
+function forEachKeptEl(toHide, selector, fn) {
     const hidden = new Set(toHide);
     for (const el of $('grid').children) {
         if (hidden.has(el) || el.classList.contains('d-none')) continue;
-        if (el.classList.contains('card')) fn(el);
+        if (el.matches(selector)) fn(el);
     }
 }
 
