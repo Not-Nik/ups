@@ -401,6 +401,14 @@ const MODAL_MODES = {
         actions: 'password',
         focusId: 'password-input',
     },
+    changePassword: {
+        title: 'Change password',
+        subtitle: 'Set a new password for your account.',
+        nameDisabled: true,
+        showPassword: true,
+        actions: 'password',
+        focusId: 'password-input',
+    },
 };
 
 const nameModal = {
@@ -446,6 +454,7 @@ const nameModal = {
     prompt(errorMsg = null) { return this.open('name', {errorMsg, shake: !!errorMsg}); },
     promptLogin() { return this.open('login'); },
     promptPassword(name) { return this.open('password', {nameValue: name}); },
+    promptChangePassword(name) { return this.open('changePassword', {nameValue: name}); },
 
     showError(msg) {
         const err = $('modal-error');
@@ -856,6 +865,11 @@ function bindEvents() {
     });
     document.addEventListener('click', () => hide(userDropdown));
 
+    onClick('change-password-btn', async () => {
+        hide(userDropdown);
+        await nameModal.promptChangePassword($('user-name').textContent);
+        nameModal.close(null);
+    });
     onClick('logout-btn', () => {
         hide(userDropdown);
         show(logoutModal);
