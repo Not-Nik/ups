@@ -336,9 +336,10 @@ const MODAL_MODES = {
     },
     login: {
         title: 'Log in',
-        subtitle: 'Enter your name and password.',
+        subtitle: 'Enter your name and password, or create a new account.',
         submitLabel: 'Log in',
         showPassword: true,
+        showCreate: true,
     },
     password: {
         title: 'Set a password?',
@@ -375,6 +376,7 @@ const nameModal = {
         const altActions = cfg.actions === 'password';
         setHidden($('modal-actions-1'), altActions);
         setHidden($('modal-actions-2'), !altActions);
+        setHidden($('modal-create'), !cfg.showCreate);
         setHidden($('modal-cookie'), !cfg.showCookie);
 
         if (cfg.errorMsg) this.showError(cfg.errorMsg);
@@ -696,7 +698,7 @@ async function attemptLogin() {
     const password = $('password-input').value;
     if (!name) { shakeEl(nameInput); return; }
     try {
-        const data = await withDisabled(['modal-submit', 'modal-cancel'], () =>
+        const data = await withDisabled(['modal-submit', 'modal-cancel', 'modal-create'], () =>
             api('/api/login', {method: 'POST', body: {name, password}})
         );
         saveToken(data.token);
@@ -705,6 +707,29 @@ async function attemptLogin() {
     } catch (e) {
         if (e.rateLimited) return;
         nameModal.showError('Invalid name or password.');
+        shakeEl(nameInput);
+    }
+}
+
+async function attemptCreateAccount() {
+    const nameInput = $('name-input');
+    const name = nameInput.value.trim();
+    const password = $('password-input').value;
+    if (!name) { shakeEl(nameInput); return; }
+    try {
+        const data = await withDisabled(['modal-submit', 'modal-cancel', 'modal-create'], async () => {
+            const r = await api('/api/submit', {method: 'POST', body: {predictions: [], name}});
+            if (r.token) saveToken(r.token);
+            if (password) await tryFetch(() => api('/api/password', {method: 'POST', body: {password}}));
+            return r;
+        });
+        nameModal.close(null);
+        loadCurrentUser();
+    } catch (e) {
+        if (e.rateLimited) return;
+        nameModal.showError(e.code === 'AccountExists'
+            ? 'That name is already taken. Please choose another.'
+            : 'Failed to create account.');
         shakeEl(nameInput);
     }
 }
@@ -759,6 +784,7 @@ function bindEvents() {
     });
 
     onClick('modal-submit', ifLogin(attemptLogin, resolveNameInput));
+    onClick('modal-create', attemptCreateAccount);
     onClick('modal-cancel', () => nameModal.close(null));
     onEnter('name-input', ifLogin(() => $('password-input').focus(), resolveNameInput));
 
