@@ -118,19 +118,42 @@ const setPanelHTML = (panel, html) => {
 
 const setPanelStatus = (panel, cls, text) => setPanelHTML(panel, statusMsg(cls, text));
 
-const renderPanelPredictions = (panel, predictions) => {
+// Group A-wins first, then draws, then B-wins. Within a group, sort by
+// closeness to the final score when there is one, otherwise by who is favoured
+// more strongly.
+function sortPredictions(predictions, match) {
+    const hasFinal = match.score_a != null && match.score_b != null;
+    const winnerSign = p => Math.sign(p.score_a - p.score_b);
+    return [...predictions].sort((a, b) => {
+        const w = winnerSign(b) - winnerSign(a);
+        if (w) return w;
+        if (hasFinal) {
+            const dist = p => Math.abs(p.score_a - match.score_a) + Math.abs(p.score_b - match.score_b);
+            return dist(a) - dist(b);
+        }
+        return (a.score_b - a.score_a) - (b.score_b - b.score_a);
+    });
+}
+
+const renderPanelPredictions = (panel, match, predictions) => {
     if (!predictions.length) return setPanelStatus(panel, 'text-secondary', 'No predictions yet.');
-    setPanelHTML(panel, predictions.map(predictionRowHTML).join(''));
+    const sorted = sortPredictions(predictions, match);
+    const splitAt = sorted.findIndex(p => p.score_b > p.score_a);
+    const rows = sorted.map((p, i) => {
+        const divider = i === splitAt && i > 0 ? '<hr class="prediction-divider">' : '';
+        return divider + predictionRowHTML(p);
+    });
+    setPanelHTML(panel, rows.join(''));
 };
 
-async function togglePredictions(matchId, panel, btn) {
+async function togglePredictions(match, panel, btn) {
     const opening = !panel.classList.contains('open');
     [panel, btn].forEach(el => el.classList.toggle('open', opening));
     if (!opening) return;
 
     setPanelStatus(panel, 'text-secondary', 'Loading…');
     try {
-        renderPanelPredictions(panel, await api(`/api/predictions/${matchId}`));
+        renderPanelPredictions(panel, match, await api(`/api/predictions/${match.id}`));
     } catch {
         setPanelStatus(panel, 'text-danger', 'Failed to load.');
     }
@@ -168,7 +191,7 @@ function createCard(match, index, day) {
     const toggleBtn = card.querySelector('.toggle-btn');
     const panel = card.querySelector('.predictions-panel');
     toggleBtn.addEventListener('click', () => {
-        togglePredictions(match.id, panel, toggleBtn);
+        togglePredictions(match, panel, toggleBtn);
         refreshExpandIcons();
     });
     card.querySelectorAll('.score-input').forEach(input =>
@@ -246,7 +269,7 @@ function toggleBtnsToTargets(btns, opening) {
             return {
                 btn,
                 panel: card.querySelector('.predictions-panel'),
-                matchId: state.matches[+card.dataset.index].id,
+                match: state.matches[+card.dataset.index],
             };
         });
 }
@@ -275,15 +298,15 @@ async function openAllPredictions(targets) {
         setPanelStatus(panel, 'text-secondary', 'Loading…');
     });
     try {
-        const ids = targets.map(t => t.matchId);
+        const ids = targets.map(t => t.match.id);
         const all = await api('/api/predictions', {method: 'POST', body: ids});
         const byId = new Map();
         all.forEach(p => {
             if (!byId.has(p.id)) byId.set(p.id, []);
             byId.get(p.id).push(p);
         });
-        targets.forEach(({panel, matchId}) =>
-            renderPanelPredictions(panel, byId.get(matchId) ?? [])
+        targets.forEach(({panel, match}) =>
+            renderPanelPredictions(panel, match, byId.get(match.id) ?? [])
         );
     } catch {
         targets.forEach(({panel}) => setPanelStatus(panel, 'text-danger', 'Failed to load.'));

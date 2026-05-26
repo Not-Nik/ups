@@ -340,6 +340,13 @@
     border-top: 1px solid var(--bs-border-color);
 }
 
+.prediction-divider {
+    border: 0;
+    border-top: 1px solid var(--bs-border-color);
+    opacity: 1;
+    margin: 0.25rem 0;
+}
+
 .submit-bar {
     position: fixed;
     bottom: 0;
