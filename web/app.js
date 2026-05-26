@@ -751,7 +751,7 @@ async function saveImage({sections, includePredictions}) {
     // the render so they appear in their normal active styling, not greyed out.
     const reEnabled = [];
     if (includePredictions) {
-        forEachKeptCard(toHide, card => {
+        forEachKeptEl(toHide, '.card', card => {
             card.querySelectorAll('.score-input:disabled').forEach(input => {
                 input.disabled = false;
                 reEnabled.push(input);
