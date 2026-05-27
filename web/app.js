@@ -125,14 +125,21 @@ const winnerSign = p => Math.sign(p.score_a - p.score_b);
 // top, then draws, then B-wins, by how strongly each side is favoured.
 function sortPredictions(predictions, match) {
     const hasFinal = match.score_a != null && match.score_b != null;
+    const byScore = (a, b) => (a.score_a - b.score_a) || (a.score_b - b.score_b);
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, {sensitivity: 'base'});
     if (hasFinal) {
         const target = winnerSign(match);
         const wrong = p => winnerSign(p) === target ? 0 : 1;
         const dist = p => Math.abs(p.score_a - match.score_a) + Math.abs(p.score_b - match.score_b);
-        return [...predictions].sort((a, b) => (wrong(a) - wrong(b)) || (dist(a) - dist(b)));
+        return [...predictions].sort((a, b) =>
+            (wrong(a) - wrong(b)) || (dist(a) - dist(b)) || byScore(a, b) || byName(a, b)
+        );
     }
     return [...predictions].sort((a, b) =>
-        (winnerSign(b) - winnerSign(a)) || ((a.score_b - a.score_a) - (b.score_b - b.score_a))
+        (winnerSign(b) - winnerSign(a))
+        || ((a.score_b - a.score_a) - (b.score_b - b.score_a))
+        || byScore(a, b)
+        || byName(a, b)
     );
 }
 
