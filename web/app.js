@@ -118,27 +118,31 @@ const setPanelHTML = (panel, html) => {
 
 const setPanelStatus = (panel, cls, text) => setPanelHTML(panel, statusMsg(cls, text));
 
-// Group A-wins first, then draws, then B-wins. Within a group, sort by
-// closeness to the final score when there is one, otherwise by who is favoured
-// more strongly.
+const winnerSign = p => Math.sign(p.score_a - p.score_b);
+
+// With a final score: predictions that picked the winner correctly come first,
+// then incorrect — each group sorted by closeness. Without a score: A-wins on
+// top, then draws, then B-wins, by how strongly each side is favoured.
 function sortPredictions(predictions, match) {
     const hasFinal = match.score_a != null && match.score_b != null;
-    const winnerSign = p => Math.sign(p.score_a - p.score_b);
-    return [...predictions].sort((a, b) => {
-        const w = winnerSign(b) - winnerSign(a);
-        if (w) return w;
-        if (hasFinal) {
-            const dist = p => Math.abs(p.score_a - match.score_a) + Math.abs(p.score_b - match.score_b);
-            return dist(a) - dist(b);
-        }
-        return (a.score_b - a.score_a) - (b.score_b - b.score_a);
-    });
+    if (hasFinal) {
+        const target = winnerSign(match);
+        const wrong = p => winnerSign(p) === target ? 0 : 1;
+        const dist = p => Math.abs(p.score_a - match.score_a) + Math.abs(p.score_b - match.score_b);
+        return [...predictions].sort((a, b) => (wrong(a) - wrong(b)) || (dist(a) - dist(b)));
+    }
+    return [...predictions].sort((a, b) =>
+        (winnerSign(b) - winnerSign(a)) || ((a.score_b - a.score_a) - (b.score_b - b.score_a))
+    );
 }
 
 const renderPanelPredictions = (panel, match, predictions) => {
     if (!predictions.length) return setPanelStatus(panel, 'text-secondary', 'No predictions yet.');
     const sorted = sortPredictions(predictions, match);
-    const splitAt = sorted.findIndex(p => p.score_b > p.score_a);
+    const hasFinal = match.score_a != null && match.score_b != null;
+    const splitAt = hasFinal
+        ? sorted.findIndex(p => winnerSign(p) !== winnerSign(match))
+        : sorted.findIndex(p => p.score_b > p.score_a);
     const rows = sorted.map((p, i) => {
         const divider = i === splitAt && i > 0 ? '<hr class="prediction-divider">' : '';
         return divider + predictionRowHTML(p);
