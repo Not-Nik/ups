@@ -11,10 +11,27 @@ use std::ops::DerefMut;
 use tokio::sync::MutexGuard;
 
 pub async fn get_matches(conn: &mut MutexGuard<'_, SqliteConnection>) -> sqlx::Result<Vec<Match>> {
-    let mut match_query = sqlx::query(
+    get_matches_filter(conn, vec![]).await
+}
+
+pub async fn get_matches_filter(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    ids: Vec<u32>,
+) -> sqlx::Result<Vec<Match>> {
+    let mut qb = QueryBuilder::new(
         "SELECT MatchID, TeamA, TeamB, LogoA, LogoB, Section, ScoreA, ScoreB FROM matches",
-    )
-    .fetch(conn.deref_mut());
+    );
+    if !ids.is_empty() {
+        qb.push(" WHERE MatchID IN (");
+        for (idx, id) in ids.iter().enumerate() {
+            if idx > 0 {
+                qb.push(", ");
+            }
+            qb.push_bind(id);
+        }
+        qb.push(")");
+    }
+    let mut match_query = qb.build().fetch(conn.deref_mut());
 
     let mut matches = Vec::new();
 
@@ -149,6 +166,23 @@ pub async fn submit_prediction(
         .bind(id)
         .bind(score_a)
         .bind(score_b)
+        .execute(conn.deref_mut())
+        .await
+        .map(|_| ())
+}
+
+pub async fn update_prediction(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    name: &String,
+    id: u32,
+    score_a: u32,
+    score_b: u32,
+) -> sqlx::Result<()> {
+    sqlx::query("UPDATE predictions SET ScoreA = ?, ScoreB = ? WHERE Name = ? AND MatchID = ?")
+        .bind(score_a)
+        .bind(score_b)
+        .bind(name)
+        .bind(id)
         .execute(conn.deref_mut())
         .await
         .map(|_| ())

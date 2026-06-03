@@ -192,7 +192,7 @@ function createCard(match, index, day) {
 
     card.innerHTML = `
       <div class="card-body">
-        ${rows.join('')}
+        <div class="score-box">${rows.join('')}</div>
         <div class="toggle-row">
           <button class="toggle-btn" aria-label="Show predictions"></button>
         </div>
@@ -214,6 +214,15 @@ function createCard(match, index, day) {
     return card;
 }
 
+const EDIT_ICON_HTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" fill="currentColor"
+         aria-hidden="true">
+        <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+    </svg>`;
+
+const setScoresDisabled = (card, disabled) =>
+    card.querySelectorAll('.score-input').forEach(input => { input.disabled = disabled; });
+
 function markSubmitted(index) {
     state.submitted.add(index);
     delete state.scores[index];
@@ -221,12 +230,38 @@ function markSubmitted(index) {
     const card = findCard(index);
     if (!card) return;
 
-    card.querySelectorAll('.score-input').forEach(input => { input.disabled = true; });
+    setScoresDisabled(card, true);
     if (!card.querySelector('.submitted-badge')) {
-        card.querySelector('.toggle-btn').insertAdjacentHTML('afterend',
-            '<span class="submitted-badge text-success small">✓</span>');
+        card.querySelector('.toggle-btn').after(makeEl('span', {
+            className: 'submitted-badge text-success small',
+            textContent: '✓',
+        }));
+    }
+    // Edit affordance only makes sense before the match is decided.
+    if (!card.querySelector('.pred-sign') && !card.querySelector('.edit-overlay')) {
+        const editBtn = makeEl('button', {
+            className: 'edit-overlay d-flex align-items-center justify-content-center border-0 p-0 lh-1',
+            type: 'button',
+            title: 'Edit prediction',
+            ariaLabel: 'Edit prediction',
+            innerHTML: EDIT_ICON_HTML,
+        });
+        editBtn.addEventListener('click', () => unlockPrediction(index));
+        card.querySelector('.score-box').append(editBtn);
     }
     updateSubmitAll();
+}
+
+function unlockPrediction(index) {
+    state.submitted.delete(index);
+    const card = findCard(index);
+    if (!card) return;
+    setScoresDisabled(card, false);
+    card.querySelector('.submitted-badge')?.remove();
+    card.querySelector('.edit-overlay')?.remove();
+    updateCardState(card, index);
+    // The edit button is gone; land focus on a field the user can now type into.
+    card.querySelector('.score-input')?.focus();
 }
 
 // ============== Section/day ordering ==============
@@ -704,11 +739,12 @@ function collectImageHides({sections, includePredictions}) {
     }
     flush();
 
-    // Submitted-badges are a UI affordance and never belong in the image; score
-    // inputs and prediction signs are stripped only when the user opts out.
+    // Submitted-badges and edit overlays are UI affordances and never belong in
+    // the image; score inputs and prediction signs are stripped only when the
+    // user opts out.
     const selector = includePredictions
-        ? '.submitted-badge'
-        : '.score-input, .pred-sign, .submitted-badge';
+        ? '.submitted-badge, .edit-overlay'
+        : '.score-input, .pred-sign, .submitted-badge, .edit-overlay';
     forEachKeptEl(toHide, '.card', card => {
         card.querySelectorAll(selector).forEach(n => toHide.push(n));
     });

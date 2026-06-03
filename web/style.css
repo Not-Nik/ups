@@ -22,6 +22,10 @@
     --form-disabled-bg: #333;
     --form-disabled-border: #333;
     --form-disabled-color: #555;
+    /* Edit overlay lightens the box in dark mode. */
+    --edit-scrim: rgba(255, 255, 255, 0.2);
+    --edit-icon: rgba(0, 0, 0, 0.7);
+    --edit-icon-hover: #000;
 }
 
 [data-bs-theme="light"] {
@@ -37,6 +41,10 @@
     --form-disabled-bg: #dde5ff;
     --form-disabled-border: #dde5ff;
     --form-disabled-color: #8899cc;
+    /* Edit overlay darkens the box in light mode. */
+    --edit-scrim: rgba(0, 0, 0, 0.15);
+    --edit-icon: rgba(255, 255, 255, 0.85);
+    --edit-icon-hover: #fff;
 }
 
 .form-control {
@@ -216,6 +224,76 @@
     top: 50%;
     transform: translateY(-50%);
     pointer-events: none;
+}
+
+.score-box {
+    position: relative;
+}
+
+.edit-overlay {
+    position: absolute;
+    /* Bleed over the card-body padding so the scrim reaches the card edges on
+       top/left/right; the bottom stays at the score box so the dropdown button
+       below is never covered. */
+    top: calc(-1 * var(--bs-card-spacer-y));
+    left: calc(-1 * var(--bs-card-spacer-x));
+    right: calc(-1 * var(--bs-card-spacer-x));
+    bottom: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    border-top-left-radius: var(--bs-card-inner-border-radius);
+    border-top-right-radius: var(--bs-card-inner-border-radius);
+    cursor: pointer;
+    /* Hidden but still focusable, so keyboard users can Tab to it; pointer-events
+       lets mouse hover/clicks pass through to the inputs while it's invisible. */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, color 0.15s;
+    z-index: 2;
+    -webkit-backdrop-filter: blur(0.5px);
+    backdrop-filter: blur(0.5px);
+    /* scale to force subpixel rendering */
+    transform: translateZ(0);
+    background: var(--edit-scrim);
+    color: var(--edit-icon);
+}
+
+/* Decorative tail: extends the scrim below the score box so it fades into the
+   dropdown button. pointer-events:none keeps the dropdown clickable underneath. */
+.edit-overlay::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 18px;
+    pointer-events: none;
+    background: inherit;
+    -webkit-backdrop-filter: blur(1px);
+    backdrop-filter: blur(1px);
+    -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
+    mask-image: linear-gradient(to bottom, #000, transparent);
+}
+
+.edit-overlay svg {
+    transition: transform 0.18s ease;
+    transform: translateY(6px);
+}
+
+.score-box:hover .edit-overlay,
+.edit-overlay:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.score-box:hover .edit-overlay svg,
+.edit-overlay:focus-visible svg {
+    transform: none;
+}
+
+.edit-overlay:hover,
+.edit-overlay:focus-visible {
+    color: var(--edit-icon-hover);
 }
 
 .toggle-btn {

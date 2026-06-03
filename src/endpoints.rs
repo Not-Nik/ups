@@ -12,8 +12,8 @@ use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::structures::*;
 
 use crate::predictions::{
-    get_matches, get_predictions, get_user_match_predictions, get_user_predictions,
-    submit_prediction,
+    get_matches, get_matches_filter, get_predictions, get_user_match_predictions,
+    get_user_predictions, submit_prediction, update_prediction,
 };
 use log::debug;
 use sqlx::SqliteConnection;
@@ -134,25 +134,47 @@ pub async fn submit(
         Err(warp::reject::custom(BadRequest))?
     };
 
-    for pred in submission.predictions {
+    let matches = get_matches_filter(
+        &mut conn_lock,
+        submission
+            .predictions
+            .iter()
+            .map(|pred| pred.id as u32)
+            .collect(),
+    )
+    .await
+    .map_err(|_| warp::reject::custom(InternalError))?;
+
+    for (pred, mat) in submission.predictions.iter().zip(matches) {
+        if mat.score_a.is_some() || mat.score_b.is_some() {
+            continue;
+        }
         if get_user_match_predictions(&mut conn_lock, &name, pred.id as u32)
             .await
             .map_err(|_| warp::reject::custom(InternalError))?
             .len()
             > 0
         {
-            continue;
+            update_prediction(
+                &mut conn_lock,
+                &name,
+                pred.id as u32,
+                pred.score_a as u32,
+                pred.score_b as u32,
+            )
+            .await
+            .map_err(|_| warp::reject::custom(InternalError))?;
+        } else {
+            submit_prediction(
+                &mut conn_lock,
+                &name,
+                pred.id as u32,
+                pred.score_a as u32,
+                pred.score_b as u32,
+            )
+            .await
+            .map_err(|_| warp::reject::custom(InternalError))?;
         }
-
-        submit_prediction(
-            &mut conn_lock,
-            &name,
-            pred.id as u32,
-            pred.score_a as u32,
-            pred.score_b as u32,
-        )
-        .await
-        .map_err(|_| warp::reject::custom(InternalError))?;
     }
 
     Ok(warp::reply::json(&Token { token }))
