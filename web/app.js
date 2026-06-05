@@ -50,9 +50,16 @@ function groupBy(items, key) {
 }
 
 async function withDisabled(ids, fn) {
-    ids.forEach(id => { $(id).disabled = true; });
-    try { return await fn(); }
-    finally { ids.forEach(id => { $(id).disabled = false; }); }
+    ids.forEach(id => {
+        $(id).disabled = true;
+    });
+    try {
+        return await fn();
+    } finally {
+        ids.forEach(id => {
+            $(id).disabled = false;
+        });
+    }
 }
 
 // ============== State ==============
@@ -221,7 +228,9 @@ const EDIT_ICON_HTML = `
     </svg>`;
 
 const setScoresDisabled = (card, disabled) =>
-    card.querySelectorAll('.score-input').forEach(input => { input.disabled = disabled; });
+    card.querySelectorAll('.score-input').forEach(input => {
+        input.disabled = disabled;
+    });
 
 function markSubmitted(index) {
     state.submitted.add(index);
@@ -275,7 +284,7 @@ function sectionOrder(a, b) {
     const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
     return ((!isNaN(na) && !isNaN(nb)) ? nb - na : lastB.localeCompare(lastA))
         || ligaRank(pa[0] ?? '') - ligaRank(pb[0] ?? '')
-        || (pa[1] ?? '').localeCompare(pb[1] ?? '');
+        || (pa.length < 3 || pb.length < 3 ? 0 : (pa[1] ?? '').localeCompare(pb[1] ?? ''));
 }
 
 function compareDays(a, b) {
@@ -511,19 +520,31 @@ const nameModal = {
         if (cfg.errorMsg) this.showError(cfg.errorMsg);
         else hide($('modal-error'));
 
-        modal.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        modal.querySelectorAll('button').forEach(b => {
+            b.disabled = false;
+        });
 
         show(modal);
         if (cfg.shake) shakeEl(nameInput);
         (cfg.focusId ? $(cfg.focusId) : nameInput).focus();
 
-        return new Promise(resolve => { this._resolve = resolve; });
+        return new Promise(resolve => {
+            this._resolve = resolve;
+        });
     },
 
-    prompt(errorMsg = null) { return this.open('name', {errorMsg, shake: !!errorMsg}); },
-    promptLogin() { return this.open('login'); },
-    promptPassword(name) { return this.open('password', {nameValue: name}); },
-    promptChangePassword(name) { return this.open('changePassword', {nameValue: name}); },
+    prompt(errorMsg = null) {
+        return this.open('name', {errorMsg, shake: !!errorMsg});
+    },
+    promptLogin() {
+        return this.open('login');
+    },
+    promptPassword(name) {
+        return this.open('password', {nameValue: name});
+    },
+    promptChangePassword(name) {
+        return this.open('changePassword', {nameValue: name});
+    },
 
     showError(msg) {
         const err = $('modal-error');
@@ -584,7 +605,9 @@ const imageDialog = {
         show($('image-modal'));
     },
 
-    close() { hide($('image-modal')); },
+    close() {
+        hide($('image-modal'));
+    },
 
     updateSaveEnabled() {
         const any = !!$('image-section-list').querySelector('input[type="checkbox"]:checked');
@@ -625,7 +648,9 @@ async function doSubmit(indices) {
         try {
             await submitPredictions(predictions);
             indices.forEach(markSubmitted);
-        } catch (e) { if (!e.rateLimited) failSubmission(); }
+        } catch (e) {
+            if (!e.rateLimited) failSubmission();
+        }
         return;
     }
 
@@ -786,13 +811,16 @@ async function renderGridCanvas() {
         ctx.globalAlpha = 0.5;
         ctx.drawImage(wm, padded.width - wmW - pad / 2, padded.height - wmH - pad / 2, wmW, wmH);
         ctx.globalAlpha = 1;
-    } catch { /* watermark is non-critical */ }
+    } catch { /* watermark is non-critical */
+    }
     return padded;
 }
 
 async function saveImage({sections, includePredictions}) {
     const toHide = collectImageHides({sections, includePredictions});
-    toHide.forEach(el => { el.style.display = 'none'; });
+    toHide.forEach(el => {
+        el.style.display = 'none';
+    });
 
     // Submitted predictions live in disabled inputs — re-enable them just for
     // the render so they appear in their normal active styling, not greyed out.
@@ -813,8 +841,12 @@ async function saveImage({sections, includePredictions}) {
             href: padded.toDataURL('image/png'),
         }).click();
     } finally {
-        toHide.forEach(el => { el.style.display = ''; });
-        reEnabled.forEach(input => { input.disabled = true; });
+        toHide.forEach(el => {
+            el.style.display = '';
+        });
+        reEnabled.forEach(input => {
+            input.disabled = true;
+        });
     }
 }
 
@@ -830,7 +862,10 @@ async function attemptLogin() {
     const nameInput = $('name-input');
     const name = nameInput.value.trim();
     const password = $('password-input').value;
-    if (!name) { shakeEl(nameInput); return; }
+    if (!name) {
+        shakeEl(nameInput);
+        return;
+    }
     try {
         const data = await withDisabled(['modal-submit', 'modal-cancel', 'modal-create'], () =>
             api('/api/login', {method: 'POST', body: {name, password}})
@@ -849,7 +884,10 @@ async function attemptCreateAccount() {
     const nameInput = $('name-input');
     const name = nameInput.value.trim();
     const password = $('password-input').value;
-    if (!name) { shakeEl(nameInput); return; }
+    if (!name) {
+        shakeEl(nameInput);
+        return;
+    }
     try {
         const data = await withDisabled(['modal-submit', 'modal-cancel', 'modal-create'], async () => {
             const r = await api('/api/submit', {method: 'POST', body: {predictions: [], name}});
@@ -871,7 +909,10 @@ async function attemptCreateAccount() {
 async function attemptSetPassword() {
     const passwordInput = $('password-input');
     const password = passwordInput.value;
-    if (!password) { shakeEl(passwordInput); return; }
+    if (!password) {
+        shakeEl(passwordInput);
+        return;
+    }
     try {
         await withDisabled(['password-submit', 'password-skip'], () =>
             api('/api/password', {method: 'POST', body: {password}})
