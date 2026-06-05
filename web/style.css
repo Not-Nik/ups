@@ -182,6 +182,13 @@
     box-shadow: 0 0 0 0.25rem rgba(var(--bs-danger-rgb), 0.25);
 }
 
+/* Prefix label column is sized to the widest label so every row's tab buttons
+   start at the same x. */
+#tabs-bar {
+    grid-template-columns: max-content 1fr;
+    align-items: center;
+}
+
 .tab-btn.invalid-day {
     color: var(--bs-danger);
     border-color: var(--bs-danger);

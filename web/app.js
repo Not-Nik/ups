@@ -411,14 +411,34 @@ function createSectionHeader(sec, day) {
 function renderTabs(days) {
     const bar = $('tabs-bar');
     bar.innerHTML = '';
-    days.forEach(day => {
-        const btn = makeEl('button', {
-            className: 'tab-btn btn btn-sm btn-outline-secondary',
-            textContent: day,
-            dataset: {day},
+    // Group tabs by their non-digit prefix (e.g. "Day"), one prefix per row.
+    // When every tab in a group has a suffix, show the prefix once as a label
+    // and bare suffixes on the buttons; otherwise fall back to full names.
+    const groups = [...groupBy(days, letters)].map(([prefix, group]) => {
+        const entries = group.map(([day]) => ({day, suffix: day.slice(prefix.length).trim()}));
+        const labelled = prefix && entries.every(e => e.suffix);
+        return {prefix, entries, labelled, solo: !labelled && entries.length === 1};
+    });
+    // Sort by prefix, but sink any lone unlabelled tab (e.g. "Finale") to the bottom.
+    groups.sort((a, b) => (a.solo - b.solo) || a.prefix.localeCompare(b.prefix));
+    groups.forEach(({entries, labelled, prefix}) => {
+        // Label cell (column 1, empty when unlabelled) then the buttons cell
+        // (column 2), so buttons line up across rows via the shared grid column.
+        bar.appendChild(makeEl('span', {
+            className: 'tab-prefix small text-secondary fw-semibold',
+            textContent: labelled ? prefix : '',
+        }));
+        const row = makeEl('div', {className: 'd-flex gap-2 flex-wrap'});
+        entries.forEach(({day, suffix}) => {
+            const btn = makeEl('button', {
+                className: 'tab-btn btn btn-sm btn-outline-secondary',
+                textContent: labelled ? suffix : day,
+                dataset: {day},
+            });
+            btn.addEventListener('click', () => activateTab(day));
+            row.appendChild(btn);
         });
-        btn.addEventListener('click', () => activateTab(day));
-        bar.appendChild(btn);
+        bar.appendChild(row);
     });
 }
 
