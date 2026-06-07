@@ -483,6 +483,61 @@
     cursor: pointer;
 }
 
+#incident-toast {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.5rem 0.5rem 1rem;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-left: 3px solid #F3900E;
+    border-radius: 0.5rem;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    font-size: 0.875rem;
+    z-index: 2000;
+    max-width: calc(100vw - 2rem);
+    animation: incident-toast-in 0.25s ease both;
+}
+
+.incident-toast-msg {
+    color: var(--bs-body-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.incident-toast-msg:hover {
+    text-decoration: underline;
+}
+
+.incident-toast-close {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0 0.35rem;
+    cursor: pointer;
+}
+
+.incident-toast-close:hover {
+    color: var(--bs-body-color);
+}
+
+@keyframes incident-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(0.5rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 @keyframes shake {
     0%, 100% {
         transform: translateX(0);
