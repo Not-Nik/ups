@@ -59,6 +59,13 @@
 <main id="main" class="container-xl px-3 py-4">
     <div class="d-flex align-items-start gap-2 mb-3">
         <div id="tabs-bar" class="d-grid gap-2 flex-grow-1"></div>
+        <button id="overlay-info-btn" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                aria-label="Stream overlay" title="Stream overlay">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"
+                 aria-hidden="true">
+                <path d="M0 4s0-2 2-2h12s2 0 2 2v6s0 2-2 2h-4c0 .667.083 1.167.25 1.5H11a.5.5 0 0 1 0 1H5a.5.5 0 0 1 0-1h.75c.167-.333.25-.833.25-1.5H2s-2 0-2-2zm1.398-.855a.758.758 0 0 0-.254.302A1.46 1.46 0 0 0 1 4.01V10c0 .325.078.502.145.602.07.105.17.188.302.254a1.464 1.464 0 0 0 .538.143L2.01 11H14c.325 0 .502-.078.602-.145a.758.758 0 0 0 .254-.302 1.464 1.464 0 0 0 .143-.538L15 9.99V4c0-.325-.078-.502-.145-.602a.757.757 0 0 0-.302-.254A1.46 1.46 0 0 0 13.99 3H2.01c-.325 0-.502.078-.602.145z"/>
+            </svg>
+        </button>
         <button id="expand-all-btn" class="btn btn-sm btn-outline-secondary flex-shrink-0"
                 aria-label="Show or hide all predictions" title="Show or hide all predictions">
             <span class="chevron-icon">
@@ -138,6 +145,27 @@
         <div class="d-flex gap-2 justify-content-end">
             <button id="image-modal-cancel" class="btn btn-secondary btn-sm">Cancel</button>
             <button id="image-modal-save" class="btn btn-success btn-sm">Save</button>
+        </div>
+    </div>
+</div>
+<div id="overlay-info-modal" class="nm-overlay d-none">
+    <div class="nm-box">
+        <h2 class="h6 fw-bold mb-1">Stream overlay</h2>
+        <p class="text-secondary small mb-3">Show match info on your stream — built for OBS.</p>
+        <p class="small mb-1"><strong>Overlay</strong></p>
+        <p class="text-secondary small mb-2">A transparent page showing the current match's teams, scores and hero
+            bans. Add it to OBS as a Browser Source.</p>
+        <p class="small mb-1"><strong>Control room</strong></p>
+        <p class="text-secondary small mb-3">A dashboard to update scores, swap sides, and set hero bans. Open it in
+            a custom browser docks and the overlay updates live.</p>
+        <div class="d-flex flex-column gap-2">
+            <a href="overlay.html" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">Open
+                overlay</a>
+            <a href="control.html" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">Open
+                control room</a>
+        </div>
+        <div class="d-flex justify-content-end mt-3">
+            <button id="overlay-info-close" class="btn btn-secondary btn-sm">Close</button>
         </div>
     </div>
 </div>

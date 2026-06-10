@@ -1,17 +1,12 @@
-// DOM helpers, $, show/hide/setHidden, getToken/saveToken, api(), tryFetch(),
-// showToast() and theming all live in common.js (loaded before this script).
+// $, makeEl, firstInt, the section/day ordering helpers, show/hide/setHidden,
+// getToken/saveToken, api(), tryFetch(), showToast() and theming all live in
+// common.js, loaded before this script.
 
 // ============== DOM helpers (app-only) ==============
 const onClick = (id, fn) => $(id).addEventListener('click', fn);
 const onEnter = (id, fn) => $(id).addEventListener('keydown', e => {
     if (e.key === 'Enter') fn(e);
 });
-
-const makeEl = (tag, {dataset, ...props} = {}) => {
-    const el = Object.assign(document.createElement(tag), props);
-    if (dataset) Object.assign(el.dataset, dataset);
-    return el;
-};
 
 // Restart the shake animation by toggling the class across a forced reflow.
 function shakeEl(el) {
@@ -33,11 +28,6 @@ const loadImage = src => new Promise((resolve, reject) => {
     img.onerror = reject;
     img.src = src;
 });
-
-const firstInt = s => {
-    const m = s.match(/\d+/);
-    return m ? parseInt(m[0], 10) : NaN;
-};
 
 function groupBy(items, key) {
     const map = new Map();
@@ -273,26 +263,7 @@ function unlockPrediction(index) {
     card.querySelector('.score-input')?.focus();
 }
 
-// ============== Section/day ordering ==============
-const dayOf = sec => sec.split('/').at(-1) ?? sec;
-const letters = s => s.replace(/\d+/g, '').trim();
-
-function sectionOrder(a, b) {
-    const pa = a.split('/'), pb = b.split('/');
-    const lastA = pa.at(-1) ?? '', lastB = pb.at(-1) ?? '';
-    const na = firstInt(lastA), nb = firstInt(lastB);
-    const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
-    return ((!isNaN(na) && !isNaN(nb)) ? nb - na : lastB.localeCompare(lastA))
-        || ligaRank(pa[0] ?? '') - ligaRank(pb[0] ?? '')
-        || (pa.length < 3 || pb.length < 3 ? 0 : (pa[1] ?? '').localeCompare(pb[1] ?? ''));
-}
-
-function compareDays(a, b) {
-    const lettersCmp = letters(a).localeCompare(letters(b));
-    if (lettersCmp) return lettersCmp;
-    const na = firstInt(a), nb = firstInt(b);
-    return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
-}
+// Section/day ordering (dayOf, letters, sectionOrder, compareDays) lives in common.js.
 
 // ============== Tabs ==============
 function activateTab(day) {
@@ -949,6 +920,13 @@ async function attemptSetPassword() {
 function bindEvents() {
     onClick('expand-all-btn', toggleAllPredictions);
     onClick('save-image-btn', () => imageDialog.open());
+
+    const overlayInfoModal = $('overlay-info-modal');
+    onClick('overlay-info-btn', () => show(overlayInfoModal));
+    onClick('overlay-info-close', () => hide(overlayInfoModal));
+    overlayInfoModal.addEventListener('click', e => {
+        if (e.target === overlayInfoModal) hide(overlayInfoModal);
+    });
     onClick('image-modal-cancel', () => imageDialog.close());
     onClick('image-modal-save', () => {
         const opts = imageDialog.readOptions();
