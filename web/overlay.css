@@ -1,0 +1,1330 @@
+/* Control-room design tokens. The overlay itself is transparent and themeless;
+   these only drive the OBS control dock (and its picker modals on <body>). */
+:root {
+    --cr-radius: 8px;
+    --cr-tile: #222;
+    --cr-tile-hover: #2e2e2e;
+    --cr-border: #2a2a2a;
+    --cr-border-hover: #555;
+    --cr-muted: #aaa;
+}
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* The team banners set display:flex, which would otherwise beat the [hidden]
+   user-agent rule, so enforce hiding for the attribute we toggle from JS. */
+[hidden] {
+    display: none !important;
+}
+
+.team {
+    --slant: 28px;
+    position: fixed;
+    top: 12px;
+    height: 52px;
+    width: 33vw;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #1a1a1a; /* neutral fallback until the logo color loads */
+    color: #fff;
+}
+
+/* Flush to the outer screen edge; the inner edge is cut on a slant that leans
+   inward at the top (the inner-top corner is the furthest-in point and the
+   bottom is pulled back). --slant is the horizontal run of that diagonal. */
+.team-left {
+    left: 0;
+    flex-direction: row;
+    padding: 0 0 0 24px;
+    clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+.team-right {
+    right: 0;
+    flex-direction: row-reverse;
+    padding: 0 24px 0 0;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, var(--slant) 100%);
+}
+
+.team-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    flex-shrink: 0;
+    /* drop-shadow follows the logo's alpha shape, so transparent PNGs cast a
+       soft shadow off their actual silhouette rather than a square box. */
+    filter: drop-shadow(0 0px 5px rgba(0, 0, 0, .75));
+}
+
+.team-name {
+    font-weight: 600;
+    font-size: 1.5rem;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+}
+
+.team-score {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 36px;
+    min-width: 1.2em;
+    background: rgba(0, 0, 0, .2); /* slightly darken the team color under the score */
+    font-weight: 800;
+    font-size: 2.25rem;
+    line-height: 1;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Push the score plate to the inner end of the banner, leaving the logo and
+   name grouped at the outer edge. Both plate edges are slanted parallel to the
+   banner's inner edge (same --slant over the same height). */
+.team-left .team-score {
+    margin-left: auto;
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+.team-right .team-score {
+    margin-right: auto;
+    clip-path: polygon(0 0, calc(100% - var(--slant)) 0, 100% 100%, var(--slant) 100%);
+}
+
+.overlay-prompt {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: #fff;
+    font-size: 1.25rem;
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+}
+
+.overlay-prompt a {
+    color: #4ea1ff;
+}
+
+.overlay-error {
+    position: fixed;
+    top: 24px;
+    left: 24px;
+    color: #fff;
+    background: rgba(0, 0, 0, .6);
+    padding: 8px 12px;
+    border-radius: var(--cr-radius);
+    font-size: 14px;
+}
+
+/* ============== Hero ban badges ============== */
+/* Anchored just past each banner's inner (center-facing) edge. The left banner's
+   inner edge sits at 33vw; the right banner's at 33vw from the right. */
+.ban-slot {
+    position: fixed;
+    top: 12px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+}
+
+.ban-slot-left {
+    left: calc(33vw + 6px);
+}
+
+.ban-slot-right {
+    right: calc(33vw + 6px);
+}
+
+.ban-badge {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+}
+
+.ban-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: grayscale(.3) brightness(.85);
+}
+
+/* The badge plays a 3-part intro, but only while it carries the `ban-animate`
+   class — added in overlay.js when (and only when) that team's ban actually
+   changes, then dropped once it finishes. Keeping the masks/animations off the
+   base rules means the static badge stays fully drawn, so unrelated repaints
+   (score changes, the other team's ban) never restart it. The portrait fades
+   in, the red outline draws on clockwise (conic mask on ::before), then the
+   diagonal strike wipes in from the top-right to the bottom-left (mask on
+   ::after). The masked custom properties are registered so they can animate. */
+@property --ban-ring {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0turn;
+}
+
+@property --ban-strike {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 0%;
+}
+
+/* Red outline ring (statically full; the intro reveals it clockwise). */
+.ban-badge::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1; /* sit in front of the icon (which builds its own context via filter) */
+    box-sizing: border-box;
+    border: 2px solid rgba(220, 40, 40, .95);
+    border-radius: 6px;
+}
+
+/* Diagonal red strike across the portrait to read unmistakably as "banned"
+   (statically full; the intro wipes it in top-right to bottom-left). */
+.ban-badge::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2; /* above both the icon and the outline ring */
+    background: linear-gradient(135deg,
+    transparent calc(50% - 1.5px),
+    rgba(220, 40, 40, .95) calc(50% - 1.5px),
+    rgba(220, 40, 40, .95) calc(50% + 1.5px),
+    transparent calc(50% + 1.5px));
+}
+
+/* Intro animations — applied only while the badge carries `ban-animate`. */
+.ban-badge.ban-animate .ban-icon {
+    animation: ban-icon-in .4s ease both;
+}
+
+.ban-badge.ban-animate::before {
+    -webkit-mask: conic-gradient(#000 var(--ban-ring), #0000 var(--ban-ring));
+    mask: conic-gradient(#000 var(--ban-ring), #0000 var(--ban-ring));
+    animation: ban-ring .55s ease-out .15s both;
+}
+
+.ban-badge.ban-animate::after {
+    -webkit-mask: linear-gradient(225deg, #000 var(--ban-strike), #0000 var(--ban-strike));
+    mask: linear-gradient(225deg, #000 var(--ban-strike), #0000 var(--ban-strike));
+    animation: ban-strike .3s ease-out .8s both;
+}
+
+@keyframes ban-icon-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes ban-ring {
+    from {
+        --ban-ring: 0turn;
+    }
+    to {
+        --ban-ring: 1turn;
+    }
+}
+
+@keyframes ban-strike {
+    from {
+        --ban-strike: 0%;
+    }
+    to {
+        --ban-strike: 100%;
+    }
+}
+
+/* ============== Powered-by badge ============== */
+.powered {
+    position: fixed;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+    pointer-events: none;
+}
+
+.powered-left {
+    left: 16px;
+    align-items: flex-start;
+}
+
+.powered-right {
+    right: 16px;
+    align-items: flex-end;
+}
+
+.powered-logo {
+    height: 28px;
+    width: auto;
+    display: block;
+}
+
+/* The "Powered by" badge grows in big view to match the larger banners/score. */
+body.scene-big .powered {
+    font-size: 1.35rem;
+}
+
+body.scene-big .powered-logo {
+    height: 56px;
+}
+
+/* ============== Big view (full-background scene) ==============
+   A presentation scene the control room toggles via SCENE_KEY. The overlay keeps
+   its normal banner styling (size + slant); entering big view slides the banners
+   out to their sides and back in to a staggered layout — team A higher, team B
+   lower, each on its normal side — with the in-banner scores hidden and a single
+   large score shown between them over a gradient that rises from the bottom.
+
+   Choreography (see paintScene in overlay.js): `scene-exit` shoves the banners
+   off their sides, then one step later `scene-big` sets the target layout and
+   scene-exit is dropped so they slide back in. Transitions only apply once
+   `anim-ready` is set (one frame after load) so reloading straight into big view
+   snaps into place rather than replaying the move. */
+.scene-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    transform: translateY(100%); /* parked below the viewport; rises in big view */
+    /* Gradient runs from team A's banner colour (top-left) to team B's
+       (bottom-right); the vars are set per-team in paint() (overlay.js). The
+       dark fallbacks apply until the logo colours have been sampled. A vignette
+       is layered on top to darken the corners and draw the eye to the centre
+       scoreboard. */
+    background: radial-gradient(ellipse 75% 75% at 50% 50%,
+    transparent 40%, rgba(0, 0, 0, .5) 100%),
+    linear-gradient(135deg,
+            var(--scene-color-0, #0b1733) 0%,
+            var(--scene-color-1, #2a0b1f) 100%);
+    pointer-events: none;
+}
+
+/* Fine monochrome film grain (inline SVG fractalNoise, desaturated) tiled over
+   the whole scene. `overlay` blending dithers the smooth gradient so the wide
+   colour ramp no longer shows visible banding on stream. */
+.scene-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: .07;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+}
+
+/* Soft white bloom behind the centre scoreboard. Sits above the background but
+   below the shapes/score; lifts the middle of the scene and reinforces the
+   vignette's pull toward the centre. Hidden until big view. */
+.scene-glow {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: -1;
+    width: 70vmax;
+    height: 70vmax;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 50% 50%,
+    rgba(255, 255, 255, .12) 0%, transparent 60%);
+    opacity: 0;
+    pointer-events: none;
+    animation: scene-glow-breathe 8s ease-in-out infinite;
+}
+
+/* Gentle pulse so the centre bloom breathes rather than sitting static. Only the
+   scale animates here; opacity stays under the big-view fade transition. */
+@keyframes scene-glow-breathe {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.12);
+    }
+}
+
+/* Occasional snaking accent: a fixed diagonal sine wave (the path geometry stays
+   put — "waves staying in place") with a single bright dash that travels along
+   it like a snake, then a long quiet gap before the next pass. The static rotate
+   lives on the wrapper while only stroke-dashoffset/opacity animate on the path,
+   keeping the glow off any animated-transform layer. */
+.scene-snake {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 150vw;
+    height: 26vh;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* Two snakes on opposite diagonals, each tinted with one team's banner colour
+   and offset in height/timing so their passes don't coincide. */
+.scene-snake-a {
+    transform: translate(-50%, -62%) rotate(20deg);
+}
+
+.scene-snake-b {
+    transform: translate(-50%, -38%) rotate(-18deg);
+}
+
+.scene-snake path {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    /* The path holds 20 full waves; a dash covering half the normalised 1000-unit
+       length shows 10 of them at once. The gap is longer than the path so exactly
+       one snake is ever on screen. */
+    stroke-dasharray: 500 1500;
+    opacity: 0;
+    animation: scene-snake 22s linear infinite;
+}
+
+.scene-snake-a path {
+    stroke: var(--scene-color-0, #4ea1ff);
+    filter: drop-shadow(0 0 6px var(--scene-color-0, #4ea1ff));
+}
+
+.scene-snake-b path {
+    stroke: var(--scene-color-1, #b14eff);
+    filter: drop-shadow(0 0 6px var(--scene-color-1, #b14eff));
+    animation-delay: -11s;
+}
+
+@keyframes scene-snake {
+    0% {
+        stroke-dashoffset: 500;
+        opacity: 0;
+    }
+    5% {
+        opacity: .85;
+    }
+    27% {
+        opacity: .85;
+    }
+    32% {
+        stroke-dashoffset: -1000;
+        opacity: 0;
+    }
+    100% {
+        stroke-dashoffset: -1000;
+        opacity: 0;
+    }
+}
+
+/* Floating accent shapes drifting over the gradient: stroked-only triangles and
+   pentagons (SVG polygons, fill none) tinted with each team's banner colour
+   (shape-a = team A / --scene-color-0, shape-b = team B) and given a soft glow.
+   The animated transform lives on the outer span while the glow filter sits on
+   the inner svg: keeping the filter off the promoted (animated) layer avoids a
+   Chromium repaint bug where the drop-shadow vanishes once the background
+   transition settles. */
+.scene-shape {
+    position: absolute;
+    width: 12vmax;
+    height: 12vmax;
+    opacity: .55;
+    will-change: transform;
+    /* Random per-shape starting orientation (set in overlay.js). This individual
+       `rotate` property composes with the animated `transform` drift below, so
+       each shape begins at a different angle and keeps spinning from there. */
+    rotate: var(--shape-rot, 0deg);
+}
+
+.scene-shape svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible; /* let the glow spill past the viewBox */
+    fill: none;
+    stroke-linejoin: round;
+}
+
+/* Two parallax layers build depth: the `far` layer is small, faint, thin and
+   blurred and drifts slowly; the `near` layer is large, brighter, sharper and
+   moves further. DOM order (far first) keeps the near shapes painting on top. */
+.scene-shape-far {
+    opacity: .22;
+}
+
+.scene-shape-near {
+    opacity: .6;
+}
+
+.scene-shape.shape-a svg {
+    stroke: var(--scene-color-0, #4ea1ff);
+}
+
+.scene-shape.shape-b svg {
+    stroke: var(--scene-color-1, #b14eff);
+}
+
+.scene-shape-far.shape-a svg {
+    stroke-width: 1.6;
+    filter: drop-shadow(0 0 2px var(--scene-color-0, #4ea1ff)) blur(1.4px);
+}
+
+.scene-shape-far.shape-b svg {
+    stroke-width: 1.6;
+    filter: drop-shadow(0 0 2px var(--scene-color-1, #b14eff)) blur(1.4px);
+}
+
+.scene-shape-near.shape-a svg {
+    stroke-width: 2.8;
+    filter: drop-shadow(0 0 4px var(--scene-color-0, #4ea1ff));
+}
+
+.scene-shape-near.shape-b svg {
+    stroke-width: 2.8;
+    filter: drop-shadow(0 0 4px var(--scene-color-1, #b14eff));
+}
+
+/* Firework bursts: a flash + expanding ring + radiating sparks that pop briefly
+   then stay quiet for the rest of the cycle, so they read as occasional. Built in
+   overlay.js (buildBooms) with random positions and a per-burst negative delay
+   (--boom-delay) that desyncs them; boom-a/boom-b tint with the two team colours
+   (--boom-color). Living inside #scene-bg, they only show once it rises in big
+   view. The flash, ring and sparks share --boom-delay so each burst fires as one. */
+.scene-boom {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.boom-a {
+    --boom-color: var(--scene-color-0, #4ea1ff);
+}
+
+.boom-b {
+    --boom-color: var(--scene-color-1, #b14eff);
+}
+
+.boom-flash,
+.boom-ring,
+.boom-spark {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    animation-duration: 9s;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+    animation-delay: var(--boom-delay, 0s);
+}
+
+.boom-flash {
+    width: 6vmax;
+    height: 6vmax;
+    margin: -3vmax 0 0 -3vmax;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+    rgba(255, 255, 255, .95) 0%, var(--boom-color) 35%, transparent 70%);
+    animation-name: boom-flash;
+}
+
+.boom-ring {
+    width: 4vmax;
+    height: 4vmax;
+    margin: -2vmax 0 0 -2vmax;
+    border-radius: 50%;
+    border: .3vmax solid var(--boom-color);
+    animation-name: boom-ring;
+}
+
+/* Each spark is a thin streak rotated to its own angle (--a) and flung outward. */
+.boom-spark {
+    width: .4vmax;
+    height: 2vmax;
+    margin: -1vmax 0 0 -.2vmax;
+    border-radius: 999px;
+    background: linear-gradient(var(--boom-color), transparent);
+    animation-name: boom-spark;
+}
+
+@keyframes boom-flash {
+    0% {
+        opacity: 0;
+        transform: scale(.2);
+    }
+    3% {
+        opacity: .9;
+    }
+    12% {
+        opacity: 0;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1);
+    }
+}
+
+@keyframes boom-ring {
+    0% {
+        opacity: 0;
+        transform: scale(.2);
+    }
+    3% {
+        opacity: .85;
+    }
+    18% {
+        opacity: 0;
+        transform: scale(2.6);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(2.6);
+    }
+}
+
+@keyframes boom-spark {
+    0% {
+        opacity: 0;
+        transform: rotate(var(--a)) translateY(0) scaleY(.4);
+    }
+    4% {
+        opacity: 1;
+    }
+    20% {
+        opacity: 0;
+        transform: rotate(var(--a)) translateY(-7vmax) scaleY(1);
+    }
+    100% {
+        opacity: 0;
+        transform: rotate(var(--a)) translateY(-7vmax) scaleY(1);
+    }
+}
+
+.shape-1 {
+    top: 8%;
+    left: 6%;
+    width: 14vmax;
+    height: 14vmax;
+    animation: scene-shape-1 18s ease-in-out -5s infinite;
+}
+
+.shape-2 {
+    top: 14%;
+    right: 10%;
+    width: 17vmax;
+    height: 17vmax;
+    animation: scene-shape-2 19s ease-in-out -12s infinite;
+}
+
+.shape-3 {
+    bottom: 6%;
+    left: 14%;
+    width: 6vmax;
+    height: 6vmax;
+    animation: scene-shape-3 36s ease-in-out -20s infinite;
+}
+
+.shape-4 {
+    bottom: 10%;
+    right: 8%;
+    width: 15vmax;
+    height: 15vmax;
+    animation: scene-shape-4 17s ease-in-out -8s infinite;
+}
+
+.shape-5 {
+    top: 42%;
+    left: 40%;
+    width: 6.5vmax;
+    height: 6.5vmax;
+    animation: scene-shape-5 38s ease-in-out -25s infinite;
+}
+
+.shape-6 {
+    top: 55%;
+    right: 30%;
+    width: 13vmax;
+    height: 13vmax;
+    animation: scene-shape-6 20s ease-in-out -3s infinite;
+}
+
+.shape-7 {
+    top: 30%;
+    left: 22%;
+    width: 5.5vmax;
+    height: 5.5vmax;
+    animation: scene-shape-7 34s ease-in-out -15s infinite;
+}
+
+.shape-8 {
+    top: 4%;
+    left: 46%;
+    width: 7vmax;
+    height: 7vmax;
+    animation: scene-shape-8 32s ease-in-out -18s infinite;
+}
+
+.shape-9 {
+    bottom: 22%;
+    right: 18%;
+    width: 6vmax;
+    height: 6vmax;
+    animation: scene-shape-9 40s ease-in-out -30s infinite;
+}
+
+.shape-10 {
+    bottom: 30%;
+    left: 6%;
+    width: 16vmax;
+    height: 16vmax;
+    animation: scene-shape-10 16s ease-in-out -9s infinite;
+}
+
+@keyframes scene-shape-1 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(9vw, 12vh) rotate(120deg);
+    }
+}
+
+@keyframes scene-shape-2 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(-10vw, 9vh) rotate(-90deg);
+    }
+}
+
+@keyframes scene-shape-3 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(2.5vw, -3vh) rotate(150deg);
+    }
+}
+
+@keyframes scene-shape-4 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(-9vw, -8vh) rotate(-120deg);
+    }
+}
+
+@keyframes scene-shape-5 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translate(3vw, 2vh) rotate(180deg) scale(1.2);
+    }
+}
+
+@keyframes scene-shape-6 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(-8vw, -11vh) rotate(100deg);
+    }
+}
+
+@keyframes scene-shape-7 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(3vw, -2.5vh) rotate(-140deg);
+    }
+}
+
+@keyframes scene-shape-8 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translate(-3vw, 2.5vh) rotate(160deg) scale(1.15);
+    }
+}
+
+@keyframes scene-shape-9 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(-2.5vw, 2.5vh) rotate(130deg);
+    }
+}
+
+@keyframes scene-shape-10 {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    50% {
+        transform: translate(9vw, -8vh) rotate(-110deg);
+    }
+}
+
+/* Central scoreboard, shown only once the banners have settled in big view.
+   Centred at 50vh; the banners are placed symmetrically above/below it (see below)
+   so the score is an equal distance from each. */
+.scene-score {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    transform: translate(-50%, -50%) scale(.85);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    opacity: 0;
+    color: #fff;
+    font-weight: 800;
+    font-size: 6rem;
+    line-height: 1;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
+    pointer-events: none;
+}
+
+.scene-score-sep {
+    opacity: .5;
+    font-size: 4rem;
+}
+
+/* --- Big view target layout --- */
+body.scene-big .scene-bg {
+    transform: translateY(0);
+}
+
+body.scene-big .scene-score {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+body.scene-big .scene-glow {
+    opacity: 1;
+}
+
+/* Bigger banners in big view. Like `top`, these size changes aren't transitioned,
+   so they apply instantly while the banner is off-screen (at the scene-big step). */
+body.scene-big .team {
+    height: 112px;
+    width: 38vw;
+}
+
+body.scene-big .team-logo {
+    width: 88px;
+    height: 88px;
+}
+
+body.scene-big .team-name {
+    font-size: 2.6rem;
+}
+
+/* Team A (left) higher, team B (right) lower, placed symmetrically about the
+   vertical middle (centres at 35vh / 65vh, offset by half the 112px height) so
+   the score sits an equal distance from each. Outer edges stay flush to the
+   screen edges (left/right 0, inherited); the banners are widened (38vw) so their
+   inner edges sit closer to the centre. justify-content + inner padding pull the
+   logo and name to the banner's inner, centre-facing edge (clearing the slant). */
+body.scene-big .team-left {
+    top: calc(35vh - 56px);
+    justify-content: flex-end;
+    padding-right: 44px;
+}
+
+body.scene-big .team-right {
+    top: calc(65vh - 56px);
+    justify-content: flex-end;
+    padding-left: 44px;
+}
+
+/* The in-banner score plate is hidden throughout the move and in big view. */
+body.scene-exit .team-score,
+body.scene-big .team-score {
+    display: none;
+}
+
+/* Hero-ban badges anchor near the banners' normal spot. Hide them during the
+   exit step (banners off-screen), then in big view reveal them grouped at the
+   top centre: team A's just left of centre, team B's just right, sitting side by
+   side near the top edge. The position isn't transitioned, so it snaps into
+   place while the badge is faded out. */
+body.scene-exit .ban-slot {
+    opacity: 0;
+}
+
+body.scene-big .ban-slot-left {
+    top: 28px;
+    left: auto;
+    right: calc(50% + 8px);
+}
+
+body.scene-big .ban-slot-right {
+    top: 28px;
+    right: auto;
+    left: calc(50% + 8px);
+}
+
+body.scene-big .ban-badge {
+    width: 76px;
+    height: 76px;
+}
+
+/* Exit phase: shove each banner off its own side of the screen and drop the
+   scoreboard (placed after the scene-big rule above so it wins while moving). */
+body.scene-exit .team-left {
+    transform: translateX(-160%);
+}
+
+body.scene-exit .team-right {
+    transform: translateX(160%);
+}
+
+body.scene-exit .scene-score {
+    opacity: 0;
+}
+
+/* --- Transitions (enabled one frame after load) --- */
+body.anim-ready .scene-bg {
+    transition: transform .6s ease;
+}
+
+body.anim-ready .scene-glow {
+    transition: opacity .5s ease;
+}
+
+body.anim-ready .ban-slot {
+    transition: opacity .35s ease;
+}
+
+body.anim-ready .scene-score {
+    transition: opacity .4s ease .1s, transform .4s ease .1s;
+}
+
+/* Only the horizontal slide animates. `top` changes instantly while the banner is
+   off-screen (set in the same step the banner starts sliding back in), so the
+   move reads as purely left-to-right while in view, never up/down. */
+body.anim-ready .team {
+    transition: transform .45s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* ============== Control room ============== */
+/* Sized for an OBS browser dock, which is often narrow and tall. `safe center`
+   keeps the panel centred when it fits but pins it to the top (scrollable)
+   instead of clipping the top off when it doesn't. */
+.control-room {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    gap: 32px;
+    padding: 24px;
+    overflow-y: auto;
+    background: #111;
+    color: #fff;
+    text-align: center;
+}
+
+.cr-teams {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 32px 48px;
+    width: 100%;
+}
+
+.cr-team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-width: min(220px, 100%);
+}
+
+.cr-name {
+    max-width: 100%;
+    font-size: 1.25rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.cr-score-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.cr-score {
+    min-width: 2ch;
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.cr-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 1.75rem;
+    line-height: 1;
+    border: none;
+    border-radius: var(--cr-radius);
+    background: #2a2a2a;
+    color: #fff;
+    cursor: pointer;
+}
+
+.cr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+}
+
+.cr-swap {
+    padding: 12px 28px;
+    font-size: 1rem;
+    border: none;
+    border-radius: var(--cr-radius);
+    background: #2a2a2a;
+    color: #fff;
+    cursor: pointer;
+}
+
+.cr-btn:hover,
+.cr-swap:hover {
+    background: #3a3a3a;
+}
+
+.cr-btn:active,
+.cr-swap:active {
+    background: #444;
+}
+
+/* Toggle in its "on" state (e.g. Big view active). */
+.cr-toggle-on,
+.cr-toggle-on:hover {
+    background: #2f7d57;
+    color: #fff;
+}
+
+.cr-empty {
+    max-width: 28rem;
+    color: var(--cr-muted);
+    font-size: 1.1rem;
+}
+
+/* ============== Ban selector (control room) ============== */
+.cr-bans {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.cr-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: #1d1d1d;
+    color: #bbb;
+    cursor: pointer;
+}
+
+.cr-clear:hover {
+    background: #2a1a1a;
+    border-color: #a33;
+    color: #f55;
+}
+
+.cr-ban {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 16px;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: #1d1d1d;
+    color: #fff;
+    font-size: .95rem;
+    cursor: pointer;
+}
+
+.cr-ban:hover {
+    background: #262626;
+}
+
+.cr-ban-set {
+    border-color: #444;
+}
+
+.cr-ban-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+.ban-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, .6);
+}
+
+.ban-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: min(680px, 100%);
+    max-height: 80vh;
+    padding: 20px;
+    background: #1a1a1a;
+    border-radius: 12px;
+}
+
+.ban-picker-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.ban-search {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 14px;
+    border: 1px solid #444;
+    border-radius: var(--cr-radius);
+    background: #111;
+    color: #fff;
+    font-size: 1rem;
+}
+
+.ban-clear {
+    white-space: nowrap;
+}
+
+.ban-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 12px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.ban-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 4px;
+    border: 1px solid transparent;
+    border-radius: var(--cr-radius);
+    background: var(--cr-tile);
+    color: #fff;
+    cursor: pointer;
+}
+
+.ban-cell:hover {
+    background: var(--cr-tile-hover);
+    border-color: var(--cr-border-hover);
+}
+
+.ban-cell-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.ban-cell-name {
+    font-size: .75rem;
+    line-height: 1.1;
+    text-align: center;
+}
+
+/* ============== Match picker (control room) ============== */
+.match-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: min(640px, 100%);
+    max-height: 80vh;
+    padding: 20px;
+    background: #1a1a1a;
+    border-radius: 12px;
+}
+
+.mp-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.mp-sub {
+    margin: 0;
+    color: var(--cr-muted);
+    font-size: .95rem;
+}
+
+.mp-days {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.mp-day {
+    padding: 18px 16px;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: var(--cr-tile);
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mp-day:hover {
+    background: var(--cr-tile-hover);
+    border-color: var(--cr-border-hover);
+}
+
+.mp-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mp-back {
+    padding: 6px 14px;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: #1d1d1d;
+    color: #ddd;
+    font-size: .9rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.mp-back:hover {
+    background: #262626;
+}
+
+.mp-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.mp-match {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--cr-radius);
+    background: var(--cr-tile);
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mp-match:hover {
+    background: var(--cr-tile-hover);
+    border-color: var(--cr-border-hover);
+}
+
+.mp-match-current {
+    border-color: #4a8;
+}
+
+.mp-logo {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+.mp-vs {
+    flex: 1;
+    font-size: .95rem;
+}
+
+/* Tighten the control room for small, near-square or portrait docks. */
+@media (max-width: 380px), (max-height: 540px) {
+    .control-room {
+        gap: 18px;
+        padding: 16px;
+    }
+
+    .cr-teams {
+        gap: 18px 28px;
+    }
+
+    .cr-btn {
+        width: 48px;
+        height: 48px;
+        font-size: 1.5rem;
+    }
+
+    .cr-score {
+        font-size: 2rem;
+    }
+
+    .ban-picker,
+    .match-picker {
+        padding: 14px;
+        gap: 12px;
+    }
+
+    .ban-grid {
+        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+        gap: 8px;
+    }
+
+    .ban-cell-icon {
+        width: 48px;
+        height: 48px;
+    }
+}
