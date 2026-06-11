@@ -36,8 +36,11 @@ def load_matches(url):
     matches = []
 
     while True:
-        headers = {"Range": f"matches={range_start}-{range_end}"}
-        data = requests.get(url, headers=headers).json()
+        # headers = {"Range": f"matches={range_start}-{range_end}"}
+        try:
+            data = requests.get(url + f"&offset={range_start}&limit=20").json()["items"]
+        except:
+            break
         print(f"Loaded range {range_start}-{range_end}")
 
         for match in data:
