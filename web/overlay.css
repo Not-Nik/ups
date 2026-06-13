@@ -54,14 +54,32 @@ html, body {
     clip-path: polygon(0 0, 100% 0, 100% 100%, var(--slant) 100%);
 }
 
+/* Box that reserves the logo's slot and centres its content (an <img>, or a text
+   monogram for teams with no logo). */
 .team-logo {
     width: 48px;
     height: 48px;
-    object-fit: contain;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.team-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
     /* drop-shadow follows the logo's alpha shape, so transparent PNGs cast a
        soft shadow off their actual silhouette rather than a square box. */
     filter: drop-shadow(0 0px 5px rgba(0, 0, 0, .75));
+}
+
+.team-logo-text {
+    font-weight: 800;
+    font-size: 1.4rem;
+    line-height: 1;
+    letter-spacing: .02em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
 }
 
 .team-name {
@@ -71,7 +89,22 @@ html, body {
     text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
 
+/* Outer wrapper: the flex item that reserves the plate's layout width and clips the
+   reveal. Collapsing its max-width to 0 (big view) wipes the plate horizontally; the
+   inner plate keeps its full width so the slant never collapses or inverts. */
 .team-score {
+    align-self: stretch;
+    display: flex;
+    justify-content: flex-end; /* pin the plate to the inner edge as it reveals */
+    min-width: 0; /* override flex min-width:auto so max-width:0 can truly collapse it */
+    max-width: 140px;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+}
+
+.team-score-plate {
+    flex-shrink: 0; /* keep full width and get clipped, rather than squeezed, by the wrapper */
     align-self: stretch;
     display: flex;
     align-items: center;
@@ -83,9 +116,8 @@ html, body {
     font-size: 2.25rem;
     line-height: 1;
     text-align: center;
+    white-space: nowrap;
     text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
-    cursor: pointer;
-    user-select: none;
 }
 
 /* Push the score plate to the inner end of the banner, leaving the logo and
@@ -93,11 +125,17 @@ html, body {
    banner's inner edge (same --slant over the same height). */
 .team-left .team-score {
     margin-left: auto;
+}
+
+.team-left .team-score-plate {
     clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
 }
 
 .team-right .team-score {
     margin-right: auto;
+}
+
+.team-right .team-score-plate {
     clip-path: polygon(0 0, calc(100% - var(--slant)) 0, 100% 100%, var(--slant) 100%);
 }
 
@@ -335,6 +373,19 @@ body.scene-big .powered-logo {
     opacity: .07;
     mix-blend-mode: overlay;
     pointer-events: none;
+}
+
+/* Foreground decoration (snakes, floating shapes, fireworks) layered over the
+   gradient. On the maps screen this layer slides right — the *elements* shift while
+   the gradient stays full-screen — in step with team B's banner moving left
+   (the scene-fx-right class is toggled in overlay.js at that exact moment). */
+.scene-fx {
+    position: absolute;
+    inset: 0;
+}
+
+body.scene-fx-right .scene-fx {
+    transform: translateX(-14vw);
 }
 
 /* Soft white bloom behind the centre scoreboard. Sits above the background but
@@ -816,7 +867,8 @@ body.scene-big .powered-logo {
 }
 
 /* --- Big view target layout --- */
-body.scene-big .scene-bg {
+body.scene-big .scene-bg,
+body.scene-maps .scene-bg {
     transform: translateY(0);
 }
 
@@ -841,6 +893,10 @@ body.scene-big .team-logo {
     height: 88px;
 }
 
+body.scene-big .team-logo-text {
+    font-size: 2.6rem;
+}
+
 body.scene-big .team-name {
     font-size: 2.6rem;
 }
@@ -857,16 +913,29 @@ body.scene-big .team-left {
     padding-right: 44px;
 }
 
+/* Left-anchored (not right:0) so team B can glide horizontally to the maps screen's
+   left:0 column; 38vw from the right edge keeps it flush right in big view. */
 body.scene-big .team-right {
     top: calc(65vh - 56px);
+    left: calc(100% - 38vw);
+    right: auto;
     justify-content: flex-end;
     padding-left: 44px;
 }
 
-/* The in-banner score plate is hidden throughout the move and in big view. */
+/* The score plate is absent off-screen mid-slide, and in big view (which has its own
+   central scoreboard). Keeping it out of the flex flow here means it never disturbs
+   the banner's logo/name layout and has no resting side to pop from on the way back. */
 body.scene-exit .team-score,
 body.scene-big .team-score {
     display: none;
+}
+
+/* While wiping closed on the way to big view the plate is briefly shown again
+   (collapseScores). Keep team B on the maps (left) slant here so its tilt doesn't
+   mirror-flip against the base right-slant the instant the wipe starts. */
+body.scene-big .team-right .team-score-plate {
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
 }
 
 /* Hero-ban badges anchor near the banners' normal spot. Hide them during the
@@ -914,6 +983,11 @@ body.anim-ready .scene-bg {
     transition: transform .6s ease;
 }
 
+/* Matches the .team transition so the fx layer slides in lockstep with team B. */
+body.anim-ready .scene-fx {
+    transition: transform .45s cubic-bezier(.4, 0, .2, 1);
+}
+
 body.anim-ready .scene-glow {
     transition: opacity .5s ease;
 }
@@ -926,11 +1000,311 @@ body.anim-ready .scene-score {
     transition: opacity .4s ease .1s, transform .4s ease .1s;
 }
 
-/* Only the horizontal slide animates. `top` changes instantly while the banner is
-   off-screen (set in the same step the banner starts sliding back in), so the
-   move reads as purely left-to-right while in view, never up/down. */
+/* Entering the maps scene wipes the score plate open horizontally (the wrapper's
+   overflow clips the fully-slanted, fixed-width inner plate). The wipe is triggered
+   from JS (revealScores in overlay.js) rather than a class-driven transition, because
+   the plate is display:none in big view and an un-hide + animate in the same frame
+   won't start reliably. Leaving maps just hides it. */
+
+/* `transform` drives the off-screen slide (normal<->big/maps); top/left/width/
+   height/clip-path let the banners glide in place when moving directly between big
+   and maps (see paintScene). All share one easing so a combined move reads as one
+   motion. The logo/name are repositioned and resized by the FLIP in overlay.js. */
 body.anim-ready .team {
-    transition: transform .45s cubic-bezier(.4, 0, .2, 1);
+    transition: transform .45s cubic-bezier(.4, 0, .2, 1),
+                top .45s cubic-bezier(.4, 0, .2, 1),
+                left .45s cubic-bezier(.4, 0, .2, 1),
+                width .45s cubic-bezier(.4, 0, .2, 1),
+                height .45s cubic-bezier(.4, 0, .2, 1),
+                clip-path .45s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* During a scene swap we momentarily kill the banner transition so a team that
+   changes sides (team B on the maps screen) jumps to its new off-screen position
+   instead of sliding across the screen (see paintScene in overlay.js). */
+body.anim-ready.scene-snap .team {
+    transition: none;
+}
+
+/* ============== Maps (big-view strip + maps scene) ============== */
+/* Both map surfaces are hidden by default; each scene reveals its own. Gating the
+   strip's display on :not([hidden]) lets overlay.js hide it (no played maps) even
+   though the scene rule is more specific than the `hidden` attribute. */
+.maps-strip,
+.maps-screen {
+    display: none;
+}
+
+body.scene-big .maps-strip:not([hidden]) {
+    position: fixed;
+    left: 50%;
+    bottom: 4vh;
+    z-index: 2;
+    display: flex;
+    gap: 16px;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+/* Shown on the maps scene, and kept shown briefly while leaving (maps-leaving) so
+   the cards can fade out instead of being cut by display:none. */
+body.scene-maps .maps-screen,
+body.maps-leaving .maps-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Leave the left third clear for the stacked team banners. */
+    padding: 0 4vw 0 34vw;
+    color: #fff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
+}
+
+/* The hero bans and watermark are irrelevant on the maps screen; the two team
+   banners stay, stacked on the left (see below). The central score is left in the DOM
+   (not display:none) so it fades/scales out via its opacity transition on the way to
+   maps and back in on the way to big — base .scene-score is already opacity 0. */
+body.scene-maps .ban-slot,
+body.scene-maps .powered {
+    display: none;
+}
+
+/* Maps scene banners: both on the left, team B normalised to the left-edge look
+   and dropped just below team A so they read as a stacked scoreboard. Entering
+   and leaving reuses the shared scene-exit slide (overlay.js paintScene). */
+body.scene-maps .team {
+    width: 30vw;
+    height: 96px;
+}
+
+body.scene-maps .team-logo {
+    width: 72px;
+    height: 72px;
+}
+
+body.scene-maps .team-logo-text {
+    font-size: 2rem;
+}
+
+body.scene-maps .team-name {
+    font-size: 2rem;
+}
+
+body.scene-maps .team-left {
+    top: calc(50vh - 104px);
+}
+
+body.scene-maps .team-right {
+    top: calc(50vh + 8px);
+    left: 0;
+    right: auto;
+    flex-direction: row;
+    padding: 0 0 0 24px;
+    clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+body.scene-maps .team-right .team-score {
+    margin-left: auto;
+    margin-right: 0;
+}
+
+body.scene-maps .team-right .team-score-plate {
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+/* Both banners are on the left here, so team B exits/enters from the left edge too
+   (the default scene-exit rule shoves .team-right off the right). */
+body.scene-maps.scene-exit .team-right {
+    transform: translateX(-160%);
+}
+
+.maps-track {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 1.6vw;
+}
+
+/* Fade/rise the timeline in once the banners have started settling. */
+body.scene-maps.anim-ready .maps-track {
+    animation: maps-rise .5s ease .12s both;
+}
+
+@keyframes maps-rise {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Leaving the maps scene: mirror the rise so the cards fade/drop out (overlay.js
+   holds the screen visible via maps-leaving for the animation's length). A separate
+   keyframe name guarantees a fresh animation plays rather than reusing the finished
+   rise. */
+body.maps-leaving.anim-ready .maps-track {
+    animation: maps-fall .4s ease both;
+}
+
+@keyframes maps-fall {
+    from {
+        opacity: 1;
+        transform: none;
+    }
+    to {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+}
+
+.maps-empty {
+    color: rgba(255, 255, 255, .7);
+    font-size: 1.5rem;
+}
+
+/* A map tile: an outer wrapper that owns layout width and the FLIP move, around an
+   inner card that owns the visual (16:9 art + name + winner badge) and the lift. The
+   split keeps the move transform (.map-tile) and the scale transform (.map-card) on
+   separate elements so neither needs a custom property to compose — plain transforms
+   transition reliably in every browser. */
+.map-tile {
+    position: relative;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.map-card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, .35);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+}
+
+/* Per-map ban badges stacked above/below the card on the maps screen (reusing the
+   banner .ban-badge look at a smaller size). Hidden when that side hasn't banned. */
+.map-ban {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+
+.map-art {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, #2a2f3a, #1a1d24);
+}
+
+.map-art-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.map-noart .map-art-img {
+    display: none;
+}
+
+.map-name {
+    padding: 8px 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    text-shadow: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Winner badge fills the whole map art over a dimmed image, centring its content
+   (the winner's logo, or a text mark for teams with no logo). */
+.map-winner {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    padding: 18%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, .35);
+}
+
+.map-winner-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .8));
+}
+
+.map-winner-text {
+    font-weight: 800;
+    font-size: 1.7rem;
+    color: #fff;
+    text-align: center;
+    line-height: 1;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, .8);
+}
+
+/* Timeline states: later = dimmed, upcoming = lifted with a glow, match point
+   swaps the glow for a coloured border (gold for a decider, set via --mp-color).
+   Applied to the inner card so they sit alongside the FLIP move on the wrapper. */
+.maps-track .map-later .map-card {
+    opacity: .45;
+}
+
+/* scale() grows the card past its layout box, so reserve real vertical space with
+   a margin to keep the lifted card clear of its ban badges above/below. */
+.maps-track .map-upcoming .map-card {
+    transform: scale(1.06);
+    margin: 10px 0;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, .5), 0 6px 24px rgba(0, 0, 0, .6);
+}
+
+.maps-track .map-matchpoint .map-card {
+    box-shadow: 0 0 0 4px var(--mp-color, #ffcf3f), 0 0 24px var(--mp-color, #ffcf3f);
+}
+
+/* The lift/dim/glow when a tile changes kind (later <-> upcoming <-> played) animate
+   via a plain class-driven transition on the inner card. The discrete events — moving,
+   appearing, the winner reveal — are driven by the Web Animations API in overlay.js
+   instead, so they don't depend on transition toggling. Maps scene only. */
+body.scene-maps.anim-ready .maps-track .map-card {
+    transition: transform .4s cubic-bezier(.4, 0, .2, 1),
+                margin .4s cubic-bezier(.4, 0, .2, 1),
+                opacity .4s ease,
+                box-shadow .4s ease;
+}
+
+/* Maps scene tiles are portrait so the whole pool fits beside the scoreboard. */
+.maps-track .map-tile {
+    width: clamp(130px, 14vw, 200px);
+}
+
+.maps-track .map-art {
+    aspect-ratio: 3 / 4.5;
+}
+
+/* Big-view strip tiles are smaller. */
+.maps-strip .map-tile {
+    width: 132px;
+}
+
+.maps-strip .map-name {
+    padding: 4px 6px;
+    font-size: .8rem;
 }
 
 /* ============== Control room ============== */
@@ -944,33 +1318,28 @@ body.anim-ready .team {
     flex-direction: column;
     align-items: center;
     justify-content: safe center;
-    gap: 32px;
-    padding: 24px;
+    gap: 14px;
+    padding: 16px;
     overflow-y: auto;
     background: #111;
     color: #fff;
     text-align: center;
 }
 
+/* One row per team: name | score controls | ban. The shared grid keeps the three
+   columns aligned across both team rows. */
 .cr-teams {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 32px 48px;
-    width: 100%;
-}
-
-.cr-team {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 16px;
-    min-width: min(220px, 100%);
+    gap: 10px 20px;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
 }
 
 .cr-name {
-    max-width: 100%;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 600;
     overflow-wrap: anywhere;
 }
@@ -978,33 +1347,26 @@ body.anim-ready .team {
 .cr-score-controls {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
 }
 
 .cr-score {
     min-width: 2ch;
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 800;
     line-height: 1;
 }
 
 .cr-btn {
-    width: 56px;
-    height: 56px;
-    font-size: 1.75rem;
+    width: 44px;
+    height: 44px;
+    font-size: 1.4rem;
     line-height: 1;
     border: none;
     border-radius: var(--cr-radius);
     background: #2a2a2a;
     color: #fff;
     cursor: pointer;
-}
-
-.cr-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px;
 }
 
 .cr-swap {
@@ -1015,6 +1377,29 @@ body.anim-ready .team {
     background: #2a2a2a;
     color: #fff;
     cursor: pointer;
+}
+
+/* Per-team "Won" button: replaces the +/- once maps drive the score. The current
+   map's winner is marked with a gold outline. */
+.cr-won {
+    padding: 9px 18px;
+    font-size: 1rem;
+    font-weight: 700;
+    border: 2px solid transparent;
+    border-radius: var(--cr-radius);
+    background: #2a2a2a;
+    color: #fff;
+    cursor: pointer;
+}
+
+.cr-won:hover {
+    background: #3a3a3a;
+}
+
+.cr-won-on,
+.cr-won-on:hover {
+    border-color: #ffcf3f;
+    box-shadow: 0 0 10px rgba(255, 207, 63, .5);
 }
 
 .cr-btn:hover,
@@ -1041,45 +1426,17 @@ body.anim-ready .team {
 }
 
 /* ============== Ban selector (control room) ============== */
-.cr-bans {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-}
-
-.cr-clear {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: 1px solid var(--cr-border);
-    border-radius: var(--cr-radius);
-    background: #1d1d1d;
-    color: #bbb;
-    cursor: pointer;
-}
-
-.cr-clear:hover {
-    background: #2a1a1a;
-    border-color: #a33;
-    color: #f55;
-}
-
 .cr-ban {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 44px;
-    padding: 8px 16px;
+    min-height: 38px;
+    padding: 6px 12px;
     border: 1px solid var(--cr-border);
     border-radius: var(--cr-radius);
     background: #1d1d1d;
     color: #fff;
-    font-size: .95rem;
+    font-size: .85rem;
     cursor: pointer;
 }
 
@@ -1092,8 +1449,8 @@ body.anim-ready .team {
 }
 
 .cr-ban-icon {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 4px;
     object-fit: cover;
 }
@@ -1291,25 +1648,188 @@ body.anim-ready .team {
     font-size: .95rem;
 }
 
-/* Tighten the control room for small, near-square or portrait docks. */
+/* ============== Maps editor (control room) ============== */
+/* Compact control grid: a right-aligned label column beside a wrapping row of
+   buttons for each group (best of / view / match actions). */
+.cr-control-table {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 6px 12px;
+    width: min(420px, 100%);
+    margin: 0 auto;
+}
+
+.cr-control-label {
+    text-align: right;
+    color: var(--cr-muted);
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+.cr-control-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.cr-control-table .cr-swap {
+    padding: 6px 12px;
+    font-size: .85rem;
+}
+
+.cr-select {
+    padding: 6px 10px;
+    font-size: .85rem;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: #2a2a2a;
+    color: #fff;
+    cursor: pointer;
+}
+
+.cr-maps-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Title + "Add map" on one line. */
+.cr-maps-head {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.cr-maps-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+/* Horizontal, scrollable timeline of map slots. Each slot is a thin vertical card;
+   the list scrolls sideways and addMap() jumps it to the right (see control.js). */
+.cr-maps {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    /* Centre the cards, but fall back to flex-start when they overflow so the first
+       card never becomes unreachable behind the scroll start. */
+    justify-content: safe center;
+    gap: 8px;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 6px; /* room for the scrollbar so it doesn't cover the cards */
+}
+
+.cr-map-row {
+    display: flex;
+    flex: 0 0 auto;
+    width: 104px;
+    padding: 6px;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: #161616;
+}
+
+.cr-map-upcoming {
+    border-color: #4a8;
+}
+
+.cr-map-matchpoint {
+    border-color: #ffcf3f;
+}
+
+.cr-map-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    padding: 5px;
+    border: 1px solid var(--cr-border);
+    border-radius: var(--cr-radius);
+    background: #1d1d1d;
+    color: #fff;
+    font-size: .72rem;
+    cursor: pointer;
+}
+
+.cr-map-pick:hover {
+    background: #262626;
+}
+
+.cr-map-pick span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.cr-map-thumb {
+    width: 100%;
+    height: 46px;
+    border-radius: 4px;
+    object-fit: cover;
+}
+
+/* Map picker: mode-grouped variant of the ban grid (reuses .ban-cell). */
+.map-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.map-group-title {
+    margin: 8px 0 4px;
+    font-size: .9rem;
+    color: var(--cr-muted);
+}
+
+.map-cells {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.map-cell-icon {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #222;
+}
+
+.map-cell-noart {
+    background: #333;
+}
+
+/* Tighten the control room further for small, near-square or portrait docks. */
 @media (max-width: 380px), (max-height: 540px) {
     .control-room {
-        gap: 18px;
-        padding: 16px;
+        gap: 12px;
+        padding: 12px;
     }
 
     .cr-teams {
-        gap: 18px 28px;
+        gap: 8px 14px;
     }
 
     .cr-btn {
-        width: 48px;
-        height: 48px;
-        font-size: 1.5rem;
+        width: 40px;
+        height: 40px;
+        font-size: 1.3rem;
     }
 
     .cr-score {
-        font-size: 2rem;
+        font-size: 1.8rem;
     }
 
     .ban-picker,
