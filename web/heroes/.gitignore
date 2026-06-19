@@ -1,0 +1,3 @@
+# Hero portrait icons — fetched from OverFast by ../fetch-assets.py, not committed.
+# The manifest (heroes.json) is tracked and drives what gets fetched.
+*.png

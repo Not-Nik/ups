@@ -1,0 +1,3 @@
+# Map screenshots — fetched from OverFast by ../fetch-assets.py, not committed.
+# The manifest (maps.json) is tracked and drives what gets fetched.
+*.jpg
