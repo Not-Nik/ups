@@ -58,6 +58,7 @@ const OTHER_SIDE = {a: 'b', b: 'a'};
 
 const state = {
     matches: [],
+    brackets: [], // rendered bracket entries {stage, key, nodes} — for the image dialog
     scores: {},   // { index: [scoreA, scoreB] } — set only when both inputs are valid ints
     submitted: new Set(),
     pendingIndices() {
@@ -263,7 +264,7 @@ function unlockPrediction(index) {
     card.querySelector('.score-input')?.focus();
 }
 
-// Section/day ordering (dayOf, letters, sectionOrder, compareDays) lives in common.js.
+// Section helpers (sectionKey, sectionTitle, dayOf, sectionOrder, compareDays) live in common.js.
 
 // ============== Tabs ==============
 function activateTab(day) {
@@ -360,13 +361,13 @@ function refreshExpandIcons() {
     updateSectionExpandIcons();
 }
 
-function createSectionHeader(sec, day) {
+function createSectionHeader(key, day) {
     const header = makeEl('div', {
         className: 'section-header',
-        dataset: {day, section: sec},
+        dataset: {day, section: key},
     });
     header.insertAdjacentHTML('beforeend', `
-        <span class="section-title">${escapeHtml(sec)}</span>
+        <span class="section-title">${escapeHtml(sectionTitle(key))}</span>
         <button class="section-expand-btn btn btn-sm btn-outline-secondary flex-shrink-0"
                 aria-label="Show or hide all predictions in this section"
                 title="Show or hide all predictions in this section">
@@ -375,7 +376,7 @@ function createSectionHeader(sec, day) {
                 <span class="chevron-arrow"></span>
             </span>
         </button>`);
-    header.querySelector('.section-expand-btn').addEventListener('click', () => toggleSectionPredictions(sec));
+    header.querySelector('.section-expand-btn').addEventListener('click', () => toggleSectionPredictions(key));
     return header;
 }
 
@@ -414,36 +415,44 @@ function renderTabs(days) {
 }
 
 // ============== Grid render ==============
-function renderGrid(matches) {
+function renderGrid(matches, brackets = []) {
     state.matches = matches;
+    state.brackets = brackets;
     const grid = $('grid');
     grid.innerHTML = '';
 
-    const groups = groupBy(matches, m => m.section ?? '');
-    const sortedSections = [...groups.keys()].sort(sectionOrder);
+    // Bracket-format stages are drawn as brackets (see bracket.js), not in the
+    // day-grid, so leave their sections out here.
+    const groups = groupBy(matches, sectionKey);
+    const isBracketKey = key => BRACKET_STAGE_TYPES.has(groups.get(key)[0]?.[0]?.stage_type);
+    const sortedSections = [...groups.keys()].sort(sectionOrder).filter(key => !isBracketKey(key));
     const days = [...new Set(sortedSections.map(dayOf))].sort(compareDays);
     renderTabs(days);
 
-    sortedSections.forEach((sec, si) => {
-        const day = dayOf(sec);
+    sortedSections.forEach((key, si) => {
+        const day = dayOf(key);
         const prevDay = si > 0 ? dayOf(sortedSections[si - 1]) : null;
 
         if (si > 0 && prevDay === day) {
             grid.appendChild(makeEl('div', {className: 'section-divider', dataset: {day}}));
         }
-        if (sec) {
-            grid.appendChild(createSectionHeader(sec, day));
+        if (sectionTitle(key)) {
+            grid.appendChild(createSectionHeader(key, day));
         }
-        groups.get(sec).forEach(([match, i]) => {
+        groups.get(key).forEach(([match, i]) => {
             const card = createCard(match, i, day);
-            card.dataset.section = sec;
+            card.dataset.section = key;
             grid.appendChild(card);
         });
     });
 
+    // One block + tab per bracket (stage, group).
+    brackets.forEach(b => grid.appendChild(renderBracketBlock(b)));
+    appendBracketTabs(brackets);
+
     // Default to the lowest-ranked day still missing scores.
     const defaultDay = days.find(day =>
-        matches.some(m => dayOf(m.section ?? '') === day && (m.score_a == null || m.score_b == null))
+        matches.some(m => (m.round_name ?? '') === day && (m.score_a == null || m.score_b == null))
     ) ?? days.at(-1);
     if (defaultDay) activateTab(defaultDay);
 }
@@ -561,33 +570,53 @@ const activeDay = () => $('tabs-bar').querySelector('.btn-secondary')?.dataset.d
 const sectionsForDay = day => {
     const set = new Set();
     state.matches.forEach(m => {
-        const sec = m.section ?? '';
-        if (sec && dayOf(sec) === day) set.add(sec);
+        if ((m.round_name ?? '') === day) set.add(sectionKey(m));
     });
     return [...set].sort(sectionOrder);
 };
 
-const userHasPredictionInSection = section =>
+const userHasPredictionInSection = key =>
     state.matches.some((m, i) =>
-        m.section === section && (i in state.scores || state.submitted.has(i))
+        sectionKey(m) === key && (i in state.scores || state.submitted.has(i))
     );
+
+// The bracket shown on the active tab, if any (its day key is a bracketDayKey).
+const activeBracket = () =>
+    (state.brackets ?? []).find(b => bracketDayKey(b.stage, b.key) === activeDay());
+
+// Toggle options for the image dialog. On a bracket tab the options are the bracket's
+// branches (Winners/Losers Bracket, full names) so each can be toggled even when a stage
+// keeps both in one group; on a league day they're the day's sections. Each is
+// {value, label, checked} — value is what the export hide logic keys on.
+const imageSectionItems = () => {
+    const bracket = activeBracket();
+    if (bracket) {
+        const branches = [...new Set(bracket.nodes.map(n => n.branch ?? ''))].sort((a, b) => branchRank(a) - branchRank(b));
+        const single = branches.length <= 1;
+        return branches.map(b => ({
+            value: b,
+            label: !single && BRANCH_LABEL[b]
+                ? BRANCH_LABEL[b]
+                : bracket.nodes.find(n => (n.branch ?? '') === b).group_name,
+            checked: true,
+        }));
+    }
+    const sections = sectionsForDay(activeDay());
+    const withPredictions = sections.filter(userHasPredictionInSection);
+    const pre = new Set(withPredictions.length ? withPredictions : sections);
+    return sections.map(key => ({value: key, label: sectionTitle(key), checked: pre.has(key)}));
+};
 
 const imageDialog = {
     open() {
-        const day = activeDay();
-        const sections = sectionsForDay(day);
-        const withPredictions = sections.filter(userHasPredictionInSection);
-        const preChecked = new Set(withPredictions.length ? withPredictions : sections);
-
         const list = $('image-section-list');
         list.replaceChildren();
-        sections.forEach((section, i) => {
+        imageSectionItems().forEach((item, i) => {
             const id = `image-section-${i}`;
-            const checked = preChecked.has(section) ? ' checked' : '';
             list.insertAdjacentHTML('beforeend', `
                 <div class="form-check">
-                    <input type="checkbox" id="${escapeAttr(id)}" class="form-check-input" data-section="${escapeAttr(section)}"${checked}>
-                    <label for="${escapeAttr(id)}" class="form-check-label small">${escapeHtml(section)}</label>
+                    <input type="checkbox" id="${escapeAttr(id)}" class="form-check-input" data-section="${escapeAttr(item.value)}"${item.checked ? ' checked' : ''}>
+                    <label for="${escapeAttr(id)}" class="form-check-label small">${escapeHtml(item.label)}</label>
                 </div>`);
         });
 
@@ -741,6 +770,11 @@ function collectImageHides({sections, includePredictions}) {
     let currentSection = '';
     for (const el of $('grid').children) {
         if (el.classList.contains('d-none')) continue;
+        // A bracket tab is a single block; hide the cells/edges of unchecked branches.
+        if (el.classList.contains('bracket-block')) {
+            collectBracketHides(el, sections, toHide);
+            continue;
+        }
         if (el.classList.contains('section-divider')) {
             flush();
             sectionEls.push(el);
@@ -761,14 +795,31 @@ function collectImageHides({sections, includePredictions}) {
     const selector = includePredictions
         ? '.submitted-badge, .edit-overlay'
         : '.score-input, .pred-sign, .submitted-badge, .edit-overlay';
-    forEachKeptEl(toHide, '.card', card => {
-        card.querySelectorAll(selector).forEach(n => toHide.push(n));
-    });
+    exportVisibleCards(toHide).forEach(card =>
+        card.querySelectorAll(selector).forEach(n => toHide.push(n)));
     forEachKeptEl(toHide, '.section-header', header => {
         header.querySelectorAll('.section-expand-btn').forEach(n => toHide.push(n));
     });
 
     return toHide;
+}
+
+// Hide a bracket's cells and edges for any branch the user unchecked. An edge is
+// dropped when either endpoint's branch is hidden so no line dangles; a branch label
+// goes with its branch.
+function collectBracketHides(block, sections, toHide) {
+    const branchOf = new Map();
+    block.querySelectorAll('.bracket-cell').forEach(cell => {
+        branchOf.set(cell.dataset.node, cell.dataset.branch);
+        if (!sections.has(cell.dataset.branch)) toHide.push(cell);
+    });
+    block.querySelectorAll('.bracket-edge').forEach(edge => {
+        if (!sections.has(branchOf.get(edge.dataset.from)) || !sections.has(branchOf.get(edge.dataset.to)))
+            toHide.push(edge);
+    });
+    block.querySelectorAll('.bracket-branch-label').forEach(label => {
+        if (!sections.has(label.dataset.branch)) toHide.push(label);
+    });
 }
 
 function forEachKeptEl(toHide, selector, fn) {
@@ -779,9 +830,24 @@ function forEachKeptEl(toHide, selector, fn) {
     }
 }
 
+// Every kept, on-screen card (league grid + bracket cells), skipping ones inside a
+// hidden container — so prediction affordances get stripped from brackets too.
+function exportVisibleCards(toHide) {
+    const hidden = new Set(toHide);
+    const visible = el => {
+        for (let n = el; n && n !== $('grid'); n = n.parentElement)
+            if (hidden.has(n) || n.classList.contains('d-none')) return false;
+        return true;
+    };
+    return [...$('grid').querySelectorAll('.card')].filter(visible);
+}
+
 async function renderGridCanvas() {
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim();
-    const canvas = await html2canvas($('grid'), {
+    // On a bracket tab, capture just the bracket's canvas (its own content width) rather
+    // than the full-width grid, so the image isn't padded out with empty space.
+    const target = $('grid').querySelector('.bracket-block:not(.d-none) .bracket-canvas') ?? $('grid');
+    const canvas = await html2canvas(target, {
         backgroundColor: bg,
         scale: window.devicePixelRatio,
         proxy: '/api/proxy',
@@ -808,6 +874,9 @@ async function renderGridCanvas() {
 }
 
 async function saveImage({sections, includePredictions}) {
+    // Suspend the bracket reflow: the hides below resize cells, which would otherwise
+    // trigger a relayout that rebuilds the SVG and undoes the per-branch edge hiding.
+    bracketReflowPaused = true;
     const toHide = collectImageHides({sections, includePredictions});
     toHide.forEach(el => {
         el.style.display = 'none';
@@ -817,7 +886,7 @@ async function saveImage({sections, includePredictions}) {
     // the render so they appear in their normal active styling, not greyed out.
     const reEnabled = [];
     if (includePredictions) {
-        forEachKeptEl(toHide, '.card', card => {
+        exportVisibleCards(toHide).forEach(card => {
             card.querySelectorAll('.score-input:disabled').forEach(input => {
                 input.disabled = false;
                 reEnabled.push(input);
@@ -838,6 +907,7 @@ async function saveImage({sections, includePredictions}) {
         reEnabled.forEach(input => {
             input.disabled = true;
         });
+        bracketReflowPaused = false;
     }
 }
 
@@ -997,7 +1067,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     bindEvents();
     try {
         const matches = await api('/api/matches');
-        renderGrid(matches);
+        const brackets = await loadBrackets();
+        renderGrid(matches, brackets);
         await loadPastPredictions();
         applyFinalScoreStates();
     } catch {

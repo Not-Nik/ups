@@ -19,20 +19,28 @@ const firstInt = s => {
 };
 
 // ============== Section/day ordering ==============
-// A match's `section` is a path like "Erste Liga/Group A/Day 5"; the last
-// segment is the day. Shared so the main site's tab bar and the control room's
-// match picker order matches identically.
-const dayOf = sec => sec.split('/').at(-1) ?? sec;
+// A match has stage_name / group_name / round_name (from the API). The round is
+// the "day" that drives the tab bar. A section is identified by an unambiguous
+// composite key (joined on a control char, since a stage name can itself contain
+// "/") and shown via a readable title. Shared so the main site's tab bar and the
+// control room's match picker order matches identically.
+const SECTION_SEP = '$'; // never appears in a stage/group/round name
+const sectionKey = m => [m.stage_name ?? '', m.group_name ?? '', m.round_name ?? ''].join(SECTION_SEP);
+const sectionParts = key => key.split(SECTION_SEP);
+const sectionTitle = key => sectionParts(key).filter(Boolean).join(' / ');
+const dayOf = key => sectionParts(key).at(-1) ?? key;
 const letters = s => s.replace(/\d+/g, '').trim();
 
+// Order sections: newest day first (round number desc), then league rank
+// (Erste < Zweite < Dritte), then group alphabetically.
 function sectionOrder(a, b) {
-    const pa = a.split('/'), pb = b.split('/');
-    const lastA = pa.at(-1) ?? '', lastB = pb.at(-1) ?? '';
-    const na = firstInt(lastA), nb = firstInt(lastB);
+    const [stageA, groupA, roundA] = sectionParts(a);
+    const [stageB, groupB, roundB] = sectionParts(b);
+    const na = firstInt(roundA), nb = firstInt(roundB);
     const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
-    return ((!isNaN(na) && !isNaN(nb)) ? nb - na : lastB.localeCompare(lastA))
-        || ligaRank(pa[0] ?? '') - ligaRank(pb[0] ?? '')
-        || (pa.length < 3 || pb.length < 3 ? 0 : (pa[1] ?? '').localeCompare(pb[1] ?? ''));
+    return ((!isNaN(na) && !isNaN(nb)) ? nb - na : roundB.localeCompare(roundA))
+        || ligaRank(stageA) - ligaRank(stageB)
+        || groupA.localeCompare(groupB);
 }
 
 function compareDays(a, b) {
@@ -53,6 +61,7 @@ const saveToken = t => localStorage.setItem('ups_token', t);
 
 // ============== Toast ==============
 let toastTimer = null;
+
 function showToast(msg, duration = 4000) {
     const toast = $('toast');
     if (!toast) return;
@@ -61,6 +70,7 @@ function showToast(msg, duration = 4000) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => hide(toast), duration);
 }
+
 $('toast')?.addEventListener('click', () => hide($('toast')));
 
 // ============== API ==============
@@ -88,7 +98,13 @@ async function api(url, {method = 'GET', body} = {}) {
 }
 
 // Run an async function, swallowing errors and returning undefined on failure.
-const tryFetch = async fn => { try { return await fn(); } catch { return undefined; } };
+const tryFetch = async fn => {
+    try {
+        return await fn();
+    } catch {
+        return undefined;
+    }
+};
 
 // ============== Theme ==============
 const THEME_CYCLE = ['dark', 'light', 'system'];

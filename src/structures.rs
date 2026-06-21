@@ -18,9 +18,39 @@ pub struct Match {
     pub team_b: String,
     pub logo_a: String,
     pub logo_b: String,
-    pub section: String,
     pub score_a: Option<u64>,
     pub score_b: Option<u64>,
+    pub toornament_id: Option<String>,
+    pub stage_type: Option<String>,
+    pub stage_number: Option<u64>,
+    pub stage_name: String,
+    pub group_name: String,
+    pub round_name: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct BracketNode {
+    pub node_id: String,
+    pub stage_id: String,
+    pub stage_name: String,
+    pub stage_number: u64,
+    pub stage_type: String,
+    pub group_name: String,
+    pub branch: Option<String>,
+    pub round_number: u64,
+    pub position: u64,
+    pub depth: u64,
+    pub team_a: Option<String>,
+    pub team_b: Option<String>,
+    pub logo_a: Option<String>,
+    pub logo_b: Option<String>,
+    pub score_a: Option<u64>,
+    pub score_b: Option<u64>,
+    pub source_type_a: Option<String>,
+    pub source_a: Option<String>,
+    pub source_type_b: Option<String>,
+    pub source_b: Option<String>,
+    pub match_id: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -63,4 +93,10 @@ pub struct Password {
 #[derive(Serialize, Deserialize)]
 pub struct ProxyQuery {
     pub url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Bracket {
+    pub stage: String,
+    pub group: String,
 }

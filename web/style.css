@@ -90,12 +90,17 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+    padding-top: .25rem;
+}
+
+/* Shared small-caps heading for section titles and bracket branch labels. */
+.section-title,
+.bracket-branch-label {
     font-size: .75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--bs-secondary-color);
-    padding-top: .25rem;
 }
 
 .section-expand-btn {
@@ -587,4 +592,62 @@
 .user-dropdown-item:hover {
     color: var(--bs-body-color);
     background: rgba(128, 128, 128, 0.1);
+}
+
+/* ============== Bracket view ============== */
+/* A bracket block spans the grid and scrolls horizontally; its canvas positions the
+   same score-box cards absolutely (one column per round) over an SVG edge layer. */
+.bracket-block {
+    grid-column: 1 / -1;
+    overflow-x: auto;
+    padding-bottom: .5rem;
+}
+
+.bracket-canvas {
+    position: relative;
+}
+
+.bracket-edges {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.bracket-edge {
+    stroke: var(--bs-secondary-color);
+    stroke-width: 2;
+    opacity: .55;
+}
+
+.bracket-edge-loser {
+    stroke-dasharray: 5 4;
+    opacity: .4;
+}
+
+/* Lines into/out of the hovered match (see renderBracketBlock). */
+.bracket-edge-hl {
+    stroke: var(--bs-primary, #4ea1ff);
+    stroke-width: 3;
+    opacity: 1;
+}
+
+.bracket-branch-label {
+    position: absolute;
+    left: 0;
+}
+
+.bracket-cell {
+    position: absolute;
+    width: 230px;
+}
+
+.bracket-cell > .card {
+    width: 100%;
+    margin: 0;
+}
+
+/* Not-yet-decided slots: the same shape, dimmed, no prediction toggle. */
+.bracket-tbd {
+    opacity: .5;
 }

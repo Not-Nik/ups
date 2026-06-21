@@ -11,7 +11,7 @@ mod predictions;
 mod structures;
 
 use crate::error::*;
-use crate::structures::ProxyQuery;
+use crate::structures::{Bracket, ProxyQuery};
 use governor::clock::DefaultClock;
 use governor::state::keyed::DefaultKeyedStateStore;
 use governor::{Quota, RateLimiter};
@@ -114,6 +114,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::matches);
 
+    let brackets = warp::path!("api" / "brackets")
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and_then(endpoints::brackets);
+
+    let bracket = warp::path!("api" / "bracket")
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and(warp::query::<Bracket>())
+        .and_then(endpoints::bracket);
+
     let single_prediction = warp::path!("api" / "predictions" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
@@ -178,6 +191,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = me
         .or(matches)
+        .or(brackets)
+        .or(bracket)
         .or(single_prediction)
         .or(multi_prediction)
         .or(user_predictions)

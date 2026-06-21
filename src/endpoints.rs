@@ -12,8 +12,8 @@ use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::structures::*;
 
 use crate::predictions::{
-    get_matches, get_matches_filter, get_predictions, get_user_match_predictions,
-    get_user_predictions, submit_prediction, update_prediction,
+    get_bracket_nodes, get_brackets, get_matches, get_matches_filter, get_predictions,
+    get_user_match_predictions, get_user_predictions, submit_prediction, update_prediction,
 };
 use log::debug;
 use sqlx::SqliteConnection;
@@ -45,6 +45,31 @@ pub async fn matches(
     let mut conn_lock = conn.lock().await;
 
     let matches = get_matches(&mut conn_lock)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&matches))
+}
+
+pub async fn bracket(
+    conn: Arc<Mutex<SqliteConnection>>,
+    query: Bracket,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let matches = get_bracket_nodes(&mut conn_lock, query.stage, query.group)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&matches))
+}
+
+pub async fn brackets(
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let matches = get_brackets(&mut conn_lock)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 

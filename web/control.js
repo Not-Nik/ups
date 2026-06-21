@@ -270,10 +270,10 @@ async function initControl() {
             return box.replaceChildren(crEmpty('No matches available.'));
         }
 
-        const days = [...new Set(matches.map(m => dayOf(m.section ?? '')))].sort(compareDays);
+        const days = [...new Set(matches.map(m => m.round_name ?? ''))].sort(compareDays);
         const matchesForDay = day => matches
-            .filter(m => dayOf(m.section ?? '') === day)
-            .sort((a, b) => sectionOrder(a.section ?? '', b.section ?? '')
+            .filter(m => (m.round_name ?? '') === day)
+            .sort((a, b) => sectionOrder(sectionKey(a), sectionKey(b))
                 || (a.team_a ?? '').localeCompare(b.team_a ?? ''));
 
         // Stage 1: the whole screen is the day list.
