@@ -380,38 +380,60 @@ function createSectionHeader(key, day) {
     return header;
 }
 
-function renderTabs(days) {
+// Render one row per tab group — league round-prefixes and bracket stages alike,
+// sorted together by group name — and return the tabs in display order (each
+// {day, unfinished}) so the caller can pick a default.
+function renderTabs(days, brackets, matches) {
+    const dayUnfinished = day =>
+        matches.some(m => (m.round_name ?? '') === day && (m.score_a == null || m.score_b == null));
+    // League days grouped by their non-digit prefix (e.g. "Day"). When every day in a
+    // group has a suffix, show the prefix once as a row label with bare suffixes on the
+    // buttons; otherwise the buttons carry the full name and the label cell is empty.
+    const leagueGroups = [...groupBy(days, letters)].map(([prefix, group]) => {
+        const items = group.map(([day]) => ({day, suffix: day.slice(prefix.length).trim()}));
+        const labelled = prefix && items.every(i => i.suffix);
+        return {
+            name: labelled ? prefix : (items[0]?.day ?? prefix),
+            label: labelled ? prefix : '',
+            entries: items.map(i => ({day: i.day, text: labelled ? i.suffix : i.day, unfinished: dayUnfinished(i.day)})),
+        };
+    });
+    // Bracket stages, one row each. A bracket is "unfinished" while it has a known
+    // matchup that hasn't been played (a predictable node without a score).
+    const bracketUnfinished = b => b.nodes.some(n => n.match_id != null && n.score_a == null);
+    const byStage = new Map();
+    brackets.forEach(b => pushTo(byStage, b.stage, b));
+    const bracketGroups = [...byStage].map(([stage, list]) => ({
+        name: stage,
+        label: stage,
+        entries: list.map(b => ({day: bracketDayKey(b.stage, b.key), text: b.label, unfinished: bracketUnfinished(b)})),
+    }));
+
     const bar = $('tabs-bar');
     bar.innerHTML = '';
-    // Group tabs by their non-digit prefix (e.g. "Day"), one prefix per row.
-    // When every tab in a group has a suffix, show the prefix once as a label
-    // and bare suffixes on the buttons; otherwise fall back to full names.
-    const groups = [...groupBy(days, letters)].map(([prefix, group]) => {
-        const entries = group.map(([day]) => ({day, suffix: day.slice(prefix.length).trim()}));
-        const labelled = prefix && entries.every(e => e.suffix);
-        return {prefix, entries, labelled, solo: !labelled && entries.length === 1};
-    });
-    // Sort by prefix, but sink any lone unlabelled tab (e.g. "Finale") to the bottom.
-    groups.sort((a, b) => (a.solo - b.solo) || a.prefix.localeCompare(b.prefix));
-    groups.forEach(({entries, labelled, prefix}) => {
-        // Label cell (column 1, empty when unlabelled) then the buttons cell
-        // (column 2), so buttons line up across rows via the shared grid column.
+    const order = [];
+    // Sort by group name, but sink groups with no heading (a lone tab like "Seedingwoche")
+    // to the bottom.
+    const groups = [...leagueGroups, ...bracketGroups]
+        .sort((a, b) => (!a.label - !b.label) || a.name.localeCompare(b.name));
+    for (const g of groups) {
+        // Label cell (column 1, empty when unlabelled) then the buttons cell (column 2),
+        // so buttons line up across rows via the shared grid column.
         bar.appendChild(makeEl('span', {
-            className: 'tab-prefix small text-secondary fw-semibold',
-            textContent: labelled ? prefix : '',
+            className: 'tab-prefix small text-secondary fw-semibold', textContent: g.label,
         }));
         const row = makeEl('div', {className: 'd-flex gap-2 flex-wrap'});
-        entries.forEach(({day, suffix}) => {
+        for (const e of g.entries) {
             const btn = makeEl('button', {
-                className: 'tab-btn btn btn-sm btn-outline-secondary',
-                textContent: labelled ? suffix : day,
-                dataset: {day},
+                className: 'tab-btn btn btn-sm btn-outline-secondary', textContent: e.text, dataset: {day: e.day},
             });
-            btn.addEventListener('click', () => activateTab(day));
+            btn.addEventListener('click', () => activateTab(e.day));
             row.appendChild(btn);
-        });
+            order.push(e);
+        }
         bar.appendChild(row);
-    });
+    }
+    return order;
 }
 
 // ============== Grid render ==============
@@ -427,7 +449,6 @@ function renderGrid(matches, brackets = []) {
     const isBracketKey = key => BRACKET_STAGE_TYPES.has(groups.get(key)[0]?.[0]?.stage_type);
     const sortedSections = [...groups.keys()].sort(sectionOrder).filter(key => !isBracketKey(key));
     const days = [...new Set(sortedSections.map(dayOf))].sort(compareDays);
-    renderTabs(days);
 
     sortedSections.forEach((key, si) => {
         const day = dayOf(key);
@@ -446,15 +467,14 @@ function renderGrid(matches, brackets = []) {
         });
     });
 
-    // One block + tab per bracket (stage, group).
+    // One block per bracket; its tab is added by renderTabs alongside the league days.
     brackets.forEach(b => grid.appendChild(renderBracketBlock(b)));
-    appendBracketTabs(brackets);
 
-    // Default to the lowest-ranked day still missing scores.
-    const defaultDay = days.find(day =>
-        matches.some(m => (m.round_name ?? '') === day && (m.score_a == null || m.score_b == null))
-    ) ?? days.at(-1);
-    if (defaultDay) activateTab(defaultDay);
+    // Tabs for league days and brackets together, sorted by group name; default to the
+    // first tab still missing a result (league day or bracket alike), else the last.
+    const tabs = renderTabs(days, brackets, matches);
+    const def = tabs.find(t => t.unfinished) ?? tabs.at(-1);
+    if (def) activateTab(def.day);
 }
 
 // ============== Modal ==============

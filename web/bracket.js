@@ -438,29 +438,3 @@ function renderBracketBlock({stage, key, nodes}) {
     block.appendChild(canvas);
     return block;
 }
-
-// One tab-group row per stage (stage name as the label, its groups as buttons),
-// matching the day-tab layout.
-function appendBracketTabs(brackets) {
-    if (!brackets.length) return;
-    const bar = $('tabs-bar');
-    const byStage = new Map();
-    brackets.forEach(b => pushTo(byStage, b.stage, b));
-    for (const [stage, groups] of byStage) {
-        bar.appendChild(makeEl('span', {
-            className: 'tab-prefix small text-secondary fw-semibold', textContent: stage,
-        }));
-        const row = makeEl('div', {className: 'd-flex gap-2 flex-wrap'});
-        groups.forEach(({key, label}) => {
-            const day = bracketDayKey(stage, key);
-            const btn = makeEl('button', {
-                className: 'tab-btn btn btn-sm btn-outline-secondary',
-                textContent: label,
-                dataset: {day},
-            });
-            btn.addEventListener('click', () => activateTab(day));
-            row.appendChild(btn);
-        });
-        bar.appendChild(row);
-    }
-}
