@@ -384,8 +384,12 @@ function createSectionHeader(key, day) {
 // sorted together by group name — and return the tabs in display order (each
 // {day, unfinished}) so the caller can pick a default.
 function renderTabs(days, brackets, matches) {
-    const dayUnfinished = day =>
-        matches.some(m => (m.round_name ?? '') === day && (m.score_a == null || m.score_b == null));
+    // A day tab is unfinished only because of the matches it actually shows — bracket
+    // matches are drawn as brackets (and some carry "Day N" round names), so exclude
+    // them here just like the day grid does.
+    const dayUnfinished = day => matches.some(m =>
+        !BRACKET_STAGE_TYPES.has(m.stage_type) && (m.round_name ?? '') === day
+        && (m.score_a == null || m.score_b == null));
     // League days grouped by their non-digit prefix (e.g. "Day"). When every day in a
     // group has a suffix, show the prefix once as a row label with bare suffixes on the
     // buttons; otherwise the buttons carry the full name and the label cell is empty.

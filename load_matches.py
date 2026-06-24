@@ -68,7 +68,9 @@ def build_match(raw):
         return None  # a TBD slot — not predictable; lives only in bracket_nodes
     stage = raw["stage"]
     round_name = raw["round"]["name"].strip()
-    if round_name.startswith("Round"):  # league/swiss matchdays read nicer as "Day N"
+    # League/swiss matchdays read nicer as "Day N"; leave bracket round names ("Round 1",
+    # "WB Round 1", …) alone so a bracket match never collides with a league day tab.
+    if stage["type"] not in BRACKET_TYPES and round_name.startswith("Round"):
         round_name = "Day" + round_name.removeprefix("Round")
     return Match(
         team_a=o_a["participant"]["name"].strip(),
@@ -88,28 +90,41 @@ def build_match(raw):
 
 
 def upsert_matches(con, matches):
-    """Insert/update league + predictable bracket matches, keyed by the natural
-    (TeamA, TeamB, StageName, GroupName, RoundName) key so existing rows (and their
-    predictions) are kept; the metadata columns get refreshed on every run."""
+    """Insert/update league + predictable bracket matches. An existing row is found by
+    its stable ToornamentId first, falling back to the natural (TeamA, TeamB, StageName,
+    GroupName, RoundName) key only for legacy rows without one. Keying on ToornamentId
+    means a changed field — e.g. a bracket round renamed "Day 1" -> "Round 1" — updates
+    the row in place instead of inserting a duplicate, so MatchID (and the predictions
+    that reference it) is preserved. Section parts and scores converge on every run."""
     cur = con.cursor()
     for m in matches:
-        row = cur.execute(
-            "SELECT MatchID FROM matches WHERE TeamA = ? AND TeamB = ? "
-            "AND StageName = ? AND GroupName = ? AND RoundName = ?",
-            (m.team_a, m.team_b, m.stage, m.group, m.round),
-        ).fetchone()
+        row = None
+        if m.toornament_id:
+            row = cur.execute(
+                "SELECT MatchID FROM matches WHERE ToornamentId = ?", (m.toornament_id,)
+            ).fetchone()
+        if not row:
+            row = cur.execute(
+                "SELECT MatchID FROM matches WHERE TeamA = ? AND TeamB = ? "
+                "AND StageName = ? AND GroupName = ? AND RoundName = ?",
+                (m.team_a, m.team_b, m.stage, m.group, m.round),
+            ).fetchone()
         if row:
+            # Always refresh metadata + section parts; only overwrite scores when the feed
+            # actually has them (don't wipe a stored score if a match briefly reports null).
             if m.score_a is not None and m.score_b is not None:
                 cur.execute(
-                    "UPDATE matches SET ScoreA = ?, ScoreB = ?, ToornamentId = ?, "
-                    "StageType = ?, StageNumber = ? WHERE MatchID = ?",
-                    (m.score_a, m.score_b, m.toornament_id, m.stage_type, m.stage_number, row[0]),
+                    "UPDATE matches SET ScoreA = ?, ScoreB = ?, ToornamentId = ?, StageType = ?, "
+                    "StageNumber = ?, StageName = ?, GroupName = ?, RoundName = ? WHERE MatchID = ?",
+                    (m.score_a, m.score_b, m.toornament_id, m.stage_type, m.stage_number,
+                     m.stage, m.group, m.round, row[0]),
                 )
             else:
                 cur.execute(
-                    "UPDATE matches SET ToornamentId = ?, StageType = ?, StageNumber = ? "
-                    "WHERE MatchID = ?",
-                    (m.toornament_id, m.stage_type, m.stage_number, row[0]),
+                    "UPDATE matches SET ToornamentId = ?, StageType = ?, StageNumber = ?, "
+                    "StageName = ?, GroupName = ?, RoundName = ? WHERE MatchID = ?",
+                    (m.toornament_id, m.stage_type, m.stage_number,
+                     m.stage, m.group, m.round, row[0]),
                 )
         else:
             cur.execute(
