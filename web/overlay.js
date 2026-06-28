@@ -279,7 +279,7 @@ async function initOverlay() {
             el.style.maxWidth = '0';
             void el.offsetWidth;
             el.style.transition = SCORE_EASE;
-            el.style.maxWidth = '140px';
+            el.style.maxWidth = 'var(--score-w)';
         });
     };
 
@@ -298,7 +298,7 @@ async function initOverlay() {
             el.style.right = '0';
             el.style.left = 'auto';
             el.style.transition = 'none';
-            el.style.maxWidth = '140px';
+            el.style.maxWidth = 'var(--score-w)';
             void el.offsetWidth;
             el.style.transition = SCORE_EASE;
             el.style.maxWidth = '0';

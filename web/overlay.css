@@ -17,6 +17,22 @@ html, body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ============== Resolution independence ==============
+   The overlay is designed against a 1920-wide canvas, but OBS may render the
+   browser source at a larger resolution (e.g. 2560x1440) and downscale the whole
+   output to the stream's 1080p. Absolute px don't track the viewport, so under
+   that render+downscale they'd end up smaller than a native 1920 render, while
+   vw/vh stay correct — leaving the foreground (px) mismatched against the scene
+   (vw/vh). To keep both consistent, the overlay's foreground sizes are expressed
+   in "reference pixels": `calc(N * var(--u))` equals N px at 1920 wide and scales
+   linearly with the canvas width, exactly like the vw units it sits alongside. So
+   rendering at any width then downscaling looks identical to a native 1920 render.
+   (The control room below keeps plain px — it's a free-sized dock, not the scene.) */
+:root {
+    --u: calc(100vw / 1920);
+    --score-w: calc(140 * var(--u)); /* open width of the in-banner score plate (shared with overlay.js) */
+}
+
 /* The team banners set display:flex, which would otherwise beat the [hidden]
    user-agent rule, so enforce hiding for the attribute we toggle from JS. */
 [hidden] {
@@ -24,15 +40,15 @@ html, body {
 }
 
 .team {
-    --slant: 28px;
+    --slant: calc(28 * var(--u));
     position: fixed;
-    top: 12px;
-    height: 52px;
+    top: calc(12 * var(--u));
+    height: calc(52 * var(--u));
     width: 33vw;
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: calc(16 * var(--u));
     background: #1a1a1a; /* neutral fallback until the logo color loads */
     color: #fff;
 }
@@ -43,22 +59,22 @@ html, body {
 .team-left {
     left: 0;
     flex-direction: row;
-    padding: 0 0 0 24px;
+    padding: 0 0 0 calc(24 * var(--u));
     clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
 }
 
 .team-right {
     right: 0;
     flex-direction: row-reverse;
-    padding: 0 24px 0 0;
+    padding: 0 calc(24 * var(--u)) 0 0;
     clip-path: polygon(0 0, 100% 0, 100% 100%, var(--slant) 100%);
 }
 
 /* Box that reserves the logo's slot and centres its content (an <img>, or a text
    monogram for teams with no logo). */
 .team-logo {
-    width: 48px;
-    height: 48px;
+    width: calc(48 * var(--u));
+    height: calc(48 * var(--u));
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -76,7 +92,7 @@ html, body {
 
 .team-logo-text {
     font-weight: 800;
-    font-size: 1.4rem;
+    font-size: calc(22.4 * var(--u)); /* 1.4rem */
     line-height: 1;
     letter-spacing: .02em;
     text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
@@ -84,7 +100,7 @@ html, body {
 
 .team-name {
     font-weight: 600;
-    font-size: 1.5rem;
+    font-size: calc(24 * var(--u)); /* 1.5rem */
     white-space: nowrap;
     text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
 }
@@ -97,7 +113,7 @@ html, body {
     display: flex;
     justify-content: flex-end; /* pin the plate to the inner edge as it reveals */
     min-width: 0; /* override flex min-width:auto so max-width:0 can truly collapse it */
-    max-width: 140px;
+    max-width: var(--score-w);
     overflow: hidden;
     cursor: pointer;
     user-select: none;
@@ -109,11 +125,11 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 36px;
+    padding: 0 calc(36 * var(--u));
     min-width: 1.2em;
     background: rgba(0, 0, 0, .2); /* slightly darken the team color under the score */
     font-weight: 800;
-    font-size: 2.25rem;
+    font-size: calc(36 * var(--u)); /* 2.25rem */
     line-height: 1;
     text-align: center;
     white-space: nowrap;
@@ -145,9 +161,9 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: calc(24 * var(--u));
     color: #fff;
-    font-size: 1.25rem;
+    font-size: calc(20 * var(--u)); /* 1.25rem */
     text-align: center;
     text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
 }
@@ -158,13 +174,13 @@ html, body {
 
 .overlay-error {
     position: fixed;
-    top: 24px;
-    left: 24px;
+    top: calc(24 * var(--u));
+    left: calc(24 * var(--u));
     color: #fff;
     background: rgba(0, 0, 0, .6);
-    padding: 8px 12px;
+    padding: calc(8 * var(--u)) calc(12 * var(--u));
     border-radius: var(--cr-radius);
-    font-size: 14px;
+    font-size: calc(14 * var(--u));
 }
 
 /* ============== Hero ban badges ============== */
@@ -172,25 +188,25 @@ html, body {
    inner edge sits at 33vw; the right banner's at 33vw from the right. */
 .ban-slot {
     position: fixed;
-    top: 12px;
-    height: 52px;
+    top: calc(12 * var(--u));
+    height: calc(52 * var(--u));
     display: flex;
     align-items: center;
 }
 
 .ban-slot-left {
-    left: calc(33vw + 6px);
+    left: calc(33vw + 6 * var(--u));
 }
 
 .ban-slot-right {
-    right: calc(33vw + 6px);
+    right: calc(33vw + 6 * var(--u));
 }
 
 .ban-badge {
     position: relative;
-    width: 48px;
-    height: 48px;
-    border-radius: 6px;
+    width: calc(48 * var(--u));
+    height: calc(48 * var(--u));
+    border-radius: calc(6 * var(--u));
     overflow: hidden;
     box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
 }
@@ -230,8 +246,8 @@ html, body {
     inset: 0;
     z-index: 1; /* sit in front of the icon (which builds its own context via filter) */
     box-sizing: border-box;
-    border: 2px solid rgba(220, 40, 40, .95);
-    border-radius: 6px;
+    border: calc(2 * var(--u)) solid rgba(220, 40, 40, .95);
+    border-radius: calc(6 * var(--u));
 }
 
 /* Diagonal red strike across the portrait to read unmistakably as "banned"
@@ -295,40 +311,40 @@ html, body {
 /* ============== Powered-by badge ============== */
 .powered {
     position: fixed;
-    bottom: 16px;
+    bottom: calc(16 * var(--u));
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: calc(4 * var(--u));
     color: #fff;
-    font-size: .85rem;
+    font-size: calc(13.6 * var(--u)); /* .85rem */
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
     pointer-events: none;
 }
 
 .powered-left {
-    left: 16px;
+    left: calc(16 * var(--u));
     align-items: flex-start;
 }
 
 .powered-right {
-    right: 16px;
+    right: calc(16 * var(--u));
     align-items: flex-end;
 }
 
 .powered-logo {
-    height: 28px;
+    height: calc(28 * var(--u));
     width: auto;
     display: block;
 }
 
 /* The "Powered by" badge grows in big view to match the larger banners/score. */
 body.scene-big .powered {
-    font-size: 1.35rem;
+    font-size: calc(21.6 * var(--u)); /* 1.35rem */
 }
 
 body.scene-big .powered-logo {
-    height: 56px;
+    height: calc(56 * var(--u));
 }
 
 /* ============== Big view (full-background scene) ==============
@@ -851,11 +867,11 @@ body.scene-fx-right .scene-fx {
     transform: translate(-50%, -50%) scale(.85);
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: calc(24 * var(--u));
     opacity: 0;
     color: #fff;
     font-weight: 800;
-    font-size: 6rem;
+    font-size: calc(96 * var(--u)); /* 6rem */
     line-height: 1;
     text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
     pointer-events: none;
@@ -863,7 +879,7 @@ body.scene-fx-right .scene-fx {
 
 .scene-score-sep {
     opacity: .5;
-    font-size: 4rem;
+    font-size: calc(64 * var(--u)); /* 4rem */
 }
 
 /* --- Big view target layout --- */
@@ -884,21 +900,21 @@ body.scene-big .scene-glow {
 /* Bigger banners in big view. Like `top`, these size changes aren't transitioned,
    so they apply instantly while the banner is off-screen (at the scene-big step). */
 body.scene-big .team {
-    height: 112px;
+    height: calc(112 * var(--u));
     width: 38vw;
 }
 
 body.scene-big .team-logo {
-    width: 88px;
-    height: 88px;
+    width: calc(88 * var(--u));
+    height: calc(88 * var(--u));
 }
 
 body.scene-big .team-logo-text {
-    font-size: 2.6rem;
+    font-size: calc(41.6 * var(--u)); /* 2.6rem */
 }
 
 body.scene-big .team-name {
-    font-size: 2.6rem;
+    font-size: calc(41.6 * var(--u)); /* 2.6rem */
 }
 
 /* Team A (left) higher, team B (right) lower, placed symmetrically about the
@@ -908,19 +924,19 @@ body.scene-big .team-name {
    inner edges sit closer to the centre. justify-content + inner padding pull the
    logo and name to the banner's inner, centre-facing edge (clearing the slant). */
 body.scene-big .team-left {
-    top: calc(35vh - 56px);
+    top: calc(35vh - 56 * var(--u));
     justify-content: flex-end;
-    padding-right: 44px;
+    padding-right: calc(44 * var(--u));
 }
 
 /* Left-anchored (not right:0) so team B can glide horizontally to the maps screen's
    left:0 column; 38vw from the right edge keeps it flush right in big view. */
 body.scene-big .team-right {
-    top: calc(65vh - 56px);
+    top: calc(65vh - 56 * var(--u));
     left: calc(100% - 38vw);
     right: auto;
     justify-content: flex-end;
-    padding-left: 44px;
+    padding-left: calc(44 * var(--u));
 }
 
 /* The score plate is absent off-screen mid-slide, and in big view (which has its own
@@ -948,20 +964,20 @@ body.scene-exit .ban-slot {
 }
 
 body.scene-big .ban-slot-left {
-    top: 28px;
+    top: calc(28 * var(--u));
     left: auto;
-    right: calc(50% + 8px);
+    right: calc(50% + 8 * var(--u));
 }
 
 body.scene-big .ban-slot-right {
-    top: 28px;
+    top: calc(28 * var(--u));
     right: auto;
-    left: calc(50% + 8px);
+    left: calc(50% + 8 * var(--u));
 }
 
 body.scene-big .ban-badge {
-    width: 76px;
-    height: 76px;
+    width: calc(76 * var(--u));
+    height: calc(76 * var(--u));
 }
 
 /* Exit phase: shove each banner off its own side of the screen and drop the
@@ -1041,7 +1057,7 @@ body.scene-big .maps-strip:not([hidden]) {
     bottom: 4vh;
     z-index: 2;
     display: flex;
-    gap: 16px;
+    gap: calc(16 * var(--u));
     transform: translateX(-50%);
     pointer-events: none;
 }
@@ -1076,32 +1092,32 @@ body.scene-maps .powered {
    and leaving reuses the shared scene-exit slide (overlay.js paintScene). */
 body.scene-maps .team {
     width: 30vw;
-    height: 96px;
+    height: calc(96 * var(--u));
 }
 
 body.scene-maps .team-logo {
-    width: 72px;
-    height: 72px;
+    width: calc(72 * var(--u));
+    height: calc(72 * var(--u));
 }
 
 body.scene-maps .team-logo-text {
-    font-size: 2rem;
+    font-size: calc(32 * var(--u)); /* 2rem */
 }
 
 body.scene-maps .team-name {
-    font-size: 2rem;
+    font-size: calc(32 * var(--u)); /* 2rem */
 }
 
 body.scene-maps .team-left {
-    top: calc(50vh - 104px);
+    top: calc(50vh - 104 * var(--u));
 }
 
 body.scene-maps .team-right {
-    top: calc(50vh + 8px);
+    top: calc(50vh + 8 * var(--u));
     left: 0;
     right: auto;
     flex-direction: row;
-    padding: 0 0 0 24px;
+    padding: 0 0 0 calc(24 * var(--u));
     clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
 }
 
@@ -1136,7 +1152,7 @@ body.scene-maps.anim-ready .maps-track {
 @keyframes maps-rise {
     from {
         opacity: 0;
-        transform: translateY(24px);
+        transform: translateY(calc(24 * var(--u)));
     }
     to {
         opacity: 1;
@@ -1159,13 +1175,13 @@ body.maps-leaving.anim-ready .maps-track {
     }
     to {
         opacity: 0;
-        transform: translateY(24px);
+        transform: translateY(calc(24 * var(--u)));
     }
 }
 
 .maps-empty {
     color: rgba(255, 255, 255, .7);
-    font-size: 1.5rem;
+    font-size: calc(24 * var(--u)); /* 1.5rem */
 }
 
 /* A map tile: an outer wrapper that owns layout width and the FLIP move, around an
@@ -1175,28 +1191,28 @@ body.maps-leaving.anim-ready .maps-track {
    transition reliably in every browser. */
 .map-tile {
     position: relative;
-    width: 200px;
+    width: calc(200 * var(--u));
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: calc(6 * var(--u));
 }
 
 .map-card {
     width: 100%;
     display: flex;
     flex-direction: column;
-    border-radius: 10px;
+    border-radius: calc(10 * var(--u));
     overflow: hidden;
     background: rgba(0, 0, 0, .35);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+    box-shadow: 0 calc(4 * var(--u)) calc(16 * var(--u)) rgba(0, 0, 0, .5);
 }
 
 /* Per-map ban badges stacked above/below the card on the maps screen (reusing the
    banner .ban-badge look at a smaller size). Hidden when that side hasn't banned. */
 .map-ban {
-    width: 36px;
-    height: 36px;
+    width: calc(36 * var(--u));
+    height: calc(36 * var(--u));
     flex-shrink: 0;
 }
 
@@ -1219,8 +1235,8 @@ body.maps-leaving.anim-ready .maps-track {
 }
 
 .map-name {
-    padding: 8px 10px;
-    font-size: 1rem;
+    padding: calc(8 * var(--u)) calc(10 * var(--u));
+    font-size: calc(16 * var(--u)); /* 1rem */
     font-weight: 600;
     text-align: center;
     text-shadow: none;
@@ -1251,7 +1267,7 @@ body.maps-leaving.anim-ready .maps-track {
 
 .map-winner-text {
     font-weight: 800;
-    font-size: 1.7rem;
+    font-size: calc(27.2 * var(--u)); /* 1.7rem */
     color: #fff;
     text-align: center;
     line-height: 1;
@@ -1269,12 +1285,12 @@ body.maps-leaving.anim-ready .maps-track {
    a margin to keep the lifted card clear of its ban badges above/below. */
 .maps-track .map-upcoming .map-card {
     transform: scale(1.06);
-    margin: 10px 0;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, .5), 0 6px 24px rgba(0, 0, 0, .6);
+    margin: calc(10 * var(--u)) 0;
+    box-shadow: 0 0 0 calc(3 * var(--u)) rgba(255, 255, 255, .5), 0 calc(6 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, .6);
 }
 
 .maps-track .map-matchpoint .map-card {
-    box-shadow: 0 0 0 4px var(--mp-color, #ffcf3f), 0 0 24px var(--mp-color, #ffcf3f);
+    box-shadow: 0 0 0 calc(4 * var(--u)) var(--mp-color, #ffcf3f), 0 0 calc(24 * var(--u)) var(--mp-color, #ffcf3f);
 }
 
 /* The lift/dim/glow when a tile changes kind (later <-> upcoming <-> played) animate
@@ -1290,7 +1306,7 @@ body.scene-maps.anim-ready .maps-track .map-card {
 
 /* Maps scene tiles are portrait so the whole pool fits beside the scoreboard. */
 .maps-track .map-tile {
-    width: clamp(130px, 14vw, 200px);
+    width: clamp(calc(130 * var(--u)), 14vw, calc(200 * var(--u)));
 }
 
 .maps-track .map-art {
@@ -1299,12 +1315,12 @@ body.scene-maps.anim-ready .maps-track .map-card {
 
 /* Big-view strip tiles are smaller. */
 .maps-strip .map-tile {
-    width: 132px;
+    width: calc(132 * var(--u));
 }
 
 .maps-strip .map-name {
-    padding: 4px 6px;
-    font-size: .8rem;
+    padding: calc(4 * var(--u)) calc(6 * var(--u));
+    font-size: calc(12.8 * var(--u)); /* .8rem */
 }
 
 /* ============== Control room ============== */
