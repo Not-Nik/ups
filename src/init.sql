@@ -21,10 +21,11 @@ CREATE TABLE predictions
 CREATE TABLE matches
 (
     MatchID      INTEGER PRIMARY KEY,
-    TeamA        TEXT NOT NULL,
-    TeamB        TEXT NOT NULL,
-    LogoA        TEXT NOT NULL,
-    LogoB        TEXT NOT NULL,
+    TournamentID INTEGER NOT NULL REFERENCES tournaments (TournamentID),
+    TeamA        TEXT    NOT NULL,
+    TeamB        TEXT    NOT NULL,
+    LogoA        TEXT    NOT NULL,
+    LogoB        TEXT    NOT NULL,
     ScoreA       int,
     ScoreB       int,
     ToornamentId TEXT,
@@ -33,6 +34,13 @@ CREATE TABLE matches
     StageName    TEXT,
     GroupName    TEXT,
     RoundName    TEXT
+);
+
+CREATE TABLE tournaments
+(
+    TournamentID INTEGER PRIMARY KEY,
+    Name         TEXT NOT NULL,
+    ToornamentId TEXT
 );
 
 -- One row per bracket match (node) for tournament-format stages, including
