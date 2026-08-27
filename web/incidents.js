@@ -94,6 +94,10 @@ const incidentList = document.getElementById('incident-list');
 if (incidentList) {
     renderIncidents(incidentList);
     markIncidentsRead();
+} else if (localStorage.getItem(INCIDENTS_SEEN_KEY) === null) {
+    // First visit to the main page: no baseline yet. Seed it with the current
+    // version so pre-existing incidents don't toast, but future ones will.
+    markIncidentsRead();
 } else if (incidentsUnread()) {
     showIncidentToast();
 }
