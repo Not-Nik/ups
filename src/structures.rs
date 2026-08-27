@@ -12,8 +12,16 @@ pub struct User {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct Tournament {
+    pub tournament_id: u64,
+    pub name: String,
+    pub toornament_id: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Match {
     pub id: u64,
+    pub tournament_id: u64,
     pub team_a: String,
     pub team_b: String,
     pub logo_a: String,
