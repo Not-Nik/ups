@@ -9,12 +9,15 @@ use crate::account::{
     verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
+use crate::matches::{
+    get_bracket_nodes, get_brackets, get_matches, get_matches_filter, get_tournaments,
+};
+use crate::predictions::{
+    get_predictions, get_user_match_predictions, get_user_predictions, submit_prediction,
+    update_prediction,
+};
 use crate::structures::*;
 
-use crate::predictions::{
-    get_bracket_nodes, get_brackets, get_matches, get_matches_filter, get_predictions,
-    get_user_match_predictions, get_user_predictions, submit_prediction, update_prediction,
-};
 use log::debug;
 use sqlx::SqliteConnection;
 use std::sync::Arc;
@@ -39,12 +42,25 @@ pub async fn me(
     Ok(warp::reply::json(&User { name }))
 }
 
-pub async fn matches(
+pub async fn tournaments(
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let matches = get_matches(&mut conn_lock)
+    let matches = get_tournaments(&mut conn_lock)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&matches))
+}
+
+pub async fn matches(
+    tournament_id: u32,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let matches = get_matches(&mut conn_lock, tournament_id)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 

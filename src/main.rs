@@ -7,6 +7,7 @@
 mod account;
 mod endpoints;
 mod error;
+mod matches;
 mod predictions;
 mod structures;
 
@@ -108,7 +109,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::me);
 
-    let matches = warp::path!("api" / "matches")
+    let tournament = warp::path!("api" / "tournaments")
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and_then(endpoints::tournaments);
+
+    let matches = warp::path!("api" / "matches" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
         .and(conn.clone())
@@ -190,6 +197,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(endpoints::proxy);
 
     let routes = me
+        .or(tournament)
         .or(matches)
         .or(brackets)
         .or(bracket)
