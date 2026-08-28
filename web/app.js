@@ -59,6 +59,8 @@ const OTHER_SIDE = {a: 'b', b: 'a'};
 const state = {
     tournaments: [],
     activeTournament: null,
+    activeTab: null, // internal day key of the open tab (a round name or a bracketDayKey)
+    tabs: [],        // the last render's tabs in display order, as {day, unfinished}
     matches: [],
     brackets: [], // rendered bracket entries {stage, key, nodes} — for the image dialog
     scores: {},   // { index: [scoreA, scoreB] } — set only when both inputs are valid ints
@@ -69,6 +71,44 @@ const state = {
 };
 
 const findCard = index => document.querySelector(`.card[data-index="${index}"]`);
+
+// ============== Location state ==============
+// Where you are — the tournament and the open tab — lives in the query string, so a
+// link reproduces the exact view and Back walks through it. Nothing about it is kept
+// in localStorage; only the token and the theme are.
+
+// URL form of a tab, assigned by renderTabs: a league day is its own name ("Day 5"), a
+// bracket is "bracket:<stage>" (plus ":<group>" only where a stage holds several). A
+// bracket's internal day key joins its parts on NUL and has no place in a URL. The param
+// is only ever compared against the rendered tabs, so it must be stable, not reversible.
+const tabParam = day => state.tabs.find(t => t.day === day)?.param ?? null;
+
+// The current query, always re-read: it is the state, so nothing may cache it.
+const urlParams = () => new URLSearchParams(location.search);
+
+function syncUrl(replace = false) {
+    const params = urlParams();
+    const set = (key, value) => value == null ? params.delete(key) : params.set(key, value);
+    set('tournament', state.activeTournament);
+    set('tab', state.activeTab && tabParam(state.activeTab));
+    const query = params.toString();
+    history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
+}
+
+// Adopt whatever the URL says — on first load and on every back/forward. False when
+// there is no tournament to show at all.
+async function applyLocation() {
+    const wanted = Number(urlParams().get('tournament'));
+    const tournament = state.tournaments.find(t => t.tournament_id === wanted) ?? state.tournaments[0];
+    if (!tournament) return false;
+    if (tournament.tournament_id === state.activeTournament) {
+        activateWantedTab();
+    } else {
+        setActiveTournament(tournament.tournament_id);
+        await loadTournament(tournament.tournament_id);
+    }
+    return true;
+}
 
 // ============== Tournaments ==============
 function updateTournamentTabs() {
@@ -95,13 +135,16 @@ function renderTournamentTabs() {
 
 function setActiveTournament(id) {
     state.activeTournament = id;
-    localStorage.setItem('ups_tournament', String(id));
     updateTournamentTabs();
 }
 
 async function switchTournament(id) {
     if (id === state.activeTournament) return;
     setActiveTournament(id);
+    // The new tournament brings its own tabs, so the old one drops out of the URL;
+    // rendering picks a default below and replaces it into the same history entry.
+    state.activeTab = null;
+    syncUrl();
     await loadTournament(id);
 }
 
@@ -327,7 +370,11 @@ function unlockPrediction(index) {
 // Section helpers (sectionKey, sectionTitle, dayOf, sectionOrder, compareDays) live in common.js.
 
 // ============== Tabs ==============
-function activateTab(day) {
+// `record` says what the URL should do about it: 'push' for a click (Back returns to
+// the previous tab), 'replace' when we only settle on a default, null when the URL
+// already says this (back/forward).
+function activateTab(day, record = 'push') {
+    state.activeTab = day;
     $('tabs-bar').querySelectorAll('.tab-btn').forEach(btn => {
         const isActive = btn.dataset.day === day;
         btn.classList.toggle('btn-secondary', isActive);
@@ -338,6 +385,18 @@ function activateTab(day) {
         setHidden(el, el.dataset.day !== day);
     });
     refreshExpandIcons();
+    if (record) syncUrl(record === 'replace');
+}
+
+// Open the tab the URL asks for; failing that the first one still missing a result,
+// else the last. Normalises the URL, which may have named a tab this tournament
+// doesn't have.
+function activateWantedTab() {
+    const wanted = urlParams().get('tab');
+    const tab = state.tabs.find(t => t.param === wanted)
+        ?? state.tabs.find(t => t.unfinished)
+        ?? state.tabs.at(-1);
+    activateTab(tab?.day ?? null, 'replace');
 }
 
 const visibleToggleBtns = () =>
@@ -442,7 +501,7 @@ function createSectionHeader(key, day) {
 
 // Render one row per tab group — league round-prefixes and bracket stages alike,
 // sorted together by group name — and return the tabs in display order (each
-// {day, unfinished}) so the caller can pick a default.
+// {day, param, unfinished}) so the caller can pick a default.
 function renderTabs(days, brackets, matches) {
     // A day tab is unfinished only because of the matches it actually shows — bracket
     // matches are drawn as brackets (and some carry "Day N" round names), so exclude
@@ -459,7 +518,9 @@ function renderTabs(days, brackets, matches) {
         return {
             name: labelled ? prefix : (items[0]?.day ?? prefix),
             label: labelled ? prefix : '',
-            entries: items.map(i => ({day: i.day, text: labelled ? i.suffix : i.day, unfinished: dayUnfinished(i.day)})),
+            entries: items.map(i => ({
+                day: i.day, param: i.day, text: labelled ? i.suffix : i.day, unfinished: dayUnfinished(i.day),
+            })),
         };
     });
     // Bracket stages, one row each. A bracket is "unfinished" while it has a known
@@ -470,7 +531,14 @@ function renderTabs(days, brackets, matches) {
     const bracketGroups = [...byStage].map(([stage, list]) => ({
         name: stage,
         label: stage,
-        entries: list.map(b => ({day: bracketDayKey(b.stage, b.key), text: b.label, unfinished: bracketUnfinished(b)})),
+        entries: list.map(b => ({
+            day: bracketDayKey(b.stage, b.key),
+            // The stage alone names the tab unless it holds more than one bracket — only
+            // then does the group (itself a merge of connected groups) earn a place too.
+            param: `bracket:${stage}${list.length > 1 ? `:${b.key}` : ''}`,
+            text: b.label,
+            unfinished: bracketUnfinished(b),
+        })),
     }));
 
     const bar = $('tabs-bar');
@@ -534,11 +602,10 @@ function renderGrid(matches, brackets = []) {
     // One block per bracket; its tab is added by renderTabs alongside the league days.
     brackets.forEach(b => grid.appendChild(renderBracketBlock(b)));
 
-    // Tabs for league days and brackets together, sorted by group name; default to the
-    // first tab still missing a result (league day or bracket alike), else the last.
-    const tabs = renderTabs(days, brackets, matches);
-    const def = tabs.find(t => t.unfinished) ?? tabs.at(-1);
-    if (def) activateTab(def.day);
+    // Tabs for league days and brackets together, sorted by group name; which one opens
+    // is up to the URL (see activateWantedTab).
+    state.tabs = renderTabs(days, brackets, matches);
+    activateWantedTab();
 }
 
 // ============== Modal ==============
@@ -649,7 +716,7 @@ const nameModal = {
 };
 
 // ============== Image dialog ==============
-const activeDay = () => $('tabs-bar').querySelector('.btn-secondary')?.dataset.day ?? null;
+const activeDay = () => state.activeTab;
 
 const sectionsForDay = day => {
     const set = new Set();
@@ -1145,6 +1212,9 @@ function bindEvents() {
     });
 
     onClick('login-btn', () => nameModal.promptLogin());
+
+    // Back/forward move between views instead of leaving the site.
+    window.addEventListener('popstate', applyLocation);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1156,14 +1226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     renderTournamentTabs();
 
-    // Remember the last viewed tournament across reloads; default to the first one.
-    const saved = Number(localStorage.getItem('ups_tournament'));
-    const tournament = state.tournaments.find(t => t.tournament_id === saved) ?? state.tournaments[0];
-    if (tournament) {
-        state.activeTournament = tournament.tournament_id;
-        updateTournamentTabs();
-        await loadTournament(tournament.tournament_id);
-    } else {
+    if (!await applyLocation()) {
         $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load tournaments. Please refresh.</p>';
     }
     if (!getToken()) show($('login-btn'));

@@ -47,6 +47,26 @@ retry name prompt).
 - `api()` helper auto-attaches the bearer header when a token exists. Don't call `fetch` directly for `/api/*`.
 - Theme preference under `ups_theme` (`dark`/`light`/`system`).
 
+## Location state
+
+Where you are lives in the **query string**, never in `localStorage` — a link reproduces the exact view and
+Back walks through it. `localStorage` is only for the token and the theme.
+
+- `?tournament=<id>` — which tournament is loaded. Unknown or missing falls back to the first one.
+- `?tab=<tab>` — which tab is open. `renderTabs` assigns each tab its `param`: a league day is its own
+  name (`tab=Day+5`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
+  more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
+  internal day key (`bracketDayKey`) joins its parts on NUL and never goes in the URL. `tabParam(day)`
+  just looks the param up; params are only compared against the rendered tabs, so they must be stable,
+  not reversible.
+- `syncUrl(replace)` writes both from `state.activeTournament` / `state.activeTab`, keeping any other
+  params. A user's click **pushes** a history entry; settling on a default **replaces**, so the URL is
+  always complete without cluttering history.
+- `applyLocation()` reads the URL and is the single entry point for both first load and `popstate`.
+  It reloads the tournament only when it actually changed, otherwise just re-picks the tab.
+- Unknown tab values are dropped silently — `activateWantedTab()` falls back to the default and rewrites
+  the URL, so a stale link still lands somewhere sensible.
+
 ## Section / day model
 
 `match.section` is a path like `"Erste Liga/Group A/Day 5"`. The last segment is the **day** and drives the tab bar.
@@ -56,7 +76,8 @@ Sorting:
   `Erste < Zweite < Dritte` for the first segment, then alphabetical on the second.
 - **Days** (`compareDays`): alphabetical on the non-digit prefix, then numeric ascending. So `Day 1`, `Day 2`, `Day 10`
   sort naturally; different prefixes group together.
-- **Default tab**: the lowest-ranked day still containing matches without final scores.
+- **Default tab** (when the URL names none, or names one this tournament doesn't have): the lowest-ranked
+  day still containing matches without final scores, else the last tab.
 
 ## app.js conventions
 
