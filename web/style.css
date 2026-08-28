@@ -283,15 +283,20 @@
     box-shadow: 0 0 0 0.25rem rgba(var(--bs-danger-rgb), 0.25);
 }
 
-/* Prefix label column is sized to the widest label so every row's tab buttons
-   start at the same x. */
+/* Two-line tab bar: a button per category on top (plus tabs without a category),
+   the open category's tabs below. */
 #tabs-bar {
-    grid-template-columns: max-content 1fr;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
 }
 
 .tab-btn.invalid-day {
     color: var(--bs-danger);
+}
+
+/* An open category that also holds an invalid tab underlines in danger instead. */
+.tab-btn.invalid-day.active {
+    box-shadow: inset 0 -2px 0 var(--bs-danger);
 }
 
 .tab-btn.invalid-day:hover {

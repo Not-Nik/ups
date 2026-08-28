@@ -87,6 +87,15 @@ Tournaments are ordered newest first everywhere (`byNewestTournament` in common.
 ## Section / day model
 
 `match.section` is a path like `"Erste Liga/Group A/Day 5"`. The last segment is the **day** and drives the tab bar.
+
+The tab bar is two lines: one button per category (a league day prefix or a bracket
+stage) on top, and below it the tabs of the category that holds the open tab — groups
+without a label (a lone day like "Seedingwoche") sit in the top line as plain tabs,
+and a category holding a single bracket tab shows no lower line at all, since its
+button already carries the selection.
+Clicking a category opens its first tab; `selectCategory`/`renderCategoryTabs` in
+app.js own the switching, and `refreshTabStates` re-applies `.active`/`.invalid-day`
+across both lines after any re-render.
 Sorting:
 
 - **Sections** (`sectionOrder` in app.js): last segment by number desc (newest day first), then

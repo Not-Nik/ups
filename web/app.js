@@ -60,7 +60,9 @@ const state = {
     tournaments: [],
     activeTournament: null,
     activeTab: null, // internal day key of the open tab (a round name or a bracketDayKey)
-    tabs: [],        // the last render's tabs in display order, as {day, unfinished}
+    tabs: [],        // the last render's tabs in display order, as {day, param, unfinished}
+    categories: [],  // the last render's labelled tab groups, as {label, name, entries}
+    invalidDays: new Set(), // days whose hidden cards hold invalid inputs; drives .invalid-day
     matches: [],
     brackets: [], // rendered bracket entries {stage, key, nodes} — for the image dialog
     scores: {},   // { index: [scoreA, scoreB] } — set only when both inputs are valid ints
@@ -406,16 +408,68 @@ function unlockPrediction(index) {
 // already says this (back/forward).
 function activateTab(day, record = 'push') {
     state.activeTab = day;
-    $('tabs-bar').querySelectorAll('.tab-btn').forEach(btn => {
-        const isActive = btn.dataset.day === day;
-        btn.classList.toggle('active', isActive);
-        if (isActive) btn.classList.remove('invalid-day');
-    });
+    state.invalidDays.delete(day);
+    renderCategoryTabs();
+    refreshTabStates();
     $('grid').querySelectorAll('[data-day]').forEach(el => {
         setHidden(el, el.dataset.day !== day);
     });
     refreshExpandIcons();
     if (record) syncUrl(record === 'replace');
+}
+
+// The bar is two lines: a button per category on top (plus tabs that have none), and
+// the open tab's category's tabs below.
+const categoryIndexOf = day => state.categories.findIndex(g => g.entries.some(e => e.day === day));
+
+function renderCategoryTabs() {
+    const row = $('category-tabs');
+    row.replaceChildren();
+    const g = state.categories[categoryIndexOf(state.activeTab)];
+    // A category holding a single bracket tab is fully carried by its own button.
+    if (!g || (g.bracket && g.entries.length === 1)) {
+        hide(row);
+        return;
+    }
+    show(row);
+    g.entries.forEach(e => appendTabBtn(row, e));
+}
+
+// Clicking a category opens its first tab, unless one of its tabs is already open.
+function selectCategory(group) {
+    if (group.entries.some(e => e.day === state.activeTab)) return;
+    activateTab(group.entries[0].day);
+}
+
+// Re-apply .active and .invalid-day across both lines after a re-render.
+function refreshTabStates() {
+    const i = categoryIndexOf(state.activeTab);
+    $('tab-categories').querySelectorAll('.category-btn').forEach((btn, k) => {
+        btn.classList.toggle('active', k === i);
+        btn.classList.toggle('invalid-day', state.categories[k].entries.some(e => state.invalidDays.has(e.day)));
+    });
+    $('tabs-bar').querySelectorAll('.tab-btn[data-day]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.day === state.activeTab);
+        btn.classList.toggle('invalid-day', state.invalidDays.has(btn.dataset.day));
+    });
+}
+
+// A tab button for an entry {day, text}, wired to activateTab.
+function appendTabBtn(row, e) {
+    const btn = makeEl('button', {
+        className: 'tab-btn btn', textContent: e.text, dataset: {day: e.day},
+    });
+    btn.addEventListener('click', () => activateTab(e.day));
+    row.appendChild(btn);
+    return btn;
+}
+
+// The button standing in for a day: its own tab where one is rendered, else the
+// category button holding it.
+function tabButtonFor(day) {
+    const i = categoryIndexOf(day);
+    return $('tabs-bar').querySelector(`.tab-btn[data-day="${CSS.escape(day)}"]`)
+        ?? (i >= 0 ? $('tab-categories').querySelectorAll('.category-btn')[i] : null);
 }
 
 // Open the tab the URL asks for; failing that the first one still missing a result,
@@ -529,9 +583,10 @@ function createSectionHeader(key, day) {
     return header;
 }
 
-// Render one row per tab group — league round-prefixes and bracket stages alike,
-// sorted together by group name — and return the tabs in display order (each
-// {day, param, unfinished}) so the caller can pick a default.
+// Render the two-line tab bar — a category button per labelled group (league
+// day-prefixes and bracket stages alike) on top, the open category's tabs below —
+// and return all tabs in display order (each {day, param, unfinished}) so the
+// caller can pick a default.
 function renderTabs(days, brackets, matches) {
     // A day tab is unfinished only because of the matches it actually shows — bracket
     // matches are drawn as brackets (and some carry "Day N" round names), so exclude
@@ -540,8 +595,8 @@ function renderTabs(days, brackets, matches) {
         !BRACKET_STAGE_TYPES.has(m.stage_type) && (m.round_name ?? '') === day
         && (m.score_a == null || m.score_b == null));
     // League days grouped by their non-digit prefix (e.g. "Day"). When every day in a
-    // group has a suffix, show the prefix once as a row label with bare suffixes on the
-    // buttons; otherwise the buttons carry the full name and the label cell is empty.
+    // group has a suffix, the prefix is its category and the buttons carry bare
+    // suffixes; otherwise the group has no category and the buttons carry the full name.
     const leagueGroups = [...groupBy(days, letters)].map(([prefix, group]) => {
         const items = group.map(([day]) => ({day, suffix: day.slice(prefix.length).trim()}));
         const labelled = prefix && items.every(i => i.suffix);
@@ -553,7 +608,7 @@ function renderTabs(days, brackets, matches) {
             })),
         };
     });
-    // Bracket stages, one row each. A bracket is "unfinished" while it has a known
+    // Bracket stages, one category each. A bracket is "unfinished" while it has a known
     // matchup that hasn't been played (a predictable node without a score).
     const bracketUnfinished = b => b.nodes.some(n => n.match_id != null && n.score_a == null);
     const byStage = new Map();
@@ -561,6 +616,7 @@ function renderTabs(days, brackets, matches) {
     const bracketGroups = [...byStage].map(([stage, list]) => ({
         name: stage,
         label: stage,
+        bracket: true,
         entries: list.map(b => ({
             day: bracketDayKey(b.stage, b.key),
             // The stage alone names the tab unless it holds more than one bracket — only
@@ -573,29 +629,28 @@ function renderTabs(days, brackets, matches) {
 
     const bar = $('tabs-bar');
     bar.innerHTML = '';
-    const order = [];
-    // Sort by group name, but sink groups with no heading (a lone tab like "Seedingwoche")
-    // to the bottom.
+    // Categories (labelled groups) get a top-line button each; groups without a label
+    // (a lone tab like "Seedingwoche") have no category, so their tabs sit in the top
+    // line next to the category buttons.
     const groups = [...leagueGroups, ...bracketGroups]
-        .sort((a, b) => (!a.label - !b.label) || a.name.localeCompare(b.name));
-    for (const g of groups) {
-        // Label cell (column 1, empty when unlabelled) then the buttons cell (column 2),
-        // so buttons line up across rows via the shared grid column.
-        bar.appendChild(makeEl('span', {
-            className: 'tab-prefix small text-secondary fw-semibold', textContent: g.label,
-        }));
-        const row = makeEl('div', {className: 'd-flex flex-wrap'});
-        for (const e of g.entries) {
-            const btn = makeEl('button', {
-                className: 'tab-btn btn', textContent: e.text, dataset: {day: e.day},
-            });
-            btn.addEventListener('click', () => activateTab(e.day));
-            row.appendChild(btn);
-            order.push(e);
-        }
-        bar.appendChild(row);
-    }
-    return order;
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const categories = groups.filter(g => g.label);
+    const loose = groups.filter(g => !g.label).flatMap(g => g.entries);
+    state.categories = categories;
+
+    const top = makeEl('div', {id: 'tab-categories', className: 'd-flex flex-wrap'});
+    categories.forEach(g => {
+        const btn = makeEl('button', {
+            className: 'tab-btn btn category-btn', textContent: g.label,
+        });
+        btn.addEventListener('click', () => selectCategory(g));
+        top.appendChild(btn);
+    });
+    loose.forEach(e => appendTabBtn(top, e));
+    bar.appendChild(top);
+    bar.appendChild(makeEl('div', {id: 'category-tabs', className: 'd-flex flex-wrap d-none'}));
+
+    return [...categories.flatMap(g => g.entries), ...loose];
 }
 
 // ============== Grid render ==============
@@ -1196,12 +1251,11 @@ function bindEvents() {
                 else shakeEl(input);
             });
             hiddenDays.forEach(day => {
-                const tab = $('tabs-bar').querySelector(`.tab-btn[data-day="${CSS.escape(day)}"]`);
-                if (tab) {
-                    tab.classList.add('invalid-day');
-                    shakeEl(tab);
-                }
+                state.invalidDays.add(day);
+                const tab = tabButtonFor(day);
+                if (tab) shakeEl(tab);
             });
+            refreshTabStates();
             return;
         }
         doSubmit(state.pendingIndices());
