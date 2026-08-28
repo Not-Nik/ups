@@ -3,7 +3,6 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-
 use crate::account::{
     create_account, delete_account, delete_session, exists_account, login_account, set_password,
     verify_session,
@@ -73,6 +72,19 @@ pub async fn matches(
         "X-Refreshing",
         if refreshing { "1" } else { "0" },
     ))
+}
+
+pub async fn match_(
+    conn: Arc<Mutex<SqliteConnection>>,
+    matches: Matches,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let matches = get_matches_filter(&mut conn_lock, matches.get_ids()?)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&matches))
 }
 
 pub async fn bracket(

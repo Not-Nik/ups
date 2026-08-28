@@ -3,8 +3,8 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-
 use serde_derive::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Serialize)]
 pub struct User {
@@ -109,4 +109,17 @@ pub struct Bracket {
     pub tournament_id: u64,
     pub stage: String,
     pub group: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Matches {
+    pub ids: String,
+}
+
+impl Matches {
+    pub fn get_ids(&self) -> Result<Vec<u32>, warp::Rejection> {
+        let ids: Result<Vec<u32>, <u32 as FromStr>::Err> =
+            self.ids.split(",").map(|id| id.parse::<u32>()).collect();
+        ids.map_err(|_| warp::reject::reject())
+    }
 }

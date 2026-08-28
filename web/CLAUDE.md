@@ -29,6 +29,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
 | GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tab bar and the archive |
 | GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per 6 h) and answers `X-Refreshing: 1` while one runs |
+| GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |

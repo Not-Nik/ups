@@ -61,6 +61,13 @@ function compareDays(a, b) {
     return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
 }
 
+const escapeHtml = str => {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+};
+const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
+
 // ============== DOM helpers ==============
 const show = el => el.classList.remove('d-none');
 const hide = el => el.classList.add('d-none');

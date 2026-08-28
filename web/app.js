@@ -15,13 +15,6 @@ function shakeEl(el) {
     el.classList.add('shake');
 }
 
-const escapeHtml = str => {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-};
-const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
-
 const loadImage = src => new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);

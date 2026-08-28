@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My predictions – PULOW</title>
+    <meta name="description" content="Predictions für die Uniliga Overwatch"/>
+
+    <!-- Open Graph (Discord reads these) -->
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="https://pulow.cc"/>
+    <meta property="og:title" content="PULOW"/>
+    <meta property="og:description" content="Predictions für die Uniliga Overwatch"/>
+    <meta property="og:site_name" content="PULOW"/>
+
+    <!-- Twitter Card (Discord favors these over OG for image display) -->
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:url" content="https://pulow.cc"/>
+    <meta name="twitter:title" content="PULOW"/>
+    <meta name="twitter:description" content="Predictions für die Uniliga Overwatch"/>
+
+    <!-- Discord embed accent border color -->
+    <meta name="theme-color" content="#F3900E"/>
+    <script>
+        {
+            const t = localStorage.getItem('ups_theme');
+            document.documentElement.dataset.bsTheme = t === 'system'
+                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                : (t || 'dark');
+        }
+    </script>
+    <link href="vendor/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="border-bottom px-3 py-3 d-flex justify-content-between align-items-center">
+    <h1 class="h5 fw-bold mb-0"><a href="/" class="text-decoration-none text-body">Prediction für die Uniliga
+        Overwatch</a> <span class="beta-badge">BETA</span></h1>
+    <div class="d-flex align-items-center gap-2">
+        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" aria-label="Toggle theme"></button>
+    </div>
+</header>
+<main class="container-xl px-3 py-4">
+    <div id="profile" class="d-flex align-items-center gap-3 mb-4">
+        <div id="profile-icon" class="profile-icon d-none"><span id="profile-initial"></span></div>
+        <div>
+            <h2 id="profile-name" class="h5 fw-bold mb-0"></h2>
+            <p id="profile-sub" class="text-secondary small mb-0">Loading…</p>
+        </div>
+    </div>
+    <div id="not-logged-in" class="d-none">
+        <p class="text-secondary">You are not logged in.</p>
+        <a href="/" class="btn btn-sm btn-outline-secondary">Go to predictions and log in</a>
+    </div>
+    <h3 id="predictions-heading" class="h6 fw-bold text-uppercase text-secondary d-none">Predictions</h3>
+    <ul id="prediction-list" class="list-unstyled mb-0"></ul>
+    <p id="no-predictions" class="text-secondary small d-none">No predictions yet.</p>
+    <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+        <a href="/" class="text-secondary small">← Back to predictions</a>
+        <span class="text-secondary small">Made with &#x2764; in Berlin</span>
+    </div>
+</main>
+<div id="toast" class="d-none" role="alert" aria-live="polite"></div>
+<script src="common.js"></script>
+<script src="me.js"></script>
+</body>
+</html>
