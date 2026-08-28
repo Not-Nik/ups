@@ -11,7 +11,7 @@
 
 [data-bs-theme="dark"] {
     /* Subtle accent, used for the archive link and its card hover. */
-    --accent: #e94560;
+    --accent: #c0287a;
     --bs-body-bg: #1a1a2e;
     --bs-body-color: #e0e0e0;
     --bs-secondary-color: #888;
@@ -155,6 +155,12 @@
 .tournament-btn:focus,
 .archive-btn:focus {
     box-shadow: none;
+}
+
+/* Selected tab gets an accent underline, sitting right above the header's bottom
+   border. Declared after the :focus rule above so focusing the active tab keeps it. */
+.tournament-btn.active {
+    box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .tournament-btn:focus-visible,

@@ -77,8 +77,8 @@ Tournaments are ordered newest first everywhere (`byNewestTournament` in common.
 
 - The header bar renders one `.tournament-btn` per tournament and never wraps. `fitTournamentTabs()`
   measures `scrollWidth` vs `clientWidth` and hides the oldest tabs until the row fits, revealing
-  `#archive-btn` (the bar's only accent, `--accent`) once anything was cut. A `ResizeObserver` on the
-  bar re-runs it on every width change.
+  `#archive-btn` (accent `--accent`, like the active tab's underline) once anything was cut. A
+  `ResizeObserver` on the bar re-runs it on every width change.
 - The **active** tournament always keeps its tab: `setActiveTournament` re-fits, so a `?tournament=`
   link or a Back into an archived season is never left without one.
 - `archive.html` lists all of them in a grid, newest in the top left, oldest in the bottom right
