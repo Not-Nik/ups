@@ -74,11 +74,12 @@ function showToast(msg, duration = 4000) {
 $('toast')?.addEventListener('click', () => hide($('toast')));
 
 // ============== API ==============
-// JSON fetch with auto-auth. Returns parsed body ({} when the response has none).
+// JSON fetch with auto-auth. Returns parsed body ({} when the response has none),
+// or {data, res} when `response` is set and the caller needs the headers.
 // Throws on !res.ok with `code` populated from a { err } body and `rateLimited`
 // flagged when the server reports {err: "RateLimited"} — the helper also
 // surfaces a toast so the user sees something even when the caller swallows.
-async function api(url, {method = 'GET', body} = {}) {
+async function api(url, {method = 'GET', body, response = false} = {}) {
     const init = {method, headers: {}};
     const token = getToken();
     if (token) init.headers['Authorization'] = `Bearer ${token}`;
@@ -94,7 +95,7 @@ async function api(url, {method = 'GET', body} = {}) {
         if (rateLimited) showToast('Too many requests — please wait a moment and try again.');
         throw Object.assign(new Error('Request failed'), {code, rateLimited});
     }
-    return data;
+    return response ? {data, res} : data;
 }
 
 // Run an async function, swallowing errors and returning undefined on failure.

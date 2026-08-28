@@ -3,8 +3,8 @@
 **Predictions für die Uniliga Overwatch** — prediction site for Uniliga (German university) Overwatch matches.
 Production at https://pulow.cc. Currently labelled BETA in the header.
 
-The Rust backend lives one directory up (`../src/main.rs`, warp + sqlx/sqlite). Match data is scraped from toornament
-via `../scrape_matches.py`.
+The Rust backend lives one directory up (`../src/main.rs`, warp + sqlx/sqlite). Match data is pulled from toornament
+by `../src/loader.rs`, on demand whenever `/api/matches/:id` is hit.
 
 ## Stack & layout
 
@@ -27,7 +27,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | Method | Path                   | Auth | Notes                                                                                       |
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
 | GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tournament tab bar      |
-| GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable)   |
+| GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per 6 h) and answers `X-Refreshing: 1` while one runs |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
@@ -71,7 +71,8 @@ Sorting:
     - `loadImage(src)` — Promise wrapper around `new Image()`
     - `firstInt(s)` — first `\d+` match as integer or `NaN`
     - `groupBy(items, key)` — returns `Map<key, [[item, index], ...]>`
-    - `api(url, {method, body})` — auth + JSON; throws with `.code` from `{err}` on `!ok`
+    - `api(url, {method, body, response})` — auth + JSON; throws with `.code` from `{err}` on `!ok`. With
+      `response: true` it returns `{data, res}` so the caller can read headers
     - `tryFetch(fn)` — swallows errors, returns `undefined` (use for non-critical loads)
     - `withDisabled(ids, fn)` — disables buttons around an async op, re-enables in `finally`
     - `findCard(index)` — `.card[data-index="..."]` lookup
