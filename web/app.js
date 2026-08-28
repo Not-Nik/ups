@@ -408,8 +408,7 @@ function activateTab(day, record = 'push') {
     state.activeTab = day;
     $('tabs-bar').querySelectorAll('.tab-btn').forEach(btn => {
         const isActive = btn.dataset.day === day;
-        btn.classList.toggle('btn-secondary', isActive);
-        btn.classList.toggle('btn-outline-secondary', !isActive);
+        btn.classList.toggle('active', isActive);
         if (isActive) btn.classList.remove('invalid-day');
     });
     $('grid').querySelectorAll('[data-day]').forEach(el => {
@@ -585,10 +584,10 @@ function renderTabs(days, brackets, matches) {
         bar.appendChild(makeEl('span', {
             className: 'tab-prefix small text-secondary fw-semibold', textContent: g.label,
         }));
-        const row = makeEl('div', {className: 'd-flex gap-2 flex-wrap'});
+        const row = makeEl('div', {className: 'd-flex flex-wrap'});
         for (const e of g.entries) {
             const btn = makeEl('button', {
-                className: 'tab-btn btn btn-sm btn-outline-secondary', textContent: e.text, dataset: {day: e.day},
+                className: 'tab-btn btn', textContent: e.text, dataset: {day: e.day},
             });
             btn.addEventListener('click', () => activateTab(e.day));
             row.appendChild(btn);

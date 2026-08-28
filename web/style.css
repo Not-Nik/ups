@@ -119,9 +119,10 @@
     overflow: hidden;
 }
 
-/* Tabs carry the bar's former padding themselves, so they fill it edge to edge. */
+/* Flat text-tab style, shared by the tournament bar and the day/bracket tabs. */
 .tournament-btn,
-.archive-btn {
+.archive-btn,
+.tab-btn {
     padding: 0.5rem 1rem;
     border: 0;
     border-radius: 0;
@@ -130,11 +131,12 @@
     background-color: transparent;
 }
 
-.tournament-btn {
+.tournament-btn,
+.tab-btn {
     color: var(--bs-secondary-color);
 }
 
-/* Pushed to the far end, and the only accent in the bar. */
+/* Pushed to the far end of the tournament bar. */
 .archive-btn {
     margin-left: auto;
     color: var(--accent);
@@ -142,7 +144,9 @@
 }
 
 .tournament-btn:hover,
-.tournament-btn.active {
+.tournament-btn.active,
+.tab-btn:hover,
+.tab-btn.active {
     color: var(--bs-body-color);
     background-color: var(--bs-card-bg);
 }
@@ -153,18 +157,21 @@
 }
 
 .tournament-btn:focus,
-.archive-btn:focus {
+.archive-btn:focus,
+.tab-btn:focus {
     box-shadow: none;
 }
 
-/* Selected tab gets an accent underline, sitting right above the header's bottom
-   border. Declared after the :focus rule above so focusing the active tab keeps it. */
-.tournament-btn.active {
+/* Active tabs get an accent underline. Declared after the :focus rule above so
+   focusing the active tab keeps it. */
+.tournament-btn.active,
+.tab-btn.active {
     box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .tournament-btn:focus-visible,
-.archive-btn:focus-visible {
+.archive-btn:focus-visible,
+.tab-btn:focus-visible {
     outline: 2px solid var(--bs-secondary-color);
     outline-offset: -2px;
 }
@@ -285,13 +292,11 @@
 
 .tab-btn.invalid-day {
     color: var(--bs-danger);
-    border-color: var(--bs-danger);
 }
 
 .tab-btn.invalid-day:hover {
     color: #fff;
     background-color: var(--bs-danger);
-    border-color: var(--bs-danger);
 }
 
 .score-input.prediction-high,
