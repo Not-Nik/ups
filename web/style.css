@@ -80,6 +80,39 @@
     vertical-align: middle;
 }
 
+/* Second header line: one tab per tournament, hidden when none were loaded. */
+#tournament-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+}
+
+/* Tabs carry the bar's former padding themselves, so they fill it edge to edge. */
+.tournament-btn {
+    padding: 0.5rem 1rem;
+    border: 0;
+    border-radius: 0;
+    font-size: 0.875rem;
+    color: var(--bs-secondary-color);
+    background-color: transparent;
+}
+
+.tournament-btn:hover,
+.tournament-btn.active {
+    color: var(--bs-body-color);
+    background-color: var(--bs-card-bg);
+}
+
+.tournament-btn:focus {
+    box-shadow: none;
+}
+
+.tournament-btn:focus-visible {
+    outline: 2px solid var(--bs-secondary-color);
+    outline-offset: -2px;
+}
+
 .section-header,
 .section-divider {
     grid-column: 1 / -1;

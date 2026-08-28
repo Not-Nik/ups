@@ -26,7 +26,8 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 
 | Method | Path                   | Auth | Notes                                                                                       |
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
-| GET    | `/api/matches`         | -    | Array of match objects with `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable), `section` |
+| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tournament tab bar      |
+| GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable)   |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions                                                             |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
