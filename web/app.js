@@ -57,6 +57,8 @@ const SIDES = ['a', 'b'];
 const OTHER_SIDE = {a: 'b', b: 'a'};
 
 const state = {
+    tournaments: [],
+    activeTournament: null,
     matches: [],
     brackets: [], // rendered bracket entries {stage, key, nodes} — for the image dialog
     scores: {},   // { index: [scoreA, scoreB] } — set only when both inputs are valid ints
@@ -67,6 +69,58 @@ const state = {
 };
 
 const findCard = index => document.querySelector(`.card[data-index="${index}"]`);
+
+// ============== Tournaments ==============
+function updateTournamentTabs() {
+    $('tournament-bar').querySelectorAll('.tournament-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.id) === state.activeTournament);
+    });
+}
+
+function renderTournamentTabs() {
+    const bar = $('tournament-bar');
+    bar.replaceChildren();
+    state.tournaments.forEach(t => {
+        const btn = makeEl('button', {
+            className: 'tournament-btn btn',
+            textContent: t.name,
+            dataset: {id: String(t.tournament_id)},
+        });
+        btn.addEventListener('click', () => switchTournament(t.tournament_id));
+        bar.appendChild(btn);
+    });
+    updateTournamentTabs();
+    setHidden(bar, state.tournaments.length === 0);
+}
+
+function setActiveTournament(id) {
+    state.activeTournament = id;
+    localStorage.setItem('ups_tournament', String(id));
+    updateTournamentTabs();
+}
+
+async function switchTournament(id) {
+    if (id === state.activeTournament) return;
+    setActiveTournament(id);
+    await loadTournament(id);
+}
+
+// Scores/submissions are keyed by match index, so they go stale the moment the
+// match list changes — reset them before each tournament load.
+async function loadTournament(id) {
+    state.scores = {};
+    state.submitted = new Set();
+    updateSubmitAll();
+    try {
+        const matches = await api(`/api/matches/${id}`);
+        const brackets = await loadBrackets();
+        renderGrid(matches, brackets);
+        await loadPastPredictions();
+        applyFinalScoreStates();
+    } catch {
+        $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load matches. Please refresh.</p>';
+    }
+}
 
 // ============== Predictions ==============
 const isValidScore = v => /^\d+$/.test(v.trim());
@@ -1090,13 +1144,21 @@ function bindEvents() {
 document.addEventListener('DOMContentLoaded', async () => {
     bindEvents();
     try {
-        const matches = await api('/api/matches');
-        const brackets = await loadBrackets();
-        renderGrid(matches, brackets);
-        await loadPastPredictions();
-        applyFinalScoreStates();
+        state.tournaments = await api('/api/tournaments');
     } catch {
-        $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load matches. Please refresh.</p>';
+        state.tournaments = [];
+    }
+    renderTournamentTabs();
+
+    // Remember the last viewed tournament across reloads; default to the first one.
+    const saved = Number(localStorage.getItem('ups_tournament'));
+    const tournament = state.tournaments.find(t => t.tournament_id === saved) ?? state.tournaments[0];
+    if (tournament) {
+        state.activeTournament = tournament.tournament_id;
+        updateTournamentTabs();
+        await loadTournament(tournament.tournament_id);
+    } else {
+        $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load tournaments. Please refresh.</p>';
     }
     if (!getToken()) show($('login-btn'));
     loadCurrentUser();
