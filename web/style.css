@@ -10,6 +10,8 @@
 }
 
 [data-bs-theme="dark"] {
+    /* Subtle accent, used for the archive link and its card hover. */
+    --accent: #e94560;
     --bs-body-bg: #1a1a2e;
     --bs-body-color: #e0e0e0;
     --bs-secondary-color: #888;
@@ -29,6 +31,7 @@
 }
 
 [data-bs-theme="light"] {
+    --accent: #c0287a;
     --bs-body-bg: #f0f4ff;
     --bs-body-color: #1a1a2e;
     --bs-secondary-color: #6670a0;
@@ -65,11 +68,36 @@
     color: var(--form-disabled-color);
 }
 
-.matches-grid {
+.matches-grid,
+.archive-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1rem;
+}
+
+.matches-grid {
     align-items: start;
+}
+
+/* Archive entries: newest fills the top left, oldest the bottom right. */
+.archive-card {
+    /* Flex-centred rather than just text-align, so a one-line name sits in the middle
+       of a card stretched to match a two-line neighbour in the same row. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1rem;
+    border: 1px solid var(--bs-card-border-color);
+    border-radius: var(--bs-border-radius);
+    background-color: var(--bs-card-bg);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+.archive-card:hover {
+    border-color: var(--accent);
+    color: var(--bs-body-color);
 }
 
 .beta-badge {
@@ -80,22 +108,37 @@
     vertical-align: middle;
 }
 
-/* Second header line: one tab per tournament, hidden when none were loaded. */
+/* Second header line: one tab per tournament, newest first, hidden when none were
+   loaded. Tabs never wrap — app.js drops the oldest ones and reveals #archive-btn
+   instead when they don't all fit. */
 #tournament-bar {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: stretch;
     gap: 0;
+    overflow: hidden;
 }
 
 /* Tabs carry the bar's former padding themselves, so they fill it edge to edge. */
-.tournament-btn {
+.tournament-btn,
+.archive-btn {
     padding: 0.5rem 1rem;
     border: 0;
     border-radius: 0;
     font-size: 0.875rem;
-    color: var(--bs-secondary-color);
+    white-space: nowrap;
     background-color: transparent;
+}
+
+.tournament-btn {
+    color: var(--bs-secondary-color);
+}
+
+/* Pushed to the far end, and the only accent in the bar. */
+.archive-btn {
+    margin-left: auto;
+    color: var(--accent);
+    text-decoration: none;
 }
 
 .tournament-btn:hover,
@@ -104,11 +147,18 @@
     background-color: var(--bs-card-bg);
 }
 
-.tournament-btn:focus {
+.archive-btn:hover {
+    color: var(--accent);
+    background-color: var(--bs-card-bg);
+}
+
+.tournament-btn:focus,
+.archive-btn:focus {
     box-shadow: none;
 }
 
-.tournament-btn:focus-visible {
+.tournament-btn:focus-visible,
+.archive-btn:focus-visible {
     outline: 2px solid var(--bs-secondary-color);
     outline-offset: -2px;
 }

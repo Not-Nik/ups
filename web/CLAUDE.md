@@ -13,6 +13,7 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `index.html` — main page (predictions grid)
 - `404.html` — error page
 - `privacy.html` / `privacy.js` — privacy policy
+- `archive.html` / `archive.js` — every tournament as a grid, linked from the header when tabs don't all fit
 - `app.js` — all prediction-page logic
 - `common.js` — shared theme toggle (loaded by every page)
 - `style.css` — all styles, including Bootstrap overrides
@@ -26,7 +27,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 
 | Method | Path                   | Auth | Notes                                                                                       |
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
-| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tournament tab bar      |
+| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tab bar and the archive |
 | GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per 6 h) and answers `X-Refreshing: 1` while one runs |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
@@ -53,6 +54,8 @@ Where you are lives in the **query string**, never in `localStorage` — a link 
 Back walks through it. `localStorage` is only for the token and the theme.
 
 - `?tournament=<id>` — which tournament is loaded. Unknown or missing falls back to the first one.
+  `TOURNAMENT_PARAM` / `tournamentHref(id)` in common.js are the one place that spells this param, so
+  the archive links in without knowing how app.js reads it.
 - `?tab=<tab>` — which tab is open. `renderTabs` assigns each tab its `param`: a league day is its own
   name (`tab=Day+5`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
@@ -66,6 +69,20 @@ Back walks through it. `localStorage` is only for the token and the theme.
   It reloads the tournament only when it actually changed, otherwise just re-picks the tab.
 - Unknown tab values are dropped silently — `activateWantedTab()` falls back to the default and rewrites
   the URL, so a stale link still lands somewhere sensible.
+
+## Tournament tabs & archive
+
+Tournaments are ordered newest first everywhere (`byNewestTournament` in common.js — descending
+`tournament_id`), so index 0 is the current season and the URL's default lands there.
+
+- The header bar renders one `.tournament-btn` per tournament and never wraps. `fitTournamentTabs()`
+  measures `scrollWidth` vs `clientWidth` and hides the oldest tabs until the row fits, revealing
+  `#archive-btn` (the bar's only accent, `--accent`) once anything was cut. A `ResizeObserver` on the
+  bar re-runs it on every width change.
+- The **active** tournament always keeps its tab: `setActiveTournament` re-fits, so a `?tournament=`
+  link or a Back into an archived season is never left without one.
+- `archive.html` lists all of them in a grid, newest in the top left, oldest in the bottom right
+  (plain row-major CSS grid over the same sorted list). Cards link back via `tournamentHref`.
 
 ## Section / day model
 

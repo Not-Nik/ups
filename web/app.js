@@ -89,7 +89,7 @@ const urlParams = () => new URLSearchParams(location.search);
 function syncUrl(replace = false) {
     const params = urlParams();
     const set = (key, value) => value == null ? params.delete(key) : params.set(key, value);
-    set('tournament', state.activeTournament);
+    set(TOURNAMENT_PARAM, state.activeTournament);
     set('tab', state.activeTab && tabParam(state.activeTab));
     const query = params.toString();
     history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
@@ -98,7 +98,7 @@ function syncUrl(replace = false) {
 // Adopt whatever the URL says — on first load and on every back/forward. False when
 // there is no tournament to show at all.
 async function applyLocation() {
-    const wanted = Number(urlParams().get('tournament'));
+    const wanted = Number(urlParams().get(TOURNAMENT_PARAM));
     const tournament = state.tournaments.find(t => t.tournament_id === wanted) ?? state.tournaments[0];
     if (!tournament) return false;
     if (tournament.tournament_id === state.activeTournament) {
@@ -117,6 +117,27 @@ function updateTournamentTabs() {
     });
 }
 
+// Tabs run newest-first and never wrap. When they don't all fit, the oldest ones drop
+// out and the Archive link takes over for them. The active tournament always keeps its
+// tab, even when a link or the Back button lands on an old one.
+function fitTournamentTabs() {
+    const bar = $('tournament-bar');
+    const archive = $('archive-btn');
+    if (!archive) return;
+    const tabs = [...bar.querySelectorAll('.tournament-btn')];
+    const fits = () => bar.scrollWidth <= bar.clientWidth;
+
+    tabs.forEach(show);
+    hide(archive);
+    if (fits()) return;
+
+    show(archive);
+    for (const tab of tabs.reverse()) {
+        if (fits()) return;
+        if (Number(tab.dataset.id) !== state.activeTournament) hide(tab);
+    }
+}
+
 function renderTournamentTabs() {
     const bar = $('tournament-bar');
     bar.replaceChildren();
@@ -129,13 +150,23 @@ function renderTournamentTabs() {
         btn.addEventListener('click', () => switchTournament(t.tournament_id));
         bar.appendChild(btn);
     });
+    bar.appendChild(makeEl('a', {
+        id: 'archive-btn',
+        className: 'archive-btn d-none',
+        href: 'archive.html',
+        textContent: 'Archive',
+    }));
     updateTournamentTabs();
     setHidden(bar, state.tournaments.length === 0);
+    fitTournamentTabs();
 }
 
 function setActiveTournament(id) {
     state.activeTournament = id;
     updateTournamentTabs();
+    // Re-fit: whichever tournament just became active must keep its tab, so a ?tournament=
+    // link or a Back into an archived season is never left without one.
+    fitTournamentTabs();
 }
 
 async function switchTournament(id) {
@@ -1215,15 +1246,20 @@ function bindEvents() {
 
     // Back/forward move between views instead of leaving the site.
     window.addEventListener('popstate', applyLocation);
+
+    // Re-run the tab fit whenever the header changes width (this also fires once the
+    // bar first becomes visible, i.e. right after the tabs are rendered).
+    new ResizeObserver(fitTournamentTabs).observe($('tournament-bar'));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     bindEvents();
     try {
-        state.tournaments = await api('/api/tournaments');
+        state.tournaments = (await api('/api/tournaments')).sort(byNewestTournament);
     } catch {
         state.tournaments = [];
     }
+
     renderTournamentTabs();
 
     if (!await applyLocation()) {
