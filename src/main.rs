@@ -7,6 +7,7 @@
 mod account;
 mod endpoints;
 mod error;
+mod loader;
 mod matches;
 mod predictions;
 mod structures;
@@ -96,6 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let db = Arc::new(Mutex::new(SqliteConnection::connect("db.sqlite3").await?));
     db.lock().await.execute("PRAGMA foreign_keys = ON;").await?;
+    let refresher = loader::Refresher::new(db.clone());
+    let refresh = warp::any().map(move || refresher.clone());
+
     let conn = warp::any().map(move || db.clone());
 
     let quota = Quota::per_minute(nonzero!(100u32)).allow_burst(nonzero!(50u32));
@@ -119,6 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(rate_limit.clone())
         .and(warp::get())
         .and(conn.clone())
+        .and(refresh.clone())
         .and_then(endpoints::matches);
 
     let brackets = warp::path!("api" / "brackets" / u32)

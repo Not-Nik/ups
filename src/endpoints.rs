@@ -9,6 +9,7 @@ use crate::account::{
     verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
+use crate::loader::Refresher;
 use crate::matches::{
     get_bracket_nodes, get_brackets, get_matches, get_matches_filter, get_tournaments,
 };
@@ -57,14 +58,21 @@ pub async fn tournaments(
 pub async fn matches(
     tournament_id: u32,
     conn: Arc<Mutex<SqliteConnection>>,
+    refresher: Arc<Refresher>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+    let refreshing = refresher.refresh(tournament_id).await;
+
     let mut conn_lock = conn.lock().await;
 
     let matches = get_matches(&mut conn_lock, tournament_id)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 
-    Ok(warp::reply::json(&matches))
+    Ok(warp::reply::with_header(
+        warp::reply::json(&matches),
+        "X-Refreshing",
+        if refreshing { "1" } else { "0" },
+    ))
 }
 
 pub async fn bracket(
