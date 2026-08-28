@@ -119,15 +119,17 @@ pub async fn fetch_matches(
 
 pub async fn get_bracket_nodes(
     conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u32,
     stage: String,
     group: String,
 ) -> sqlx::Result<Vec<BracketNode>> {
     let mut bracket_query = sqlx::query(
-        "SELECT NodeId, StageId, StageName, StageNumber, StageType, GroupName, Branch,
+        "SELECT NodeId, TournamentID, StageId, StageName, StageNumber, StageType, GroupName, Branch,
                                  RoundNumber, Position, Depth, TeamA, TeamB, LogoA, LogoB, ScoreA,
                                  ScoreB, SourceTypeA, SourceA, SourceTypeB, SourceB, MatchID
-                          FROM bracket_nodes WHERE StageName = ? AND GroupName = ?",
+                          FROM bracket_nodes WHERE TournamentID = ? AND StageName = ? AND GroupName = ?",
     )
+    .bind(tournament_id)
     .bind(stage)
     .bind(group)
     .fetch(conn.deref_mut());
@@ -136,6 +138,7 @@ pub async fn get_bracket_nodes(
 
     while let Some(row) = bracket_query.try_next().await? {
         let node_id: String = row.try_get("NodeId")?;
+        let tournament_id: u32 = row.try_get("TournamentID")?;
         let stage_id: String = row.try_get("StageId")?;
         let stage_name: String = row.try_get("StageName")?;
         let stage_number: u64 = row.try_get("StageNumber")?;
@@ -159,6 +162,7 @@ pub async fn get_bracket_nodes(
 
         matches.push(BracketNode {
             node_id,
+            tournament_id,
             stage_id,
             stage_name,
             stage_number,
@@ -187,9 +191,13 @@ pub async fn get_bracket_nodes(
 
 pub async fn get_brackets(
     conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u32,
 ) -> sqlx::Result<Vec<Bracket>> {
-    let mut bracket_query = sqlx::query("SELECT DISTINCT StageName, GroupName FROM bracket_nodes")
-        .fetch(conn.deref_mut());
+    let mut bracket_query = sqlx::query(
+        "SELECT DISTINCT StageName, GroupName FROM bracket_nodes WHERE TournamentID = ?",
+    )
+    .bind(tournament_id)
+    .fetch(conn.deref_mut());
 
     let mut matches = Vec::new();
 
@@ -197,7 +205,11 @@ pub async fn get_brackets(
         let stage: String = row.try_get("StageName")?;
         let group: String = row.try_get("GroupName")?;
 
-        matches.push(Bracket { stage, group });
+        matches.push(Bracket {
+            tournament_id: tournament_id as u64,
+            stage,
+            group,
+        });
     }
 
     Ok(matches)

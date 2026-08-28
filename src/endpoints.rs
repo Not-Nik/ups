@@ -73,19 +73,25 @@ pub async fn bracket(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let matches = get_bracket_nodes(&mut conn_lock, query.stage, query.group)
-        .await
-        .map_err(|_| warp::reject::custom(InternalError))?;
+    let matches = get_bracket_nodes(
+        &mut conn_lock,
+        query.tournament_id as u32,
+        query.stage,
+        query.group,
+    )
+    .await
+    .map_err(|_| warp::reject::custom(InternalError))?;
 
     Ok(warp::reply::json(&matches))
 }
 
 pub async fn brackets(
+    tournament_id: u32,
     conn: Arc<Mutex<SqliteConnection>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let matches = get_brackets(&mut conn_lock)
+    let matches = get_brackets(&mut conn_lock, tournament_id)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 

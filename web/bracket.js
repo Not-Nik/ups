@@ -35,16 +35,17 @@ const bracketDayKey = (stage, group) => `\u0000bracket\u0000${stage}\u0000${grou
 const GROUP_ABBR = {'Winners Bracket': 'WB', 'Losers Bracket': 'LB', 'Main Bracket': 'Main'};
 const bracketGroupLabel = group => GROUP_ABBR[group] ?? group;
 
-// Fetch the list of bracket (stage, group) pairs from /api/brackets, then each one's
-// nodes. Using the dedicated list (not the match feed) means all-TBD brackets — ones
-// with no predictable match yet, like an undrawn Playoffs — still get a tab.
-async function loadBrackets() {
-    const pairs = await tryFetch(() => api('/api/brackets'));
+// Fetch the list of bracket (stage, group) pairs for one tournament from
+// /api/brackets/:id, then each one's nodes. Using the dedicated list (not the match
+// feed) means all-TBD brackets — ones with no predictable match yet, like an undrawn
+// Playoffs — still get a tab.
+async function loadBrackets(tournamentId) {
+    const pairs = await tryFetch(() => api(`/api/brackets/${tournamentId}`));
     if (!pairs || !pairs.length) return [];
     const out = [];
     await Promise.all(pairs.map(async ({stage, group}) => {
-        const nodes = await tryFetch(() => api(
-            `/api/bracket?stage=${encodeURIComponent(stage)}&group=${encodeURIComponent(group)}`));
+        const nodes = await tryFetch(() => api(`/api/bracket?tournament_id=${tournamentId}`
+            + `&stage=${encodeURIComponent(stage)}&group=${encodeURIComponent(group)}`));
         if (nodes && nodes.length) out.push({stage, group, nodes});
     }));
     out.sort((a, b) =>
