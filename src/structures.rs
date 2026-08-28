@@ -39,6 +39,7 @@ pub struct Match {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct BracketNode {
     pub node_id: String,
+    pub tournament_id: u32,
     pub stage_id: String,
     pub stage_name: String,
     pub stage_number: u64,
@@ -105,6 +106,7 @@ pub struct ProxyQuery {
 
 #[derive(Serialize, Deserialize)]
 pub struct Bracket {
+    pub tournament_id: u64,
     pub stage: String,
     pub group: String,
 }

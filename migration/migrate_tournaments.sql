@@ -10,3 +10,6 @@ VALUES (1, "Uniliga Overwatch Sommerseason 2026", 2425613637680488447);
 
 ALTER TABLE matches
     ADD COLUMN TournamentID INTEGER NOT NULL REFERENCES tournaments (TournamentID) DEFAULT 1;
+
+ALTER TABLE bracket_nodes
+    ADD COLUMN TournamentID INTEGER NOT NULL REFERENCES tournaments (TournamentID) DEFAULT 1;

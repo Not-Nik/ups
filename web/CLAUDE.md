@@ -28,6 +28,8 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
 | GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tournament tab bar      |
 | GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable)   |
+| GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
+| GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions                                                             |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |

@@ -113,7 +113,7 @@ async function loadTournament(id) {
     updateSubmitAll();
     try {
         const matches = await api(`/api/matches/${id}`);
-        const brackets = await loadBrackets();
+        const brackets = await loadBrackets(id);
         renderGrid(matches, brackets);
         await loadPastPredictions();
         applyFinalScoreStates();

@@ -121,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::matches);
 
-    let brackets = warp::path!("api" / "brackets")
+    let brackets = warp::path!("api" / "brackets" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
         .and(conn.clone())
