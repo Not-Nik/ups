@@ -37,6 +37,19 @@ pub async fn get_tournaments(
     Ok(tournaments)
 }
 
+pub async fn add_tournament(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament: Tournament,
+) -> sqlx::Result<()> {
+    sqlx::query("INSERT INTO tournaments (name, tournament) VALUES (?, ?)")
+        .bind(tournament.name)
+        .bind(tournament.toornament_id)
+        .execute(conn.deref_mut())
+        .await?;
+
+    Ok(())
+}
+
 pub async fn get_matches(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     tournament_id: u32,
@@ -115,6 +128,31 @@ pub async fn fetch_matches(
     }
 
     Ok(matches)
+}
+
+pub async fn add_match(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    match_: Match,
+) -> sqlx::Result<()> {
+    sqlx::query("INSERT INTO matches (TournamentID, TeamA, TeamB, LogoA, LogoB, ScoreA, ScoreB, ToornamentId, StageType,\
+                     StageNumber, StageName, GroupName, RoundName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(match_.tournament_id as i32)
+        .bind(match_.team_a)
+        .bind(match_.team_b)
+        .bind(match_.logo_a)
+        .bind(match_.logo_b)
+        .bind(match_.score_a.map(|a| a as u32))
+        .bind(match_.score_b.map(|a| a as u32))
+        .bind(match_.toornament_id)
+        .bind(match_.stage_type)
+        .bind(match_.stage_number.map(|a| a as u32))
+        .bind(match_.stage_name)
+        .bind(match_.group_name)
+        .bind(match_.round_name)
+        .execute(conn.deref_mut())
+        .await?;
+
+    Ok(())
 }
 
 pub async fn get_bracket_nodes(

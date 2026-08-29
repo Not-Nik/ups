@@ -587,6 +587,10 @@
     cursor: pointer;
 }
 
+#toast.toast-success {
+    background: var(--bs-success);
+}
+
 #incident-toast {
     position: fixed;
     bottom: 1rem;

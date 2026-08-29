@@ -14,6 +14,7 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `404.html` — error page
 - `privacy.html` / `privacy.js` — privacy policy
 - `archive.html` / `archive.js` — every tournament as a grid, linked from the header when tabs don't all fit
+- `admin.html` / `admin.js` — admin panel: add tournaments and matches (login-gated, admin-only)
 - `app.js` — all prediction-page logic
 - `common.js` — shared theme toggle (loaded by every page)
 - `style.css` — all styles, including Bootstrap overrides
@@ -38,10 +39,15 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | POST   | `/api/submit`          | opt  | `{predictions, name?}` — name only when no token; returns `{token}` for new accounts        |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
+| POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
+| POST   | `/api/match`           | admin| Full `Match` body: `tournament_id`, `team_a/b`, `logo_a/b`, `score_a/b?`, `stage_name`, `group_name`, `round_name`, plus optional `stage_type`, `stage_number`, `toornament_id` (+ dummy `id`) |
 | -      | `/api/proxy`           | -    | Image proxy used by html2canvas for cross-origin team logos                                 |
 
 Server returns `{err: 'Code'}` on failures. `AccountExists` is the only error code handled specially in the client (
 retry name prompt).
+
+"admin" auth means a token whose account has the `Admin` flag (`is_admin` in `../src/account.rs`). Non-admins get a
+404 with `{err: 'AccessDenied'}`; `admin.js` maps that to "This account is not an admin."
 
 ## Auth
 

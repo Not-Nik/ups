@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin – PULOW</title>
+    <link href="vendor/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="border-bottom px-3 py-3 d-flex justify-content-between align-items-center">
+    <h1 class="h5 fw-bold mb-0"><a href="/" class="text-decoration-none text-body">Admin</a></h1>
+    <div class="d-flex align-items-center gap-2">
+        <span id="who" class="text-secondary small d-none"></span>
+        <button id="logout" class="btn btn-sm btn-outline-secondary d-none">Log out</button>
+        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" aria-label="Toggle theme"></button>
+    </div>
+</header>
+<main class="container-lg px-3 py-4">
+    <div id="login-card" class="card border-0 shadow-sm" style="max-width: 24rem;">
+        <div class="card-body p-4">
+            <h2 class="h5 fw-bold">Log in</h2>
+            <p class="text-secondary small mb-3">Admin access required.</p>
+            <div class="mb-3">
+                <label for="login-name" class="form-label">Name</label>
+                <input id="login-name" type="text" class="form-control" autocomplete="username">
+            </div>
+            <div class="mb-3">
+                <label for="login-password" class="form-label">Password</label>
+                <input id="login-password" type="password" class="form-control" autocomplete="current-password">
+            </div>
+            <button id="login-submit" class="btn btn-primary w-100">Log in</button>
+        </div>
+    </div>
+
+    <div id="admin-cards" class="d-none">
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">New tournament</h2>
+                        <div class="mb-3">
+                            <label for="tournament-name" class="form-label">Name</label>
+                            <input id="tournament-name" type="text" class="form-control" placeholder="Winter 2027">
+                        </div>
+                        <div class="mb-3">
+                            <label for="tournament-toornament" class="form-label">Toornament id <span class="text-secondary">(optional)</span></label>
+                            <input id="tournament-toornament" type="text" class="form-control" placeholder="e.g. 123456">
+                        </div>
+                        <button id="tournament-submit" class="btn btn-primary w-100">Add tournament</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">New match</h2>
+                        <div class="mb-3">
+                            <label for="match-tournament" class="form-label">Tournament</label>
+                            <select id="match-tournament" class="form-select"></select>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="match-team-a" class="form-label">Team A</label>
+                                <input id="match-team-a" type="text" class="form-control" placeholder="Charite">
+                            </div>
+                            <div class="col-6">
+                                <label for="match-team-b" class="form-label">Team B</label>
+                                <input id="match-team-b" type="text" class="form-control" placeholder="TUM">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="match-logo-a" class="form-label">Logo A <span class="text-secondary">(URL)</span></label>
+                                <input id="match-logo-a" type="text" class="form-control" placeholder="https://…">
+                            </div>
+                            <div class="col-6">
+                                <label for="match-logo-b" class="form-label">Logo B <span class="text-secondary">(URL)</span></label>
+                                <input id="match-logo-b" type="text" class="form-control" placeholder="https://…">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="match-score-a" class="form-label">Score A <span class="text-secondary">(final)</span></label>
+                                <input id="match-score-a" type="number" min="0" class="form-control">
+                            </div>
+                            <div class="col-6">
+                                <label for="match-score-b" class="form-label">Score B <span class="text-secondary">(final)</span></label>
+                                <input id="match-score-b" type="number" min="0" class="form-control">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="match-stage-name" class="form-label">Stage</label>
+                                <input id="match-stage-name" type="text" class="form-control" placeholder="Erste Liga">
+                            </div>
+                            <div class="col-6">
+                                <label for="match-group-name" class="form-label">Group</label>
+                                <input id="match-group-name" type="text" class="form-control" placeholder="Group A">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="match-round-name" class="form-label">Round</label>
+                                <input id="match-round-name" type="text" class="form-control" placeholder="Day 5">
+                            </div>
+                            <div class="col-6">
+                                <label for="match-stage-number" class="form-label">Stage number <span class="text-secondary">(optional)</span></label>
+                                <input id="match-stage-number" type="number" min="0" class="form-control">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="match-stage-type" class="form-label">Stage type <span class="text-secondary">(optional)</span></label>
+                                <input id="match-stage-type" type="text" class="form-control" placeholder="e.g. Swiss">
+                            </div>
+                            <div class="col-6">
+                                <label for="match-toornament" class="form-label">Toornament id <span class="text-secondary">(optional)</span></label>
+                                <input id="match-toornament" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <button id="match-submit" class="btn btn-primary w-100">Add match</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+<div id="toast" class="d-none" role="alert" aria-live="polite"></div>
+<script src="common.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

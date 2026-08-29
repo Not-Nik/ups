@@ -4,13 +4,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::account::{
-    create_account, delete_account, delete_session, exists_account, login_account, set_password,
-    verify_session,
+    create_account, delete_account, delete_session, exists_account, is_admin, login_account,
+    set_password, verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::loader::Refresher;
 use crate::matches::{
-    get_bracket_nodes, get_brackets, get_matches, get_matches_filter, get_tournaments,
+    add_tournament, get_bracket_nodes, get_brackets, get_matches, get_matches_filter,
+    get_tournaments,
 };
 use crate::predictions::{
     get_predictions, get_user_match_predictions, get_user_predictions, submit_prediction,
@@ -18,10 +19,33 @@ use crate::predictions::{
 };
 use crate::structures::*;
 
+use crate::matches;
 use log::debug;
 use sqlx::SqliteConnection;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
+
+async fn verify_admin(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    auth: String,
+) -> Result<(), warp::Rejection> {
+    let name = verify_session(conn, auth.strip_prefix("Bearer ").ok_or(BadRequest)?)
+        .await
+        .map_err(|_| warp::reject::not_found())?;
+
+    let Some(name) = name else {
+        Err(warp::reject::not_found())?
+    };
+
+    if !is_admin(conn, &name)
+        .await
+        .map_err(|_| warp::reject::not_found())?
+    {
+        Err(warp::reject::not_found())?
+    } else {
+        Ok(())
+    }
+}
 
 pub async fn me(
     auth: String,
@@ -52,6 +76,22 @@ pub async fn tournaments(
         .map_err(|_| warp::reject::custom(InternalError))?;
 
     Ok(warp::reply::json(&matches))
+}
+
+pub async fn tournament(
+    conn: Arc<Mutex<SqliteConnection>>,
+    auth: String,
+    tournament: Tournament,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    verify_admin(&mut conn_lock, auth.clone()).await?;
+
+    add_tournament(&mut conn_lock, tournament)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply())
 }
 
 pub async fn matches(
@@ -85,6 +125,22 @@ pub async fn match_(
         .map_err(|_| warp::reject::custom(InternalError))?;
 
     Ok(warp::reply::json(&matches))
+}
+
+pub async fn add_match(
+    conn: Arc<Mutex<SqliteConnection>>,
+    auth: String,
+    match_: Match,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    verify_admin(&mut conn_lock, auth.clone()).await?;
+
+    matches::add_match(&mut conn_lock, match_)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply())
 }
 
 pub async fn bracket(

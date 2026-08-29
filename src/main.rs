@@ -113,11 +113,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::me);
 
-    let tournament = warp::path!("api" / "tournaments")
+    let tournaments = warp::path!("api" / "tournaments")
         .and(rate_limit.clone())
         .and(warp::get())
         .and(conn.clone())
         .and_then(endpoints::tournaments);
+
+    let tournament = warp::path!("api" / "tournament")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(conn.clone())
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and_then(endpoints::tournament);
 
     let matches = warp::path!("api" / "matches" / u32)
         .and(rate_limit.clone())
@@ -132,6 +140,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and(warp::query::<Matches>())
         .and_then(endpoints::match_);
+
+    let add_match = warp::path!("api" / "match")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(conn.clone())
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and_then(endpoints::add_match);
 
     let brackets = warp::path!("api" / "brackets" / u32)
         .and(rate_limit.clone())
@@ -209,9 +225,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(endpoints::proxy);
 
     let routes = me
+        .or(tournaments)
         .or(tournament)
         .or(matches)
         .or(match_)
+        .or(add_match)
         .or(brackets)
         .or(bracket)
         .or(single_prediction)
