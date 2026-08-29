@@ -122,6 +122,19 @@ pub async fn verify_session(
     Ok(res.try_get("Name")?)
 }
 
+pub async fn is_admin(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    name: &String,
+) -> sqlx::Result<bool> {
+    let admin: u32 = sqlx::query("SELECT Admin FROM users WHERE Name = ?")
+        .bind(name)
+        .fetch_one(conn.deref_mut())
+        .await?
+        .try_get(0)?;
+
+    Ok(admin == 1)
+}
+
 pub async fn set_password(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
