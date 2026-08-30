@@ -61,22 +61,18 @@
                         </div>
                         <div class="row g-3 mb-3">
                             <div class="col-6">
-                                <label for="match-team-a" class="form-label">Team A</label>
-                                <input id="match-team-a" type="text" class="form-control" placeholder="Charite">
+                                <label for="team-btn-a" class="form-label">Team A</label>
+                                <div class="admin-team-picker">
+                                    <button type="button" class="admin-team-btn" id="team-btn-a" aria-haspopup="listbox" aria-expanded="false"></button>
+                                    <div class="admin-team-list d-none" id="team-list-a" role="listbox"></div>
+                                </div>
                             </div>
                             <div class="col-6">
-                                <label for="match-team-b" class="form-label">Team B</label>
-                                <input id="match-team-b" type="text" class="form-control" placeholder="TUM">
-                            </div>
-                        </div>
-                        <div class="row g-3 mb-3">
-                            <div class="col-6">
-                                <label for="match-logo-a" class="form-label">Logo A <span class="text-secondary">(URL)</span></label>
-                                <input id="match-logo-a" type="text" class="form-control" placeholder="https://…">
-                            </div>
-                            <div class="col-6">
-                                <label for="match-logo-b" class="form-label">Logo B <span class="text-secondary">(URL)</span></label>
-                                <input id="match-logo-b" type="text" class="form-control" placeholder="https://…">
+                                <label for="team-btn-b" class="form-label">Team B</label>
+                                <div class="admin-team-picker">
+                                    <button type="button" class="admin-team-btn" id="team-btn-b" aria-haspopup="listbox" aria-expanded="false"></button>
+                                    <div class="admin-team-list d-none" id="team-list-b" role="listbox"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="row g-3 mb-3">
@@ -91,21 +87,33 @@
                         </div>
                         <div class="row g-3 mb-3">
                             <div class="col-6">
-                                <label for="match-stage-name" class="form-label">Stage</label>
-                                <input id="match-stage-name" type="text" class="form-control" placeholder="Erste Liga">
+                                <label for="section-btn-stage" class="form-label">Stage</label>
+                                <div class="admin-team-picker"
+>
+                                    <button type="button" class="admin-team-btn" id="section-btn-stage" aria-haspopup="listbox" aria-expanded="false"></button>
+                                    <div class="admin-team-list d-none" id="section-list-stage" role="listbox"></div>
+                                </div>
                             </div>
                             <div class="col-6">
-                                <label for="match-group-name" class="form-label">Group</label>
-                                <input id="match-group-name" type="text" class="form-control" placeholder="Group A">
+                                <label for="section-btn-group" class="form-label">Group</label>
+                                <div class="admin-team-picker"
+>
+                                    <button type="button" class="admin-team-btn" id="section-btn-group" aria-haspopup="listbox" aria-expanded="false"></button>
+                                    <div class="admin-team-list d-none" id="section-list-group" role="listbox"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="row g-3 mb-3">
                             <div class="col-6">
-                                <label for="match-round-name" class="form-label">Round</label>
-                                <input id="match-round-name" type="text" class="form-control" placeholder="Day 5">
+                                <label for="section-btn-round" class="form-label">Round</label>
+                                <div class="admin-team-picker"
+>
+                                    <button type="button" class="admin-team-btn" id="section-btn-round" aria-haspopup="listbox" aria-expanded="false"></button>
+                                    <div class="admin-team-list d-none" id="section-list-round" role="listbox"></div>
+                                </div>
                             </div>
                             <div class="col-6">
-                                <label for="match-stage-number" class="form-label">Stage number <span class="text-secondary">(optional)</span></label>
+                                <label for="match-stage-number" class="form-label">Stage number <span class="text-secondary">(auto-filled, editable)</span></label>
                                 <input id="match-stage-number" type="number" min="0" class="form-control">
                             </div>
                         </div>

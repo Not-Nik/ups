@@ -40,7 +40,7 @@ function render() {
     setHidden($('logout'), !loggedIn);
     if (loggedIn) {
         loadCurrentUser();
-        loadTournamentOptions();
+        loadTournamentOptions().then(loadTournamentData);
     }
 }
 
@@ -114,13 +114,211 @@ async function submitTournament(btn) {
     }
 }
 
+// ============== Pickers ==============
+// <option> can't render images, so every pick is a custom listbox: a button
+// showing the current value, and a panel of rows. Team rows carry logos;
+// stage/group/round rows come from existing matches and offer "Custom…" to
+// fall back to free text.
+
+const pickers = {};
+let teamLogos = new Map();
+let sectionCombos = new Map(); // "stage\0group\0round" -> {stage_number, stage_type}
+let sectionNames = {stage: [], group: [], round: []};
+
+function makePicker({key, btn, list, placeholder, render, onSelect, custom = false}) {
+    const picker = {btn, list, value: '', customEl: null};
+    pickers[key] = picker;
+
+    // render(value) -> array of nodes for one row (or the button)
+    const renderBtn = () => {
+        btn.replaceChildren(...render(picker.value));
+    };
+
+    picker.close = () => {
+        list.classList.add('d-none');
+        btn.setAttribute('aria-expanded', 'false');
+    };
+
+    picker.set = (name, {notify = true} = {}) => {
+        picker.value = name;
+        renderBtn();
+        picker.close();
+        if (notify && onSelect) onSelect(name);
+    };
+
+    picker.toCustom = () => {
+        picker.close();
+        const input = makeEl('input', {
+            type: 'text',
+            className: 'form-control',
+            value: picker.value,
+            placeholder,
+        });
+        input.addEventListener('input', () => {
+            picker.value = input.value.trim();
+            onSelect?.(picker.value);
+        });
+        btn.replaceWith(input);
+        picker.customEl = input;
+        input.focus();
+        input.select();
+    };
+
+    picker.fill = names => {
+        if (picker.customEl) return; // stay in custom mode
+        picker.value = '';
+        renderBtn();
+        const items = names.map(name => {
+            const item = makeEl('button', {type: 'button', className: 'admin-team-item', role: 'option'});
+            item.append(...render(name));
+            item.addEventListener('click', () => picker.set(name));
+            return item;
+        });
+        if (!names.length) {
+            items.push(makeEl('div', {
+                className: 'admin-team-empty',
+                textContent: custom ? 'No entries yet — or pick "Custom…" below.' : 'No entries yet.',
+            }));
+        }
+        if (custom) {
+            const customItem = makeEl('button', {
+                type: 'button',
+                className: 'admin-team-item admin-team-custom',
+                textContent: 'Custom…',
+            });
+            customItem.addEventListener('click', picker.toCustom);
+            items.push(customItem);
+        }
+        list.replaceChildren(...items);
+    };
+
+    picker.reset = () => {
+        if (picker.customEl) {
+            picker.customEl.replaceWith(btn);
+            picker.customEl = null;
+        }
+        picker.value = '';
+        renderBtn();
+    };
+
+    picker.clear = () => {
+        picker.value = '';
+        renderBtn();
+    };
+
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        closeAllPickers(picker);
+        const opened = list.classList.toggle('d-none');
+        btn.setAttribute('aria-expanded', String(opened));
+    });
+    list.addEventListener('click', e => e.stopPropagation());
+
+    return picker;
+}
+
+const closeAllPickers = except => {
+    for (const p of Object.values(pickers)) {
+        if (p !== except) p.close();
+    }
+};
+
+document.addEventListener('click', () => closeAllPickers());
+
+const label = (name, placeholder) => makeEl('span', {
+    className: 'admin-team-choice' + (name ? '' : ' text-secondary'),
+    textContent: name || placeholder,
+});
+
+const teamRender = name => {
+    const nodes = [];
+    const logo = name ? teamLogos.get(name) : '';
+    if (logo) nodes.push(makeEl('img', {className: 'admin-team-logo', src: logo, alt: ''}));
+    nodes.push(label(name, 'Select team…'));
+    return nodes;
+};
+
+makePicker({
+    key: 'team-a', btn: $('team-btn-a'), list: $('team-list-a'),
+    placeholder: 'Team A', render: teamRender,
+});
+makePicker({
+    key: 'team-b', btn: $('team-btn-b'), list: $('team-list-b'),
+    placeholder: 'Team B', render: teamRender,
+});
+
+// Picking an existing stage/group/round combo fills the stage number and type
+// from a match that already uses it.
+const sectionRender = placeholder => name => [label(name, placeholder)];
+
+makePicker({
+    key: 'stage', btn: $('section-btn-stage'), list: $('section-list-stage'),
+    placeholder: 'Select stage…', render: sectionRender('Select stage…'), custom: true,
+    onSelect: syncSection,
+});
+makePicker({
+    key: 'group', btn: $('section-btn-group'), list: $('section-list-group'),
+    placeholder: 'Select group…', render: sectionRender('Select group…'), custom: true,
+    onSelect: syncSection,
+});
+makePicker({
+    key: 'round', btn: $('section-btn-round'), list: $('section-list-round'),
+    placeholder: 'Select round…', render: sectionRender('Select round…'), custom: true,
+    onSelect: syncSection,
+});
+
+function syncSection() {
+    const key = [pickers.stage.value, pickers.group.value, pickers.round.value].join('\u0000');
+    const combo = sectionCombos.get(key);
+    if (!combo) return;
+    $('match-stage-number').value = combo.stage_number ?? '';
+    $('match-stage-type').value = combo.stage_type ?? '';
+}
+
+async function loadTournamentData() {
+    teamLogos = new Map();
+    sectionCombos = new Map();
+    const stages = new Set(), groups = new Set(), rounds = new Set();
+    const tid = parseInt($('match-tournament').value, 10);
+    if (!isNaN(tid)) {
+        const matches = await tryFetch(() => api(`/api/matches/${tid}`));
+        if (Array.isArray(matches)) {
+            for (const m of matches) {
+                for (const side of ['a', 'b']) {
+                    const team = m[`team_${side}`];
+                    if (team && !teamLogos.has(team)) teamLogos.set(team, m[`logo_${side}`] || '');
+                }
+                if (m.stage_name) stages.add(m.stage_name);
+                if (m.group_name) groups.add(m.group_name);
+                if (m.round_name) rounds.add(m.round_name);
+                const key = [m.stage_name, m.group_name, m.round_name].join('\u0000');
+                if (!sectionCombos.has(key)) {
+                    sectionCombos.set(key, {stage_number: m.stage_number, stage_type: m.stage_type});
+                }
+            }
+        }
+    }
+    const sortByName = (a, b) => a.localeCompare(b);
+    sectionNames = {
+        stage: [...stages].sort(sortByName),
+        group: [...groups].sort(sortByName),
+        round: [...rounds].sort(compareDays),
+    };
+    const teamNames = [...teamLogos.keys()].sort(sortByName);
+    pickers['team-a'].fill(teamNames);
+    pickers['team-b'].fill(teamNames);
+    pickers.stage.fill(sectionNames.stage);
+    pickers.group.fill(sectionNames.group);
+    pickers.round.fill(sectionNames.round);
+}
+
 // ============== Matches ==============
 
 function matchBody() {
-    const required = ['match-team-a', 'match-team-b', 'match-stage-name', 'match-group-name', 'match-round-name'];
-    for (const id of required) {
-        const el = $(id);
-        if (!el.value.trim()) {
+    for (const key of ['team-a', 'team-b', 'stage', 'group', 'round']) {
+        const p = pickers[key];
+        if (!p.value) {
+            const el = p.customEl ?? p.btn;
             shake(el);
             el.focus();
             return null;
@@ -134,18 +332,18 @@ function matchBody() {
     return {
         id: 0,
         tournament_id,
-        team_a: $('match-team-a').value.trim(),
-        team_b: $('match-team-b').value.trim(),
-        logo_a: $('match-logo-a').value.trim(),
-        logo_b: $('match-logo-b').value.trim(),
+        team_a: pickers['team-a'].value,
+        team_b: pickers['team-b'].value,
+        logo_a: teamLogos.get(pickers['team-a'].value) || '',
+        logo_b: teamLogos.get(pickers['team-b'].value) || '',
         score_a: intOrNull('match-score-a'),
         score_b: intOrNull('match-score-b'),
         toornament_id: textOrNull('match-toornament'),
         stage_type: textOrNull('match-stage-type'),
         stage_number: intOrNull('match-stage-number'),
-        stage_name: $('match-stage-name').value.trim(),
-        group_name: $('match-group-name').value.trim(),
-        round_name: $('match-round-name').value.trim(),
+        stage_name: pickers.stage.value,
+        group_name: pickers.group.value,
+        round_name: pickers.round.value,
     };
 }
 
@@ -156,11 +354,15 @@ async function submitMatch(btn) {
     try {
         await api('/api/match', {method: 'POST', body});
         toast('Match added.', true);
-        for (const id of ['match-team-a', 'match-team-b', 'match-logo-a', 'match-logo-b',
-                          'match-score-a', 'match-score-b']) {
+        pickers['team-a'].clear();
+        pickers['team-b'].clear();
+        for (const key of ['stage', 'group', 'round']) {
+            pickers[key].reset();
+        }
+        for (const id of ['match-score-a', 'match-score-b', 'match-stage-number', 'match-stage-type']) {
             $(id).value = '';
         }
-        $('match-team-a').focus();
+        pickers['team-a'].btn.focus();
     } catch (e) {
         report(e, 'Match could not be added');
     } finally {
@@ -173,5 +375,6 @@ async function submitMatch(btn) {
 $('tournament-submit').addEventListener('click', () => submitTournament($('tournament-submit')));
 $('match-submit').addEventListener('click', () => submitMatch($('match-submit')));
 $('login-submit').addEventListener('click', () => submitLogin($('login-submit')));
+$('match-tournament').addEventListener('change', loadTournamentData);
 
 render();
