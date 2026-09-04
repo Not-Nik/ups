@@ -4,7 +4,7 @@
 // fetch per stage+group); structure/edges come from the node `source_*` fields.
 // Loaded after app.js, so it shares its globals (createCard, state, helpers).
 
-const BRACKET_STAGE_TYPES = new Set(['single_elimination', 'double_elimination', 'bracket_groups']);
+const BRACKET_STAGE_TYPES = new Set(['single_elimination', 'double_elimination', 'bracket_groups', 'custom_bracket']);
 
 // The image export hides individual cells/edges via display:none; that resizes cells
 // and would trigger the reflow observer, which rebuilds the SVG and undoes those hides.

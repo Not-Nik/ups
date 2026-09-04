@@ -23,7 +23,8 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 // Stage types played as a bracket rather than a round-robin league. These get a
 // row per match (incl. undecided slots) in bracket_nodes so the bracket can be drawn.
-const BRACKET_TYPES: [&str; 3] = ["single_elimination", "double_elimination", "bracket_groups"];
+const BRACKET_TYPES: [&str; 4] =
+    ["single_elimination", "double_elimination", "bracket_groups", "custom_bracket"];
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
