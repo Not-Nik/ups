@@ -46,7 +46,12 @@ async function loadBrackets(tournamentId) {
     await Promise.all(pairs.map(async ({stage, group}) => {
         const nodes = await tryFetch(() => api(`/api/bracket?tournament_id=${tournamentId}`
             + `&stage=${encodeURIComponent(stage)}&group=${encodeURIComponent(group)}`));
-        if (nodes && nodes.length) out.push({stage, group, nodes});
+        if (nodes && nodes.length) {
+            // Toornament's custom_bracket stages send branch as "WB"/"LB"; elimination
+            // stages send lowercase. Normalize so BRANCH_RANK/BRANCH_LABEL always match.
+            for (const n of nodes) if (n.branch) n.branch = n.branch.toLowerCase();
+            out.push({stage, group, nodes});
+        }
     }));
     out.sort((a, b) =>
         (a.nodes[0].stage_number - b.nodes[0].stage_number) || a.group.localeCompare(b.group));
