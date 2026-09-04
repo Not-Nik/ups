@@ -25,7 +25,8 @@ function switchMatch() {
 
 async function initOverlay() {
     const id = localStorage.getItem(CURRENT_KEY);
-    if (!id) {
+    const tournamentId = localStorage.getItem(TOURNAMENT_KEY);
+    if (!id || !tournamentId) {
         showSelectPrompt();
         // Follow the control room once it picks a match.
         window.addEventListener('storage', e => {
@@ -36,7 +37,7 @@ async function initOverlay() {
 
     let match;
     try {
-        match = await fetchMatch(id);
+        match = await fetchMatch(tournamentId, id);
     } catch {
         return showError('Failed to load matches.');
     }

@@ -248,70 +248,100 @@ async function initControl() {
         });
     }
 
-    const selectMatch = mid => {
+    const selectMatch = (tid, mid) => {
         clearMatchData(); // drop residual scores/swap/bans before repointing
+        localStorage.setItem(TOURNAMENT_KEY, String(tid));
         localStorage.setItem(CURRENT_KEY, String(mid));
         closeModal();
         render(); // same-tab write doesn't fire `storage`, so re-render manually
     };
 
-    // Two-stage match picker: first pick a day, then a match within that day.
-    async function openMatchPicker(currentId) {
+    // Three-stage match picker: pick a tournament, then a day, then a match.
+    async function openMatchPicker(currentTournamentId, currentId) {
         const box = openModal('match-picker');
-        box.append(crEmpty('Loading matches…'));
+        box.append(crEmpty('Loading tournaments…'));
 
-        let matches;
+        let tournaments;
         try {
-            matches = await fetchMatches();
+            tournaments = await fetchTournaments();
         } catch {
-            return box.replaceChildren(crEmpty('Failed to load matches.'));
+            return box.replaceChildren(crEmpty('Failed to load tournaments.'));
         }
-        if (!matches.length) {
-            return box.replaceChildren(crEmpty('No matches available.'));
+        if (!tournaments.length) {
+            return box.replaceChildren(crEmpty('No tournaments available.'));
         }
 
-        const days = [...new Set(matches.map(m => m.round_name ?? ''))].sort(compareDays);
-        const matchesForDay = day => matches
-            .filter(m => (m.round_name ?? '') === day)
-            .sort((a, b) => sectionOrder(sectionKey(a), sectionKey(b))
-                || (a.team_a ?? '').localeCompare(b.team_a ?? ''));
-
-        // Stage 1: the whole screen is the day list.
-        const showDays = () => {
+        // Stage 1: the whole screen is the tournament list.
+        const showTournaments = () => {
             const title = makeEl('h2', {className: 'mp-title', textContent: 'Change match'});
+            const sub = makeEl('p', {className: 'mp-sub', textContent: 'Pick a tournament'});
+            const list = makeEl('div', {className: 'mp-days'});
+            tournaments.forEach(t => {
+                const btn = makeEl('button', {className: 'mp-day', type: 'button', textContent: t.name});
+                if (String(t.tournament_id) === String(currentTournamentId)) btn.classList.add('mp-match-current');
+                btn.addEventListener('click', () => showDays(t));
+                list.append(btn);
+            });
+            box.replaceChildren(title, sub, list);
+        };
+
+        // Stage 2: the whole screen is that tournament's day list, with a way back.
+        const showDays = async tournament => {
+            box.replaceChildren(crEmpty('Loading matches…'));
+            let matches;
+            try {
+                matches = await fetchMatches(tournament.tournament_id);
+            } catch {
+                return box.replaceChildren(crEmpty('Failed to load matches.'));
+            }
+            if (!matches.length) {
+                return box.replaceChildren(crEmpty('No matches available.'));
+            }
+
+            const days = [...new Set(matches.map(m => m.round_name ?? ''))].sort(compareDays);
+            const matchesForDay = day => matches
+                .filter(m => (m.round_name ?? '') === day)
+                .sort((a, b) => sectionOrder(sectionKey(a), sectionKey(b))
+                    || (a.team_a ?? '').localeCompare(b.team_a ?? ''));
+
+            const back = makeEl('button', {className: 'mp-back', type: 'button', textContent: '‹ Tournaments'});
+            back.addEventListener('click', showTournaments);
+            const head = makeEl('div', {className: 'mp-head'});
+            head.append(back, makeEl('h2', {className: 'mp-title', textContent: tournament.name}));
             const sub = makeEl('p', {className: 'mp-sub', textContent: 'Pick a day'});
             const dayList = makeEl('div', {className: 'mp-days'});
             days.forEach(day => {
                 const btn = makeEl('button', {className: 'mp-day', type: 'button', textContent: day});
-                btn.addEventListener('click', () => showMatches(day));
+                btn.addEventListener('click', () => showMatches(tournament, day, matchesForDay(day)));
                 dayList.append(btn);
             });
-            box.replaceChildren(title, sub, dayList);
+            box.replaceChildren(head, sub, dayList);
         };
 
-        // Stage 2: the whole screen is that day's matches, with a way back.
-        const showMatches = day => {
+        // Stage 3: the whole screen is that day's matches, with a way back.
+        const showMatches = (tournament, day, dayMatches) => {
             const back = makeEl('button', {className: 'mp-back', type: 'button', textContent: '‹ Days'});
-            back.addEventListener('click', showDays);
+            back.addEventListener('click', () => showDays(tournament));
             const head = makeEl('div', {className: 'mp-head'});
             head.append(back, makeEl('h2', {className: 'mp-title', textContent: day}));
 
             const list = makeEl('div', {className: 'mp-list'});
-            list.append(...matchesForDay(day).map(m => {
+            list.append(...dayMatches.map(m => {
                 const row = makeEl('button', {className: 'mp-match', type: 'button'});
-                if (String(m.id) === String(currentId)) row.classList.add('mp-match-current');
+                if (String(tournament.tournament_id) === String(currentTournamentId)
+                    && String(m.id) === String(currentId)) row.classList.add('mp-match-current');
                 row.append(
                     makeEl('img', {className: 'mp-logo', alt: '', src: proxied(m.logo_a)}),
                     makeEl('span', {className: 'mp-vs', textContent: `${m.team_a} vs ${m.team_b}`}),
                     makeEl('img', {className: 'mp-logo', alt: '', src: proxied(m.logo_b)}),
                 );
-                row.addEventListener('click', () => selectMatch(m.id));
+                row.addEventListener('click', () => selectMatch(tournament.tournament_id, m.id));
                 return row;
             }));
             box.replaceChildren(head, list);
         };
 
-        showDays();
+        showTournaments();
     }
 
     document.addEventListener('keydown', e => {
@@ -325,17 +355,18 @@ async function initControl() {
         syncBo = noop;
         syncMaps = noop;
         const id = localStorage.getItem(CURRENT_KEY);
-        if (!id) {
+        const tid = localStorage.getItem(TOURNAMENT_KEY);
+        if (!id || !tid) {
             // No match set yet (e.g. the overlay was opened bare); still let the
             // operator pick one, which the empty overlay will then switch to.
             const note = crEmpty('No match selected yet.');
-            const pick = actionBtn('Choose match', () => openMatchPicker(null));
+            const pick = actionBtn('Choose match', () => openMatchPicker(null, null));
             return panel.replaceChildren(note, pick);
         }
 
         let match;
         try {
-            match = await fetchMatch(id);
+            match = await fetchMatch(tid, id);
         } catch {
             return message('Failed to load matches.');
         }
@@ -424,7 +455,7 @@ async function initControl() {
         };
         controlRow('View', ...sceneBtns);
         controlRow('Match',
-            actionBtn('Change match', () => openMatchPicker(id)),
+            actionBtn('Change match', () => openMatchPicker(tid, id)),
             actionBtn('Swap teams', () => saveSwap(id, !loadSwap(id))),
             actionBtn('Cycle logo', () => saveLogo(nextLogo(loadLogo()))),
         );

@@ -13,6 +13,7 @@ const noop = () => {
 // Persisted in localStorage; the `storage` event lets the control tab and the
 // overlay tab drive each other live (works across tabs of the same browser).
 const CURRENT_KEY = 'ups_overlay_current';
+const TOURNAMENT_KEY = 'ups_overlay_tournament';
 const SCORE_PREFIX = 'ups_overlay_score_';
 const SWAP_PREFIX = 'ups_overlay_swap_';
 const scoreKey = id => `${SCORE_PREFIX}${id}`;
@@ -168,14 +169,20 @@ function clearMatchData() {
     }
 }
 
-async function fetchMatches() {
-    const res = await fetch('/api/matches');
+async function fetchTournaments() {
+    const res = await fetch('/api/tournaments');
     if (!res.ok) throw new Error('request failed');
     return res.json();
 }
 
-async function fetchMatch(id) {
-    const matches = await fetchMatches();
+async function fetchMatches(tournamentId) {
+    const res = await fetch(`/api/matches/${tournamentId}`);
+    if (!res.ok) throw new Error('request failed');
+    return res.json();
+}
+
+async function fetchMatch(tournamentId, id) {
+    const matches = await fetchMatches(tournamentId);
     return matches.find(m => String(m.id) === String(id));
 }
 
