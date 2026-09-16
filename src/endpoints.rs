@@ -8,9 +8,10 @@ use crate::account::{
     set_password, verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
-use crate::loader::Refresher;
+use crate::loader::{Refresher, BRACKET_TYPES};
 use crate::matches::{
-    add_tournament, get_bracket_nodes, get_brackets, get_matches, get_matches_filter,
+    add_group, add_round, add_stage, add_team, add_tournament, get_bracket_nodes, get_brackets,
+    get_group_id, get_matches, get_matches_filter, get_round_id, get_stage_id, get_team_id,
     get_tournaments,
 };
 use crate::predictions::{
@@ -21,7 +22,7 @@ use crate::structures::*;
 
 use crate::matches;
 use log::debug;
-use sqlx::SqliteConnection;
+use sqlx::{Connection, SqliteConnection};
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -103,9 +104,10 @@ pub async fn matches(
 
     let mut conn_lock = conn.lock().await;
 
-    let matches = get_matches(&mut conn_lock, tournament_id)
+    let mut matches = get_matches(&mut conn_lock, tournament_id)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
+    matches.iter_mut().for_each(show_day_names);
 
     Ok(warp::reply::with_header(
         warp::reply::json(&matches),
@@ -120,11 +122,75 @@ pub async fn match_(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut conn_lock = conn.lock().await;
 
-    let matches = get_matches_filter(&mut conn_lock, matches.get_ids()?)
+    let mut matches = get_matches_filter(&mut conn_lock, matches.get_ids()?)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
+    matches.iter_mut().for_each(show_day_names);
 
     Ok(warp::reply::json(&matches))
+}
+
+/// League/swiss matchdays read nicer as "Day N"; leave bracket round names ("Round 1",
+/// "WB Round 1", …) alone so a bracket match never collides with a league day tab.
+fn show_day_names(match_: &mut Match) {
+    if match_
+        .stage_type
+        .as_deref()
+        .is_some_and(|kind| BRACKET_TYPES.contains(&kind))
+    {
+        return;
+    }
+    if let Some(rest) = match_.round_name.strip_prefix("Round") {
+        match_.round_name = format!("Day{rest}");
+    }
+}
+
+/// Store a manual match. Teams, stage, group and round are referenced by name and
+/// created (without a ToornamentId) when the tournament doesn't have them yet.
+async fn store_match(conn: &mut SqliteConnection, match_: Match) -> sqlx::Result<()> {
+    let tournament_id = match_.tournament_id as i64;
+    let mut tx = conn.begin().await?;
+
+    let (name_a, name_b) = (match_.team_a.trim(), match_.team_b.trim());
+    let team_a = match get_team_id(&mut tx, tournament_id, name_a).await? {
+        Some(id) => id,
+        None => add_team(&mut tx, tournament_id, name_a, &match_.logo_a).await?,
+    };
+    let team_b = match get_team_id(&mut tx, tournament_id, name_b).await? {
+        Some(id) => id,
+        None => add_team(&mut tx, tournament_id, name_b, &match_.logo_b).await?,
+    };
+
+    let (mut group_id, mut round_id) = (None, None);
+    if !match_.stage_name.is_empty() {
+        let stage_id = match get_stage_id(&mut tx, tournament_id, &match_.stage_name).await? {
+            Some(id) => id,
+            None => {
+                let kind = match_.stage_type.as_deref().unwrap_or("custom");
+                add_stage(&mut tx, tournament_id, &match_.stage_name, kind).await?
+            }
+        };
+        let group = match get_group_id(&mut tx, stage_id, &match_.group_name).await? {
+            Some(id) => id,
+            None => add_group(&mut tx, stage_id, &match_.group_name).await?,
+        };
+        group_id = Some(group);
+
+        if !match_.round_name.is_empty() {
+            // The site shows league/swiss "Round N" as "Day N"; accept either spelling.
+            let mut round = get_round_id(&mut tx, group, &match_.round_name).await?;
+            if let (None, Some(rest)) = (round, match_.round_name.strip_prefix("Day")) {
+                round = get_round_id(&mut tx, group, &format!("Round{rest}")).await?;
+            }
+            round_id = Some(match round {
+                Some(id) => id,
+                None => add_round(&mut tx, group, &match_.round_name).await?,
+            });
+        }
+    }
+
+    matches::add_match(&mut tx, tournament_id, group_id, round_id, team_a, team_b, match_).await?;
+    tx.commit().await
 }
 
 pub async fn add_match(
@@ -136,7 +202,7 @@ pub async fn add_match(
 
     verify_admin(&mut conn_lock, auth.clone()).await?;
 
-    matches::add_match(&mut conn_lock, match_)
+    store_match(&mut conn_lock, match_)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 
