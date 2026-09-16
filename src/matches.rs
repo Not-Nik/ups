@@ -35,15 +35,10 @@ pub async fn get_tournaments(
     let mut tournaments = Vec::new();
 
     while let Some(row) = tournament_query.try_next().await? {
-        // map the row into a user-defined domain type
-        let tournament_id: u64 = row.try_get("TournamentID")?;
-        let name: String = row.try_get("Name")?;
-        let toornament_id: Option<String> = row.try_get("ToornamentId")?;
-
         tournaments.push(Tournament {
-            tournament_id,
-            name,
-            toornament_id,
+            tournament_id: row.try_get("TournamentID")?,
+            name: row.try_get("Name")?,
+            toornament_id: row.try_get("ToornamentId")?,
         });
     }
 
@@ -101,37 +96,21 @@ pub async fn fetch_matches(
     let mut matches = Vec::new();
 
     while let Some(row) = match_query.try_next().await? {
-        // map the row into a user-defined domain type
-        let id: u64 = row.try_get("MatchID")?;
-        let tournament_id: u64 = row.try_get("TournamentID")?;
-        let team_a: String = row.try_get("TeamA")?;
-        let team_b: String = row.try_get("TeamB")?;
-        let logo_a: String = row.try_get("LogoA")?;
-        let logo_b: String = row.try_get("LogoB")?;
-        let score_a: Option<u64> = row.try_get("ScoreA")?;
-        let score_b: Option<u64> = row.try_get("ScoreB")?;
-        let toornament_id: Option<String> = row.try_get("ToornamentId")?;
-        let stage_type: Option<String> = row.try_get("StageType")?;
-        let stage_number: Option<u64> = row.try_get("StageNumber")?;
-        let stage_name: String = row.try_get("StageName")?;
-        let group_name: String = row.try_get("GroupName")?;
-        let round_name: String = row.try_get("RoundName")?;
-
         matches.push(Match {
-            id,
-            tournament_id,
-            team_a,
-            team_b,
-            logo_a,
-            logo_b,
-            score_a,
-            score_b,
-            toornament_id,
-            stage_type,
-            stage_number,
-            stage_name,
-            group_name,
-            round_name,
+            id: row.try_get("MatchID")?,
+            tournament_id: row.try_get("TournamentID")?,
+            team_a: row.try_get("TeamA")?,
+            team_b: row.try_get("TeamB")?,
+            logo_a: row.try_get("LogoA")?,
+            logo_b: row.try_get("LogoB")?,
+            score_a: row.try_get("ScoreA")?,
+            score_b: row.try_get("ScoreB")?,
+            toornament_id: row.try_get("ToornamentId")?,
+            stage_type: row.try_get("StageType")?,
+            stage_number: row.try_get("StageNumber")?,
+            stage_name: row.try_get("StageName")?,
+            group_name: row.try_get("GroupName")?,
+            round_name: row.try_get("RoundName")?,
         });
     }
 
@@ -317,52 +296,29 @@ pub async fn get_bracket_nodes(
     let mut matches = Vec::new();
 
     while let Some(row) = bracket_query.try_next().await? {
-        let node_id: String = row.try_get("NodeId")?;
-        let tournament_id: u32 = row.try_get("TournamentID")?;
-        let stage_id: String = row.try_get("StageId")?;
-        let stage_name: String = row.try_get("StageName")?;
-        let stage_number: u64 = row.try_get("StageNumber")?;
-        let stage_type: String = row.try_get("StageType")?;
-        let group_name: String = row.try_get("GroupName")?;
-        let branch: Option<String> = row.try_get("Branch")?;
-        let round_number: u64 = row.try_get("RoundNumber")?;
-        let position: u64 = row.try_get("Position")?;
-        let depth: u64 = row.try_get("Depth")?;
-        let team_a: Option<String> = row.try_get("TeamA")?;
-        let team_b: Option<String> = row.try_get("TeamB")?;
-        let logo_a: Option<String> = row.try_get("LogoA")?;
-        let logo_b: Option<String> = row.try_get("LogoB")?;
-        let score_a: Option<u64> = row.try_get("ScoreA")?;
-        let score_b: Option<u64> = row.try_get("ScoreB")?;
-        let source_type_a: Option<String> = row.try_get("SourceTypeA")?;
-        let source_a: Option<String> = row.try_get("SourceA")?;
-        let source_type_b: Option<String> = row.try_get("SourceTypeB")?;
-        let source_b: Option<String> = row.try_get("SourceB")?;
-        let match_id: Option<u64> = row.try_get("MatchID")?;
-
         matches.push(BracketNode {
-            node_id,
-            tournament_id,
-            stage_id,
-            stage_name,
-            stage_number,
-            stage_type,
-            group_name,
-            branch,
-            round_number,
-            position,
-            depth,
-            team_a,
-            team_b,
-            logo_a,
-            logo_b,
-            score_a,
-            score_b,
-            source_type_a,
-            source_a,
-            source_type_b,
-            source_b,
-            match_id,
+            node_id: row.try_get("NodeId")?,
+            tournament_id: row.try_get("TournamentID")?,
+            stage_id: row.try_get("StageId")?,
+            stage_name: row.try_get("StageName")?,
+            stage_number: row.try_get("StageNumber")?,
+            stage_type: row.try_get("StageType")?,
+            group_name: row.try_get("GroupName")?,
+            branch: row.try_get("Branch")?,
+            round_number: row.try_get("RoundNumber")?,
+            position: row.try_get("Position")?,
+            depth: row.try_get("Depth")?,
+            team_a: row.try_get("TeamA")?,
+            team_b: row.try_get("TeamB")?,
+            logo_a: row.try_get("LogoA")?,
+            logo_b: row.try_get("LogoB")?,
+            score_a: row.try_get("ScoreA")?,
+            score_b: row.try_get("ScoreB")?,
+            source_type_a: row.try_get("SourceTypeA")?,
+            source_a: row.try_get("SourceA")?,
+            source_type_b: row.try_get("SourceTypeB")?,
+            source_b: row.try_get("SourceB")?,
+            match_id: row.try_get("MatchID")?,
         });
     }
 
@@ -386,13 +342,10 @@ pub async fn get_brackets(
     let mut matches = Vec::new();
 
     while let Some(row) = bracket_query.try_next().await? {
-        let stage: String = row.try_get("StageName")?;
-        let group: String = row.try_get("GroupName")?;
-
         matches.push(Bracket {
             tournament_id: tournament_id as u64,
-            stage,
-            group,
+            stage: row.try_get("StageName")?,
+            group: row.try_get("GroupName")?,
         });
     }
 

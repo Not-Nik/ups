@@ -29,17 +29,11 @@ pub async fn get_predictions(
     let mut predictions = Vec::new();
 
     while let Some(row) = pred_query.try_next().await? {
-        // map the row into a user-defined domain type
-        let name: String = row.try_get("Name")?;
-        let id: u64 = row.try_get("MatchID")?;
-        let score_a: u64 = row.try_get("ScoreA")?;
-        let score_b: u64 = row.try_get("ScoreB")?;
-
         predictions.push(Prediction {
-            name,
-            id,
-            score_a,
-            score_b,
+            name: row.try_get("Name")?,
+            id: row.try_get("MatchID")?,
+            score_a: row.try_get("ScoreA")?,
+            score_b: row.try_get("ScoreB")?,
         });
     }
 
@@ -58,16 +52,11 @@ pub async fn get_user_predictions(
     let mut predictions = Vec::new();
 
     while let Some(row) = pred_query.try_next().await? {
-        // map the row into a user-defined domain type
-        let id: u64 = row.try_get("MatchID")?;
-        let score_a: u64 = row.try_get("ScoreA")?;
-        let score_b: u64 = row.try_get("ScoreB")?;
-
         predictions.push(Prediction {
             name: name.clone(),
-            id,
-            score_a,
-            score_b,
+            id: row.try_get("MatchID")?,
+            score_a: row.try_get("ScoreA")?,
+            score_b: row.try_get("ScoreB")?,
         });
     }
 
@@ -88,15 +77,11 @@ pub async fn get_user_match_predictions(
     let mut predictions = Vec::new();
 
     while let Some(row) = pred_query.try_next().await? {
-        // map the row into a user-defined domain type
-        let score_a: u64 = row.try_get("ScoreA")?;
-        let score_b: u64 = row.try_get("ScoreB")?;
-
         predictions.push(Prediction {
             name: name.clone(),
             id: id as u64,
-            score_a,
-            score_b,
+            score_a: row.try_get("ScoreA")?,
+            score_b: row.try_get("ScoreB")?,
         });
     }
 
