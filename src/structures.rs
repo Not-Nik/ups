@@ -62,6 +62,30 @@ pub struct BracketNode {
     pub match_id: Option<u64>,
 }
 
+#[derive(Serialize, Debug)]
+pub struct Standing {
+    pub stage_name: String,
+    pub stage_number: u64,
+    pub stage_type: String,
+    pub group_name: String,
+    pub group_number: u64,
+    pub position: u64,
+    pub rank: u64,
+    pub team: String,
+    pub short_name: Option<String>,
+    pub logo: String,
+    pub points: Option<i64>,
+    pub played: u64,
+    pub wins: u64,
+    pub draws: u64,
+    pub losses: u64,
+    pub forfeits: u64,
+    pub score_for: Option<u64>,
+    pub score_against: Option<u64>,
+    pub score_difference: Option<i64>,
+    pub dropped: bool,
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Prediction {
     pub name: String,

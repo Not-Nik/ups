@@ -162,6 +162,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::query::<Bracket>())
         .and_then(endpoints::bracket);
 
+    let standings = warp::path!("api" / "standings" / u32)
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and(refresh.clone())
+        .and_then(endpoints::standings);
+
     let single_prediction = warp::path!("api" / "predictions" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
@@ -232,6 +239,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(add_match)
         .or(brackets)
         .or(bracket)
+        .or(standings)
         .or(single_prediction)
         .or(multi_prediction)
         .or(user_predictions)

@@ -4,7 +4,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::structures::{Bracket, BracketNode, Match, Tournament};
+use crate::structures::{Bracket, BracketNode, Match, Standing, Tournament};
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
 use sqlx::sqlite::SqliteRow;
@@ -397,4 +397,54 @@ pub async fn get_brackets(
     }
 
     Ok(matches)
+}
+
+pub async fn get_standings(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u32,
+) -> sqlx::Result<Vec<Standing>> {
+    let mut standings_query = sqlx::query(
+        "SELECT s.Name AS StageName, s.Number AS StageNumber, s.Type AS StageType,
+                g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank,
+                t.Name AS Team, t.ShortName, t.Logo, st.Points, st.Played, st.Wins, st.Draws,
+                st.Losses, st.Forfeits, st.ScoreFor, st.ScoreAgainst,
+                st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped
+         FROM standings st
+                  JOIN groups g ON g.GroupID = st.GroupID
+                  JOIN stages s ON s.StageID = g.StageID
+                  JOIN teams t ON t.TeamID = st.TeamID
+         WHERE s.TournamentID = ?
+         ORDER BY s.Number, g.Number, st.Position",
+    )
+    .bind(tournament_id)
+    .fetch(conn.deref_mut());
+
+    let mut standings = Vec::new();
+
+    while let Some(row) = standings_query.try_next().await? {
+        standings.push(Standing {
+            stage_name: row.try_get("StageName")?,
+            stage_number: row.try_get("StageNumber")?,
+            stage_type: row.try_get("StageType")?,
+            group_name: row.try_get("GroupName")?,
+            group_number: row.try_get("GroupNumber")?,
+            position: row.try_get("Position")?,
+            rank: row.try_get("Rank")?,
+            team: row.try_get("Team")?,
+            short_name: row.try_get("ShortName")?,
+            logo: row.try_get("Logo")?,
+            points: row.try_get("Points")?,
+            played: row.try_get("Played")?,
+            wins: row.try_get("Wins")?,
+            draws: row.try_get("Draws")?,
+            losses: row.try_get("Losses")?,
+            forfeits: row.try_get("Forfeits")?,
+            score_for: row.try_get("ScoreFor")?,
+            score_against: row.try_get("ScoreAgainst")?,
+            score_difference: row.try_get("ScoreDifference")?,
+            dropped: row.try_get("Dropped")?,
+        });
+    }
+
+    Ok(standings)
 }
