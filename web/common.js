@@ -19,15 +19,14 @@ const firstInt = s => {
 };
 
 // ============== Tournaments ==============
-// Newest (highest id) first — the header tab bar and the archive grid agree on this,
-// so "first" always means the current season.
+// Newest (highest id) first, so the landing grid opens with the current season.
 const byNewestTournament = (a, b) => b.tournament_id - a.tournament_id;
 
-// The prediction page keeps its view in the query string (see "Location state" in
-// app.js). This is the one place that spells the param, so the archive can link
+// The tournament page keeps its view in the query string (see "Location state" in
+// app.js). This is the one place that spells the param, so the landing page can link
 // straight into a tournament without knowing how app.js reads it.
 const TOURNAMENT_PARAM = 'tournament';
-const tournamentHref = id => `/?${TOURNAMENT_PARAM}=${encodeURIComponent(id)}`;
+const tournamentHref = id => `/tournament.html?${TOURNAMENT_PARAM}=${encodeURIComponent(id)}`;
 
 // ============== Section/day ordering ==============
 // A match has stage_name / group_name / round_name (from the API). The round is

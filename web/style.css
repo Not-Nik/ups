@@ -10,7 +10,7 @@
 }
 
 [data-bs-theme="dark"] {
-    /* Subtle accent, used for the archive link and its card hover. */
+    /* Subtle accent: active tab underlines and the tournament card hover. */
     --accent: #c0287a;
     --bs-body-bg: #1a1a2e;
     --bs-body-color: #e0e0e0;
@@ -69,7 +69,7 @@
 }
 
 .matches-grid,
-.archive-grid {
+.tournament-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1rem;
@@ -79,8 +79,8 @@
     align-items: start;
 }
 
-/* Archive entries: newest fills the top left, oldest the bottom right. */
-.archive-card {
+/* Landing page tiles: newest fills the top left, oldest the bottom right. */
+.tournament-card {
     /* Flex-centred rather than just text-align, so a one-line name sits in the middle
        of a card stretched to match a two-line neighbour in the same row. */
     display: flex;
@@ -95,7 +95,7 @@
     text-decoration: none;
 }
 
-.archive-card:hover {
+.tournament-card:hover {
     border-color: var(--accent);
     color: var(--bs-body-color);
 }
@@ -108,20 +108,19 @@
     vertical-align: middle;
 }
 
-/* Second header line: one tab per tournament, newest first, hidden when none were
-   loaded. Tabs never wrap — app.js drops the oldest ones and reveals #archive-btn
-   instead when they don't all fit. */
-#tournament-bar {
+/* Second header line of the tournament page: its views on the left, the way back to
+   the landing page on the right. */
+#view-bar {
     display: flex;
     flex-wrap: nowrap;
     align-items: stretch;
     gap: 0;
-    overflow: hidden;
+    overflow-x: auto;
 }
 
-/* Flat text-tab style, shared by the tournament bar and the day/bracket tabs. */
-.tournament-btn,
-.archive-btn,
+/* Flat text-tab style, shared by the view bar and the day/bracket tabs. */
+.view-btn,
+.bar-link,
 .tab-btn {
     padding: 0.5rem 1rem;
     border: 0;
@@ -131,46 +130,46 @@
     background-color: transparent;
 }
 
-.tournament-btn,
+.view-btn,
 .tab-btn {
     color: var(--bs-secondary-color);
 }
 
-/* Pushed to the far end of the tournament bar. */
-.archive-btn {
+/* Pushed to the far end of the view bar. */
+.bar-link {
     margin-left: auto;
     color: var(--accent);
     text-decoration: none;
 }
 
-.tournament-btn:hover,
-.tournament-btn.active,
+.view-btn:hover,
+.view-btn.active,
 .tab-btn:hover,
 .tab-btn.active {
     color: var(--bs-body-color);
     background-color: var(--bs-card-bg);
 }
 
-.archive-btn:hover {
+.bar-link:hover {
     color: var(--accent);
     background-color: var(--bs-card-bg);
 }
 
-.tournament-btn:focus,
-.archive-btn:focus,
+.view-btn:focus,
+.bar-link:focus,
 .tab-btn:focus {
     box-shadow: none;
 }
 
 /* Active tabs get an accent underline. Declared after the :focus rule above so
    focusing the active tab keeps it. */
-.tournament-btn.active,
+.view-btn.active,
 .tab-btn.active {
     box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-.tournament-btn:focus-visible,
-.archive-btn:focus-visible,
+.view-btn:focus-visible,
+.bar-link:focus-visible,
 .tab-btn:focus-visible {
     outline: 2px solid var(--bs-secondary-color);
     outline-offset: -2px;

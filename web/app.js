@@ -50,7 +50,6 @@ const SIDES = ['a', 'b'];
 const OTHER_SIDE = {a: 'b', b: 'a'};
 
 const state = {
-    tournaments: [],
     activeTournament: null,
     activeTab: null, // internal day key of the open tab (a round name or a bracketDayKey)
     tabs: [],        // the last render's tabs in display order, as {day, param, unfinished}
@@ -90,96 +89,21 @@ function syncUrl(replace = false) {
     history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
 }
 
-// Adopt whatever the URL says — on first load and on every back/forward. False when
-// there is no tournament to show at all.
-async function applyLocation() {
+// Adopt whatever the URL says on back/forward. The tournament is fixed for the page's
+// lifetime (switching one is a page load from the landing grid), so only the tab moves.
+function applyLocation() {
+    activateWantedTab();
+}
+
+// ============== Tournament ==============
+// The one the URL names, or undefined when it names none we know.
+async function findTournament() {
+    const tournaments = await api('/api/tournaments');
     const wanted = Number(urlParams().get(TOURNAMENT_PARAM));
-    const tournament = state.tournaments.find(t => t.tournament_id === wanted) ?? state.tournaments[0];
-    if (!tournament) return false;
-    if (tournament.tournament_id === state.activeTournament) {
-        activateWantedTab();
-    } else {
-        setActiveTournament(tournament.tournament_id);
-        await loadTournament(tournament.tournament_id);
-    }
-    return true;
+    return tournaments.find(t => t.tournament_id === wanted);
 }
 
-// ============== Tournaments ==============
-function updateTournamentTabs() {
-    $('tournament-bar').querySelectorAll('.tournament-btn').forEach(btn => {
-        btn.classList.toggle('active', Number(btn.dataset.id) === state.activeTournament);
-    });
-}
-
-// Tabs run newest-first and never wrap. When they don't all fit, the oldest ones drop
-// out and the Archive link takes over for them. The active tournament always keeps its
-// tab, even when a link or the Back button lands on an old one.
-function fitTournamentTabs() {
-    const bar = $('tournament-bar');
-    const archive = $('archive-btn');
-    if (!archive) return;
-    const tabs = [...bar.querySelectorAll('.tournament-btn')];
-    const fits = () => bar.scrollWidth <= bar.clientWidth;
-
-    tabs.forEach(show);
-    hide(archive);
-    if (fits()) return;
-
-    show(archive);
-    for (const tab of tabs.reverse()) {
-        if (fits()) return;
-        if (Number(tab.dataset.id) !== state.activeTournament) hide(tab);
-    }
-}
-
-function renderTournamentTabs() {
-    const bar = $('tournament-bar');
-    bar.replaceChildren();
-    state.tournaments.forEach(t => {
-        const btn = makeEl('button', {
-            className: 'tournament-btn btn',
-            textContent: t.name,
-            dataset: {id: String(t.tournament_id)},
-        });
-        btn.addEventListener('click', () => switchTournament(t.tournament_id));
-        bar.appendChild(btn);
-    });
-    bar.appendChild(makeEl('a', {
-        id: 'archive-btn',
-        className: 'archive-btn d-none',
-        href: 'archive.html',
-        textContent: 'Archive',
-    }));
-    updateTournamentTabs();
-    setHidden(bar, state.tournaments.length === 0);
-    fitTournamentTabs();
-}
-
-function setActiveTournament(id) {
-    state.activeTournament = id;
-    updateTournamentTabs();
-    // Re-fit: whichever tournament just became active must keep its tab, so a ?tournament=
-    // link or a Back into an archived season is never left without one.
-    fitTournamentTabs();
-}
-
-async function switchTournament(id) {
-    if (id === state.activeTournament) return;
-    setActiveTournament(id);
-    // The new tournament brings its own tabs, so the old one drops out of the URL;
-    // rendering picks a default below and replaces it into the same history entry.
-    state.activeTab = null;
-    syncUrl();
-    await loadTournament(id);
-}
-
-// Scores/submissions are keyed by match index, so they go stale the moment the
-// match list changes — reset them before each tournament load.
 async function loadTournament(id) {
-    state.scores = {};
-    state.submitted = new Set();
-    updateSubmitAll();
     try {
         const {data: matches, res} = await api(`/api/matches/${id}`, {response: true});
         const brackets = await loadBrackets(id);
@@ -1290,27 +1214,30 @@ function bindEvents() {
 
     onClick('login-btn', () => nameModal.promptLogin());
 
-    // Back/forward move between views instead of leaving the site.
+    // Back/forward move between views instead of leaving the page.
     window.addEventListener('popstate', applyLocation);
-
-    // Re-run the tab fit whenever the header changes width (this also fires once the
-    // bar first becomes visible, i.e. right after the tabs are rendered).
-    new ResizeObserver(fitTournamentTabs).observe($('tournament-bar'));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     bindEvents();
-    try {
-        state.tournaments = (await api('/api/tournaments')).sort(byNewestTournament);
-    } catch {
-        state.tournaments = [];
-    }
-
-    renderTournamentTabs();
-
-    if (!await applyLocation()) {
-        $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load tournaments. Please refresh.</p>';
-    }
     if (!getToken()) show($('login-btn'));
     loadCurrentUser();
+
+    let tournament;
+    try {
+        tournament = await findTournament();
+    } catch {
+        $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load tournaments. Please refresh.</p>';
+        return;
+    }
+    // A link to a tournament that doesn't exist (any more) lands on the full list.
+    if (!tournament) {
+        location.replace('/');
+        return;
+    }
+
+    state.activeTournament = tournament.tournament_id;
+    $('tournament-name').textContent = tournament.name;
+    document.title = `${tournament.name} – PULOW`;
+    await loadTournament(tournament.tournament_id);
 });

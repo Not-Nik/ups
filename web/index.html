@@ -31,62 +31,26 @@
     </script>
     <link href="vendor/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script src="vendor/html2canvas.min.js"></script>
 </head>
 <body>
-<header class="border-bottom">
-    <div class="px-3 py-3 d-flex justify-content-between align-items-center">
-        <h1 class="h5 fw-bold mb-0"><a href="/" class="text-decoration-none text-body">Prediction für die Uniliga
-            Overwatch</a> <span class="beta-badge">BETA</span></h1>
-        <div class="d-flex align-items-center gap-2">
-            <button id="login-btn" class="btn btn-sm btn-outline-secondary d-none">Log in</button>
-            <div id="user-menu" class="d-none position-relative">
-                <button id="user-btn" class="btn btn-sm btn-outline-secondary"><span id="user-name"></span></button>
-                <div id="user-dropdown" class="user-dropdown d-none">
-                    <a href="me.html" class="user-dropdown-item">Profile</a>
-                    <button id="change-password-btn" class="user-dropdown-item">Change password</button>
-                    <button id="logout-btn" class="user-dropdown-item">Log out</button>
-                </div>
-            </div>
-            <a href="https://github.com/Not-Nik/ups" target="_blank" rel="noopener" class="text-secondary lh-1"
-               aria-label="GitHub">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" fill="currentColor"
-                     aria-hidden="true">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-                </svg>
-            </a>
-            <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" aria-label="Toggle theme"></button>
-        </div>
+<header class="border-bottom px-3 py-3 d-flex justify-content-between align-items-center">
+    <h1 class="h5 fw-bold mb-0"><a href="/" class="text-decoration-none text-body">Prediction für die Uniliga
+        Overwatch</a> <span class="beta-badge">BETA</span></h1>
+    <div class="d-flex align-items-center gap-2">
+        <a href="https://github.com/Not-Nik/ups" target="_blank" rel="noopener" class="text-secondary lh-1"
+           aria-label="GitHub">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 16 16" fill="currentColor"
+                 aria-hidden="true">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+        </a>
+        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" aria-label="Toggle theme"></button>
     </div>
-    <div id="tournament-bar" class="d-none"></div>
 </header>
-<main id="main" class="container-xl px-3 py-4">
-    <div class="d-flex align-items-start gap-2 mb-3">
-        <div id="tabs-bar" class="flex-grow-1"></div>
-        <button id="overlay-info-btn" class="btn btn-sm btn-outline-secondary flex-shrink-0"
-                aria-label="Stream overlay" title="Stream overlay">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"
-                 aria-hidden="true">
-                <path d="M0 4s0-2 2-2h12s2 0 2 2v6s0 2-2 2h-4c0 .667.083 1.167.25 1.5H11a.5.5 0 0 1 0 1H5a.5.5 0 0 1 0-1h.75c.167-.333.25-.833.25-1.5H2s-2 0-2-2zm1.398-.855a.758.758 0 0 0-.254.302A1.46 1.46 0 0 0 1 4.01V10c0 .325.078.502.145.602.07.105.17.188.302.254a1.464 1.464 0 0 0 .538.143L2.01 11H14c.325 0 .502-.078.602-.145a.758.758 0 0 0 .254-.302 1.464 1.464 0 0 0 .143-.538L15 9.99V4c0-.325-.078-.502-.145-.602a.757.757 0 0 0-.302-.254A1.46 1.46 0 0 0 13.99 3H2.01c-.325 0-.502.078-.602.145z"/>
-            </svg>
-        </button>
-        <button id="expand-all-btn" class="btn btn-sm btn-outline-secondary flex-shrink-0"
-                aria-label="Show or hide all predictions" title="Show or hide all predictions">
-            <span class="chevron-icon">
-                <span class="chevron-arrow"></span>
-                <span class="chevron-arrow"></span>
-            </span>
-        </button>
-        <button id="save-image-btn" class="btn btn-sm btn-outline-secondary flex-shrink-0" aria-label="Save as image"
-                title="Save as image">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"
-                 aria-hidden="true">
-                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-            </svg>
-        </button>
-    </div>
-    <div id="grid" class="matches-grid"></div>
+<main class="container-xl px-3 py-4">
+    <h2 class="h4 fw-bold mb-1">Tournaments</h2>
+    <p class="text-secondary small mb-4">Pick a tournament to see its matches and standings.</p>
+    <div id="tournament-grid" class="tournament-grid"></div>
     <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
         <span class="d-flex gap-3">
             <a href="privacy.html" class="text-secondary small">Privacy Policy</a>
@@ -95,88 +59,8 @@
         <span class="text-secondary small">Made with &#x2764; in Berlin</span>
     </div>
 </main>
-<div id="submit-all-container" class="d-none submit-bar">
-    <div class="container-xl px-3 d-flex justify-content-end align-items-center">
-        <button id="submit-all-btn" class="btn btn-success">
-            Submit Predictions (<span id="submit-all-count">0</span>)
-        </button>
-    </div>
-</div>
-<div id="name-modal" class="nm-overlay d-none">
-    <div class="nm-box">
-        <h2 class="h6 fw-bold mb-1" id="modal-title">Who are you?</h2>
-        <p class="text-secondary small mb-3" id="modal-subtitle">Enter a name to save your prediction.</p>
-        <p id="modal-error" class="text-danger small d-none mb-2"></p>
-        <input type="text" id="name-input" class="form-control mb-2"
-               placeholder="Your name" autocomplete="off">
-        <input type="password" id="password-input" class="form-control mb-3 d-none"
-               placeholder="Password (optional)" autocomplete="new-password">
-        <div class="d-flex gap-2 justify-content-end" id="modal-actions-1">
-            <button id="modal-cancel" class="btn btn-secondary btn-sm">Cancel</button>
-            <button id="modal-create" class="btn btn-outline-secondary btn-sm d-none">Create account</button>
-            <button id="modal-submit" class="btn btn-danger btn-sm">Submit</button>
-        </div>
-        <div class="d-flex gap-2 justify-content-end d-none" id="modal-actions-2">
-            <button id="password-skip" class="btn btn-secondary btn-sm">Skip</button>
-            <button id="password-submit" class="btn btn-danger btn-sm">Set password</button>
-        </div>
-        <p id="modal-cookie" class="text-secondary text-center mb-0 mt-2" style="font-size:.7rem">By submitting you
-            allow us
-            to <a href="privacy.html"
-                  target="_blank"
-                  class="text-secondary">store cookies</a></p>
-    </div>
-</div>
-<div id="logout-modal" class="nm-overlay d-none">
-    <div class="nm-box">
-        <h2 class="h6 fw-bold mb-1">Log out?</h2>
-        <p class="text-secondary small mb-3">If you didn't set a password yet, there is no way to log back in</p>
-        <div class="d-flex gap-2 justify-content-end">
-            <button id="logout-cancel" class="btn btn-secondary btn-sm">Cancel</button>
-            <button id="logout-confirm" class="btn btn-danger btn-sm">Log out</button>
-        </div>
-    </div>
-</div>
-<div id="image-modal" class="nm-overlay d-none">
-    <div class="nm-box">
-        <h2 class="h6 fw-bold mb-1">Save as image</h2>
-        <p class="text-secondary small mb-3">Choose what to include.</p>
-        <div id="image-section-list" class="mb-3"></div>
-        <div class="form-check form-switch mb-3">
-            <input type="checkbox" id="image-include-predictions" class="form-check-input" checked>
-            <label for="image-include-predictions" class="form-check-label small">Include my predictions</label>
-        </div>
-        <div class="d-flex gap-2 justify-content-end">
-            <button id="image-modal-cancel" class="btn btn-secondary btn-sm">Cancel</button>
-            <button id="image-modal-save" class="btn btn-success btn-sm">Save</button>
-        </div>
-    </div>
-</div>
-<div id="overlay-info-modal" class="nm-overlay d-none">
-    <div class="nm-box">
-        <h2 class="h6 fw-bold mb-1">Stream overlay</h2>
-        <p class="text-secondary small mb-3">Show match info on your stream — built for OBS.</p>
-        <p class="small mb-1"><strong>Overlay</strong></p>
-        <p class="text-secondary small mb-2">A transparent page showing the current match's teams, scores and hero
-            bans. Add it to OBS as a Browser Source.</p>
-        <p class="small mb-1"><strong>Control room</strong></p>
-        <p class="text-secondary small mb-3">A dashboard to update scores, swap sides, and set hero bans. Open it in
-            a custom browser docks and the overlay updates live.</p>
-        <div class="d-flex flex-column gap-2">
-            <a href="overlay.html" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">Open
-                overlay</a>
-            <a href="control.html" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">Open
-                control room</a>
-        </div>
-        <div class="d-flex justify-content-end mt-3">
-            <button id="overlay-info-close" class="btn btn-secondary btn-sm">Close</button>
-        </div>
-    </div>
-</div>
 <div id="toast" class="d-none" role="alert" aria-live="polite"></div>
 <script src="common.js"></script>
-<script src="app.js"></script>
-<script src="bracket.js"></script>
-<script src="incidents.js"></script>
+<script src="index.js"></script>
 </body>
 </html>
