@@ -3,8 +3,9 @@
 **Predictions für die Uniliga Overwatch** — prediction site for Uniliga (German university) Overwatch matches.
 Production at https://pulow.cc. Currently labelled BETA in the header.
 
-The Rust backend lives one directory up (`../src/main.rs`, warp + sqlx/sqlite). Match data is pulled from toornament
-by `../src/loader.rs`, on demand whenever `/api/matches/:id` is hit.
+The Rust backend lives one directory up (`../src/main.rs`, warp + sqlx/sqlite). Match data, brackets and league
+standings are pulled from toornament by `../src/loader.rs`, on demand whenever `/api/matches/:id` or
+`/api/standings/:id` is hit.
 
 ## Stack & layout
 
@@ -33,6 +34,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
+| GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions                                                             |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
@@ -42,6 +44,12 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
 | POST   | `/api/match`           | admin| Full `Match` body: `tournament_id`, `team_a/b`, `logo_a/b`, `score_a/b?`, `stage_name`, `group_name`, `round_name`, plus optional `stage_type`, `stage_number`, `toornament_id` (+ dummy `id`) |
 | -      | `/api/proxy`           | -    | Image proxy used by html2canvas for cross-origin team logos                                 |
+
+A standings row carries `stage_name`, `stage_number`, `stage_type`, `group_name`, `group_number`, `position`, `rank`
+(ties share a rank, `position` breaks them), `team`, `short_name`, `logo`, `points`, `played`, `wins`, `draws`,
+`losses`, `forfeits`, `score_for`, `score_against`, `score_difference` and `dropped`. Swiss groups have no map scores:
+the three score fields are `null` there, and `points` is toornament's tiebreaker-weighted value (925, 818, …), so show
+W/L for swiss rather than points.
 
 Server returns `{err: 'Code'}` on failures. `AccountExists` is the only error code handled specially in the client (
 retry name prompt).
@@ -93,7 +101,14 @@ Tournaments are ordered newest first everywhere (`byNewestTournament` in common.
 
 ## Section / day model
 
-`match.section` is a path like `"Erste Liga/Group A/Day 5"`. The last segment is the **day** and drives the tab bar.
+A match has three name fields: `stage_name` ("Erste Liga"), `group_name` ("Division 1", or `""` for a match with no
+group, like Seedingwoche) and `round_name` ("Day 5"). The round is the **day** and drives the tab bar. The backend
+turns toornament's "Round N" into "Day N" for league/swiss/pools matches and leaves bracket rounds alone, so
+`round_name` is always the display name.
+
+`sectionKey(m)` in common.js joins the three with `SECTION_SEP` (`$`) into one key per grid section;
+`sectionParts`/`sectionTitle`/`dayOf` split it back. Bracket tabs use their own key, `bracketDayKey(stage, group)`
+in bracket.js, which starts with NUL so it can never collide with a round name.
 
 The tab bar is two lines: one button per category (a league day prefix or a bracket
 stage) on top, and below it the tabs of the category that holds the open tab — groups
@@ -105,8 +120,8 @@ app.js own the switching, and `refreshTabStates` re-applies `.active`/`.invalid-
 across both lines after any re-render.
 Sorting:
 
-- **Sections** (`sectionOrder` in app.js): last segment by number desc (newest day first), then
-  `Erste < Zweite < Dritte` for the first segment, then alphabetical on the second.
+- **Sections** (`sectionOrder` in common.js): round number desc (newest day first), then
+  `Erste < Zweite < Dritte` on the stage name, then alphabetical on the group name.
 - **Days** (`compareDays`): alphabetical on the non-digit prefix, then numeric ascending. So `Day 1`, `Day 2`, `Day 10`
   sort naturally; different prefixes group together.
 - **Default tab** (when the URL names none, or names one this tournament doesn't have): the lowest-ranked
