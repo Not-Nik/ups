@@ -61,6 +61,22 @@ struct Participant {
     name: String,
     #[serde(rename = "customFieldValues")]
     custom_field_values: Option<CustomFieldValues>,
+    // Only the participants endpoint fills this; matches and rankings send [].
+    lineup: Option<Vec<LineupPlayer>>,
+}
+
+#[derive(Deserialize)]
+struct PlayerFields {
+    battle_net_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct LineupPlayer {
+    name: String,
+    #[serde(rename = "playerUser")]
+    player_user: Option<NodeRef>,
+    #[serde(rename = "customFieldValues")]
+    custom_field_values: Option<PlayerFields>,
 }
 
 #[derive(Deserialize)]
@@ -454,6 +470,47 @@ async fn upsert_teams(
     Ok(())
 }
 
+/// Replace the lineup of every team the participants endpoint returned. Lineup entries
+/// have no id of their own and names aren't unique, so the whole lineup is rewritten.
+async fn replace_players(
+    conn: &mut SqliteConnection,
+    feed: &Feed,
+    ids: &Ids,
+) -> sqlx::Result<()> {
+    for p in &feed.participants {
+        let Some(&team_id) = ids.teams.get(&p.id) else {
+            continue;
+        };
+        sqlx::query("DELETE FROM players WHERE TeamID = ?")
+            .bind(team_id)
+            .execute(&mut *conn)
+            .await?;
+
+        for (position, player) in p.lineup.iter().flatten().enumerate() {
+            let battle_tag = player
+                .custom_field_values
+                .as_ref()
+                .and_then(|c| c.battle_net_id.as_deref())
+                .map(str::trim)
+                .filter(|tag| !tag.is_empty());
+
+            sqlx::query(
+                "INSERT INTO players (TeamID, Position, Name, BattleTag, ToornamentUserId) \
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(team_id)
+            .bind(position as i64 + 1)
+            .bind(player.name.trim())
+            .bind(battle_tag)
+            .bind(player.player_user.as_ref().map(|u| &u.id))
+            .execute(&mut *conn)
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
 /// The local team id of a known opponent, or None for a TBD slot.
 fn opponent_team(opponent: &Opponent, ids: &Ids) -> Option<i64> {
     ids.teams.get(&opponent.participant.as_ref()?.id).copied()
@@ -684,6 +741,7 @@ async fn load_tournament(
 
     upsert_tree(&mut tx, tournament_id, &feed, &mut ids).await?;
     upsert_teams(&mut tx, tournament_id, &feed, &mut ids).await?;
+    replace_players(&mut tx, &feed, &ids).await?;
 
     let mut matches: Vec<NewMatch> = feed.matches.iter().filter_map(|m| build_match(m, &ids)).collect();
     matches.sort_by_key(|m| m.number);

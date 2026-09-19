@@ -4,7 +4,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::structures::{Bracket, BracketNode, Match, Standing, Tournament};
+use crate::structures::{Bracket, BracketNode, Match, Player, Standing, Tournament};
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
 use sqlx::sqlite::SqliteRow;
@@ -400,4 +400,36 @@ pub async fn get_standings(
     }
 
     Ok(standings)
+}
+
+pub async fn get_players(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u32,
+) -> sqlx::Result<Vec<Player>> {
+    let mut players_query = sqlx::query(
+        "SELECT t.Name AS Team, t.ShortName, t.Logo, p.Position, p.Name, p.BattleTag,
+                p.ToornamentUserId
+         FROM players p
+                  JOIN teams t ON t.TeamID = p.TeamID
+         WHERE t.TournamentID = ?
+         ORDER BY t.Name COLLATE NOCASE, t.TeamID, p.Position",
+    )
+    .bind(tournament_id)
+    .fetch(conn.deref_mut());
+
+    let mut players = Vec::new();
+
+    while let Some(row) = players_query.try_next().await? {
+        players.push(Player {
+            team: row.try_get("Team")?,
+            short_name: row.try_get("ShortName")?,
+            logo: row.try_get("Logo")?,
+            position: row.try_get("Position")?,
+            name: row.try_get("Name")?,
+            battle_tag: row.try_get("BattleTag")?,
+            toornament_user_id: row.try_get("ToornamentUserId")?,
+        });
+    }
+
+    Ok(players)
 }

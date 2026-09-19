@@ -169,6 +169,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(refresh.clone())
         .and_then(endpoints::standings);
 
+    let players = warp::path!("api" / "players" / u32)
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and(refresh.clone())
+        .and_then(endpoints::players);
+
     let single_prediction = warp::path!("api" / "predictions" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
@@ -240,6 +247,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(brackets)
         .or(bracket)
         .or(standings)
+        .or(players)
         .or(single_prediction)
         .or(multi_prediction)
         .or(user_predictions)

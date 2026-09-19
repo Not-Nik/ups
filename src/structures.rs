@@ -86,6 +86,17 @@ pub struct Standing {
     pub dropped: bool,
 }
 
+#[derive(Serialize, Debug)]
+pub struct Player {
+    pub team: String,
+    pub short_name: Option<String>,
+    pub logo: String,
+    pub position: u64,
+    pub name: String,
+    pub battle_tag: Option<String>,
+    pub toornament_user_id: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Prediction {
     pub name: String,
