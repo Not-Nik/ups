@@ -180,24 +180,12 @@
 }
 
 .section-header,
-.section-divider,
-.standings-stage,
-.standings-status {
+.section-divider {
     grid-column: 1 / -1;
 }
 
-/* Standings view: one card per group, under a heading per stage. */
-.standings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
-    gap: 1rem;
-    align-items: start;
-}
-
-.standings-stage:not(:first-child) {
-    margin-top: .5rem;
-}
-
+/* Standings view: one group's card at a time, picked by the tabs above it, as wide
+   as the page. Headers and cells share the tabs' and predictions' .875rem. */
 .standings-table {
     width: 100%;
     table-layout: fixed;
@@ -205,14 +193,13 @@
 }
 
 .standings-table th {
-    font-size: .75rem;
     font-weight: 600;
     color: var(--bs-secondary-color);
 }
 
 .standings-table th,
 .standings-table td {
-    padding: .3rem .25rem;
+    padding: .6rem .5rem;
 }
 
 .standings-table tbody tr {
@@ -220,7 +207,7 @@
 }
 
 .standings-rank {
-    width: 2rem;
+    width: 2.5rem;
     color: var(--bs-secondary-color);
 }
 
@@ -229,14 +216,35 @@
 }
 
 .standings-num {
-    width: 2.25rem;
+    width: 3rem;
     text-align: right;
     white-space: nowrap;
 }
 
 /* The map score needs more room than the single-number columns. */
 .standings-num.standings-wide {
-    width: 3.25rem;
+    width: 4rem;
+}
+
+/* Phones: keep the vertical breathing room, but give the width back to the team names. */
+@media (max-width: 575.98px) {
+    .standings-table th,
+    .standings-table td {
+        padding-left: .25rem;
+        padding-right: .25rem;
+    }
+
+    .standings-rank {
+        width: 2rem;
+    }
+
+    .standings-num {
+        width: 2.25rem;
+    }
+
+    .standings-num.standings-wide {
+        width: 3.25rem;
+    }
 }
 
 .standings-dropped {
