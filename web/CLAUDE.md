@@ -77,17 +77,20 @@ Back walks through it. `localStorage` is only for the token and the theme.
   `index.js` forwards the old `/?tournament=` links to tournament.html.
 - `?view=matches|standings` — which header tab is open (`VIEWS`, `activateView`). Unknown or missing
   falls back to `matches`.
+- `?table=<stage>[:<group>]` — which standings table is open; the group is appended only where the
+  stage holds several (`standingsParam` in standings.js). Unknown or missing falls back to the first.
 - `?tab=<tab>` — which day/bracket tab of the matches view is open. `renderTabs` assigns each tab its `param`: a league day is its own
   name (`tab=Day+5`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
   internal day key (`bracketDayKey`) joins its parts on NUL and never goes in the URL. `tabParam(day)`
   just looks the param up; params are only compared against the rendered tabs, so they must be stable,
   not reversible.
-- `syncUrl(replace)` writes all three from `state.activeTournament` / `state.activeView` /
-  `state.activeTab`, keeping any other params. A user's click **pushes** a history entry; settling on a
+- `syncUrl(replace)` writes all four from `state.activeTournament` / `state.activeView` /
+  `state.activeTab` / `activeStandingsTable()`, keeping any other params. A user's click **pushes** a history entry; settling on a
   default **replaces**, so the URL is always complete without cluttering history.
-- `applyLocation()` is the `popstate` handler: it re-picks the view and the tab. First load picks the
-  view in the init handler, and `renderGrid` → `activateWantedTab()` picks the tab.
+- `applyLocation()` is the `popstate` handler: it re-picks the view, the tab and the standings table.
+  First load picks the view in the init handler, `renderGrid` → `activateWantedTab()` picks the tab,
+  and `renderStandings` → `activateWantedStandingsTable()` the table once the standings have loaded.
 - Unknown tab values are dropped silently — `activateWantedTab()` falls back to the default and rewrites
   the URL, so a stale link still lands somewhere sensible.
 
@@ -103,7 +106,9 @@ and the matches' day tabs. Each view shows the main-area elements
 marked `data-view-panel="<view>"` and hides the rest. The matches load on page load whatever the view;
 the standings load once, the first time their view opens (`loadStandings` in standings.js).
 
-The Standings view renders a `.section-title` per stage and a card with a table per group. League and
+The Standings view shows one group's table at a time. Its tab bar (`#standings-tabs`) works like the
+matches one: a `.category-btn` per stage on top, and the open stage's group tabs below — left out when
+the stage has a single group. League and
 pools tables show P/W/L, maps, map difference and points; swiss tables show P/W/L only. A D column
 appears only where a group has draws. Dropped teams are dimmed and struck through.
 

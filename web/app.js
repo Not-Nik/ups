@@ -63,16 +63,18 @@ function syncUrl(replace = false) {
     set(TOURNAMENT_PARAM, state.activeTournament);
     set('view', state.activeView);
     set('tab', state.activeTab && tabParam(state.activeTab));
+    set('table', activeStandingsTable());
     const query = params.toString();
     history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
 }
 
 // Adopt whatever the URL says on back/forward. The tournament is fixed for the page's
-// lifetime (switching one is a page load from the landing grid), so only the view and
-// the tab move.
+// lifetime (switching one is a page load from the landing grid), so only the view, the
+// tab and the standings table move.
 function applyLocation() {
     activateView(wantedView(), null);
     activateWantedTab();
+    activateWantedStandingsTable();
 }
 
 // ============== Views ==============
