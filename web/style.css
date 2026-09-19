@@ -108,14 +108,20 @@
     vertical-align: middle;
 }
 
-/* Second header line of the tournament page: its views on the left, the way back to
-   the landing page on the right. */
+/* Second header line of the tournament page: the way back to the landing page. */
+#back-bar {
+    display: flex;
+}
+
+/* The tournament's views, between its name and the matches' day tabs. The rule
+   underneath sets them apart from the day tabs below. */
 #view-bar {
     display: flex;
     flex-wrap: nowrap;
     align-items: stretch;
     gap: 0;
     overflow-x: auto;
+    border-bottom: 1px solid var(--bs-border-color);
 }
 
 /* Flat text-tab style, shared by the view bar and the day/bracket tabs. */
@@ -135,9 +141,7 @@
     color: var(--bs-secondary-color);
 }
 
-/* Pushed to the far end of the view bar. */
 .bar-link {
-    margin-left: auto;
     color: var(--accent);
     text-decoration: none;
 }

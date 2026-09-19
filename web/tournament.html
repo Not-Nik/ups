@@ -58,14 +58,16 @@
             <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" aria-label="Toggle theme"></button>
         </div>
     </div>
-    <nav id="view-bar">
-        <button class="view-btn btn" data-view="matches">Matches</button>
-        <button class="view-btn btn" data-view="standings">Standings</button>
-        <a href="/" class="bar-link">All tournaments</a>
+    <nav id="back-bar">
+        <a href="/" class="bar-link">&larr; Back to tournaments</a>
     </nav>
 </header>
 <main id="main" class="container-xl px-3 py-4">
-    <h2 id="tournament-name" class="h4 fw-bold mb-3"></h2>
+    <h2 id="tournament-name" class="h2 fw-bold pt-2 mb-4"></h2>
+    <nav id="view-bar" class="mb-3">
+        <button class="view-btn btn" data-view="matches">Matches</button>
+        <button class="view-btn btn" data-view="standings">Standings</button>
+    </nav>
     <div class="d-flex align-items-start gap-2 mb-3" data-view-panel="matches">
         <div id="tabs-bar" class="flex-grow-1"></div>
         <button id="overlay-info-btn" class="btn btn-sm btn-outline-secondary flex-shrink-0"

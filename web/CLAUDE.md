@@ -97,8 +97,9 @@ Tournaments are ordered newest first (`byNewestTournament` in common.js — desc
 `index.html` lists them in a grid, newest in the top left, oldest in the bottom right (plain row-major
 CSS grid over the sorted list). Cards link to tournament.html via `tournamentHref`.
 
-tournament.html's second header line (`#view-bar`) holds the `.view-btn` tabs — Matches and
-Standings — and an "All tournaments" `.bar-link` back to `/`. Each view shows the main-area elements
+tournament.html's second header line (`#back-bar`) holds a "← Back to tournaments" `.bar-link` to `/`.
+The `.view-btn` tabs — Matches and Standings — sit in `#view-bar` in main, between the tournament name
+and the matches' day tabs. Each view shows the main-area elements
 marked `data-view-panel="<view>"` and hides the rest. The matches load on page load whatever the view;
 the standings load once, the first time their view opens (`loadStandings` in standings.js).
 
