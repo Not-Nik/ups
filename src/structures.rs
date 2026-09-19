@@ -87,6 +87,15 @@ pub struct Standing {
 }
 
 #[derive(Serialize, Debug)]
+pub struct Team {
+    pub id: u64,
+    pub name: String,
+    pub short_name: Option<String>,
+    pub logo: String,
+    pub toornament_id: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
 pub struct Player {
     pub team: String,
     pub short_name: Option<String>,

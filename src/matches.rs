@@ -4,7 +4,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::structures::{Bracket, BracketNode, Match, Player, Standing, Tournament};
+use crate::structures::{Bracket, BracketNode, Match, Player, Standing, Team, Tournament};
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
 use sqlx::sqlite::SqliteRow;
@@ -400,6 +400,32 @@ pub async fn get_standings(
     }
 
     Ok(standings)
+}
+
+pub async fn get_teams(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u32,
+) -> sqlx::Result<Vec<Team>> {
+    let mut teams_query = sqlx::query(
+        "SELECT TeamID, Name, ShortName, Logo, ToornamentId FROM teams WHERE TournamentID = ?
+         ORDER BY Name COLLATE NOCASE, TeamID",
+    )
+    .bind(tournament_id)
+    .fetch(conn.deref_mut());
+
+    let mut teams = Vec::new();
+
+    while let Some(row) = teams_query.try_next().await? {
+        teams.push(Team {
+            id: row.try_get("TeamID")?,
+            name: row.try_get("Name")?,
+            short_name: row.try_get("ShortName")?,
+            logo: row.try_get("Logo")?,
+            toornament_id: row.try_get("ToornamentId")?,
+        });
+    }
+
+    Ok(teams)
 }
 
 pub async fn get_players(

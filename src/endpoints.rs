@@ -12,7 +12,7 @@ use crate::loader::{Refresher, BRACKET_TYPES};
 use crate::matches::{
     add_group, add_round, add_stage, add_team, add_tournament, get_bracket_nodes, get_brackets,
     get_group_id, get_matches, get_matches_filter, get_players, get_round_id, get_stage_id,
-    get_standings, get_team_id, get_tournaments,
+    get_standings, get_team_id, get_teams, get_tournaments,
 };
 use crate::predictions::{
     get_predictions, get_user_match_predictions, get_user_predictions, submit_prediction,
@@ -255,6 +255,26 @@ pub async fn standings(
 
     Ok(warp::reply::with_header(
         warp::reply::json(&standings),
+        "X-Refreshing",
+        if refreshing { "1" } else { "0" },
+    ))
+}
+
+pub async fn teams(
+    tournament_id: u32,
+    conn: Arc<Mutex<SqliteConnection>>,
+    refresher: Arc<Refresher>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let refreshing = refresher.refresh(tournament_id).await;
+
+    let mut conn_lock = conn.lock().await;
+
+    let teams = get_teams(&mut conn_lock, tournament_id)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::with_header(
+        warp::reply::json(&teams),
         "X-Refreshing",
         if refreshing { "1" } else { "0" },
     ))
