@@ -18,6 +18,8 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
+- `auth.js` — header Log in button / user menu and the name + logout modals; loaded by index.html and
+  tournament.html (both carry that markup), before app.js
 - `common.js` — shared theme toggle (loaded by every page)
 - `style.css` — all styles, including Bootstrap overrides
 - `vendor/bootstrap.min.css` (5.3.3) and `vendor/html2canvas.min.js` (1.4.1) — vendored, do not load from CDN
@@ -135,7 +137,8 @@ Sorting:
 ## app.js conventions
 
 - 4-space indent (the local formatter will reformat anything else).
-- Helpers — prefer these to raw DOM calls:
+- Helpers — prefer these to raw DOM calls (most live in common.js; `loadImage`, `groupBy` and
+  `findCard` in app.js):
     - `$(id)` — `getElementById`
     - `show`/`hide`/`setHidden(el, hidden)` — `d-none` toggling
     - `onClick(id, fn)` / `onEnter(id, fn)` — listener binding by id
@@ -157,7 +160,7 @@ Sorting:
 
 ## Modal
 
-Single `#name-modal` re-used for three flows via `MODAL_MODES`:
+Lives in auth.js. Single `#name-modal` re-used for three flows via `MODAL_MODES`:
 
 - `'name'` — first-submit name prompt (with optional error + shake)
 - `'login'` — login form, exposes the password field

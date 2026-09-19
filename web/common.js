@@ -72,6 +72,32 @@ const show = el => el.classList.remove('d-none');
 const hide = el => el.classList.add('d-none');
 const setHidden = (el, hidden) => el.classList.toggle('d-none', hidden);
 
+const onClick = (id, fn) => $(id).addEventListener('click', fn);
+const onEnter = (id, fn) => $(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') fn(e);
+});
+
+// Restart the shake animation by toggling the class across a forced reflow.
+function shakeEl(el) {
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+}
+
+// Disable the buttons with these ids while fn runs.
+async function withDisabled(ids, fn) {
+    ids.forEach(id => {
+        $(id).disabled = true;
+    });
+    try {
+        return await fn();
+    } finally {
+        ids.forEach(id => {
+            $(id).disabled = false;
+        });
+    }
+}
+
 // ============== Auth ==============
 const getToken = () => localStorage.getItem('ups_token');
 const saveToken = t => localStorage.setItem('ups_token', t);
