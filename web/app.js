@@ -51,6 +51,7 @@ const OTHER_SIDE = {a: 'b', b: 'a'};
 
 const state = {
     activeTournament: null,
+    activeView: null, // one of VIEWS: which header tab (and main panel) is open
     activeTab: null, // internal day key of the open tab (a round name or a bracketDayKey)
     tabs: [],        // the last render's tabs in display order, as {day, param, unfinished}
     categories: [],  // the last render's labelled tab groups, as {label, name, entries}
@@ -84,15 +85,42 @@ function syncUrl(replace = false) {
     const params = urlParams();
     const set = (key, value) => value == null ? params.delete(key) : params.set(key, value);
     set(TOURNAMENT_PARAM, state.activeTournament);
+    set('view', state.activeView);
     set('tab', state.activeTab && tabParam(state.activeTab));
     const query = params.toString();
     history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
 }
 
 // Adopt whatever the URL says on back/forward. The tournament is fixed for the page's
-// lifetime (switching one is a page load from the landing grid), so only the tab moves.
+// lifetime (switching one is a page load from the landing grid), so only the view and
+// the tab move.
 function applyLocation() {
+    activateView(wantedView(), null);
     activateWantedTab();
+}
+
+// ============== Views ==============
+// The header's Matches / Standings tabs. Each shows the main-area elements marked with
+// its data-view-panel; the standings load the first time their view opens.
+const VIEWS = ['matches', 'standings'];
+
+// Unknown or missing ?view= falls back to the matches.
+const wantedView = () => {
+    const view = urlParams().get('view');
+    return VIEWS.includes(view) ? view : VIEWS[0];
+};
+
+// `record` works as in activateTab.
+function activateView(view, record = 'push') {
+    state.activeView = view;
+    $('view-bar').querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    document.querySelectorAll('[data-view-panel]').forEach(el => {
+        setHidden(el, el.dataset.viewPanel !== view);
+    });
+    if (view === 'standings') loadStandings(state.activeTournament);
+    if (record) syncUrl(record === 'replace');
 }
 
 // ============== Tournament ==============
@@ -1160,6 +1188,8 @@ function bindEvents() {
     onClick('submit-all-btn', () => {
         const invalid = findInvalidInputs();
         if (invalid.length) {
+            // The inputs to fix live on the matches view.
+            if (state.activeView !== 'matches') activateView('matches');
             const hiddenDays = new Set();
             invalid.forEach(input => {
                 input.classList.add('invalid');
@@ -1214,6 +1244,12 @@ function bindEvents() {
 
     onClick('login-btn', () => nameModal.promptLogin());
 
+    $('view-bar').querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.dataset.view !== state.activeView) activateView(btn.dataset.view);
+        });
+    });
+
     // Back/forward move between views instead of leaving the page.
     window.addEventListener('popstate', applyLocation);
 }
@@ -1239,5 +1275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.activeTournament = tournament.tournament_id;
     $('tournament-name').textContent = tournament.name;
     document.title = `${tournament.name} – PULOW`;
+    // The matches' render settles the tab and replaces the URL with the full view.
+    activateView(wantedView(), null);
     await loadTournament(tournament.tournament_id);
 });

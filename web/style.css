@@ -176,8 +176,71 @@
 }
 
 .section-header,
-.section-divider {
+.section-divider,
+.standings-stage,
+.standings-status {
     grid-column: 1 / -1;
+}
+
+/* Standings view: one card per group, under a heading per stage. */
+.standings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+.standings-stage:not(:first-child) {
+    margin-top: .5rem;
+}
+
+.standings-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: .875rem;
+}
+
+.standings-table th {
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+}
+
+.standings-table th,
+.standings-table td {
+    padding: .3rem .25rem;
+}
+
+.standings-table tbody tr {
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.standings-rank {
+    width: 2rem;
+    color: var(--bs-secondary-color);
+}
+
+.standings-team {
+    overflow: hidden;
+}
+
+.standings-num {
+    width: 2.25rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* The map score needs more room than the single-number columns. */
+.standings-num.standings-wide {
+    width: 3.25rem;
+}
+
+.standings-dropped {
+    opacity: .5;
+}
+
+.standings-dropped .standings-team {
+    text-decoration: line-through;
 }
 
 .section-header {
