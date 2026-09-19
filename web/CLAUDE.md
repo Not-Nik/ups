@@ -11,12 +11,13 @@ standings are pulled from toornament by `../src/loader.rs`, on demand whenever `
 
 Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 
-- `index.html` — main page (predictions grid)
+- `index.html` / `index.js` — landing page: every tournament as a tiled grid
+- `tournament.html` — one tournament: Matches (predictions grid) and Standings views
 - `404.html` — error page
 - `privacy.html` / `privacy.js` — privacy policy
-- `archive.html` / `archive.js` — every tournament as a grid, linked from the header when tabs don't all fit
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches (login-gated, admin-only)
-- `app.js` — all prediction-page logic
+- `app.js` — all tournament-page logic except the standings
+- `standings.js` — the Standings view (tables from `/api/standings/:id`)
 - `common.js` — shared theme toggle (loaded by every page)
 - `style.css` — all styles, including Bootstrap overrides
 - `vendor/bootstrap.min.css` (5.3.3) and `vendor/html2canvas.min.js` (1.4.1) — vendored, do not load from CDN
@@ -29,7 +30,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 
 | Method | Path                   | Auth | Notes                                                                                       |
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
-| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the header tab bar and the archive |
+| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the landing grid                    |
 | GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per 6 h) and answers `X-Refreshing: 1` while one runs |
 | GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
@@ -68,36 +69,40 @@ retry name prompt).
 Where you are lives in the **query string**, never in `localStorage` — a link reproduces the exact view and
 Back walks through it. `localStorage` is only for the token and the theme.
 
-- `?tournament=<id>` — which tournament is loaded. Unknown or missing falls back to the first one.
-  `TOURNAMENT_PARAM` / `tournamentHref(id)` in common.js are the one place that spells this param, so
-  the archive links in without knowing how app.js reads it.
-- `?tab=<tab>` — which tab is open. `renderTabs` assigns each tab its `param`: a league day is its own
+- `?tournament=<id>` — which tournament tournament.html shows. It is fixed for the page's lifetime;
+  unknown or missing redirects to `/`. `TOURNAMENT_PARAM` / `tournamentHref(id)` in common.js are the
+  one place that spells this param, so the landing grid links in without knowing how app.js reads it.
+  `index.js` forwards the old `/?tournament=` links to tournament.html.
+- `?view=matches|standings` — which header tab is open (`VIEWS`, `activateView`). Unknown or missing
+  falls back to `matches`.
+- `?tab=<tab>` — which day/bracket tab of the matches view is open. `renderTabs` assigns each tab its `param`: a league day is its own
   name (`tab=Day+5`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
   internal day key (`bracketDayKey`) joins its parts on NUL and never goes in the URL. `tabParam(day)`
   just looks the param up; params are only compared against the rendered tabs, so they must be stable,
   not reversible.
-- `syncUrl(replace)` writes both from `state.activeTournament` / `state.activeTab`, keeping any other
-  params. A user's click **pushes** a history entry; settling on a default **replaces**, so the URL is
-  always complete without cluttering history.
-- `applyLocation()` reads the URL and is the single entry point for both first load and `popstate`.
-  It reloads the tournament only when it actually changed, otherwise just re-picks the tab.
+- `syncUrl(replace)` writes all three from `state.activeTournament` / `state.activeView` /
+  `state.activeTab`, keeping any other params. A user's click **pushes** a history entry; settling on a
+  default **replaces**, so the URL is always complete without cluttering history.
+- `applyLocation()` is the `popstate` handler: it re-picks the view and the tab. First load picks the
+  view in the init handler, and `renderGrid` → `activateWantedTab()` picks the tab.
 - Unknown tab values are dropped silently — `activateWantedTab()` falls back to the default and rewrites
   the URL, so a stale link still lands somewhere sensible.
 
-## Tournament tabs & archive
+## Landing page & tournament page
 
-Tournaments are ordered newest first everywhere (`byNewestTournament` in common.js — descending
-`tournament_id`), so index 0 is the current season and the URL's default lands there.
+Tournaments are ordered newest first (`byNewestTournament` in common.js — descending `tournament_id`).
+`index.html` lists them in a grid, newest in the top left, oldest in the bottom right (plain row-major
+CSS grid over the sorted list). Cards link to tournament.html via `tournamentHref`.
 
-- The header bar renders one `.tournament-btn` per tournament and never wraps. `fitTournamentTabs()`
-  measures `scrollWidth` vs `clientWidth` and hides the oldest tabs until the row fits, revealing
-  `#archive-btn` (accent `--accent`, like the active tab's underline) once anything was cut. A
-  `ResizeObserver` on the bar re-runs it on every width change.
-- The **active** tournament always keeps its tab: `setActiveTournament` re-fits, so a `?tournament=`
-  link or a Back into an archived season is never left without one.
-- `archive.html` lists all of them in a grid, newest in the top left, oldest in the bottom right
-  (plain row-major CSS grid over the same sorted list). Cards link back via `tournamentHref`.
+tournament.html's second header line (`#view-bar`) holds the `.view-btn` tabs — Matches and
+Standings — and an "All tournaments" `.bar-link` back to `/`. Each view shows the main-area elements
+marked `data-view-panel="<view>"` and hides the rest. The matches load on page load whatever the view;
+the standings load once, the first time their view opens (`loadStandings` in standings.js).
+
+The Standings view renders a `.section-title` per stage and a card with a table per group. League and
+pools tables show P/W/L, maps, map difference and points; swiss tables show P/W/L only. A D column
+appears only where a group has draws. Dropped teams are dimmed and struck through.
 
 ## Section / day model
 
