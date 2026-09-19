@@ -156,7 +156,7 @@ function standingsTable(rows) {
     card.insertAdjacentHTML('beforeend', `
         <div class="card-body">
             <div class="section-title mb-2">${escapeHtml(first.group_name || first.stage_name)}</div>
-            <table class="standings-table">
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th class="standings-rank" title="Rank">#</th>

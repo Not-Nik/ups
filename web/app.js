@@ -78,9 +78,17 @@ function applyLocation() {
 }
 
 // ============== Views ==============
-// The header's Matches / Standings tabs. Each shows the main-area elements marked with
-// its data-view-panel; the standings load the first time their view opens.
-const VIEWS = ['matches', 'standings'];
+// The Matches / Standings / Teams / Players tabs. Each shows the main-area elements
+// marked with its data-view-panel. The matches load with the page; every other view
+// loads the first time it opens, through its loader (defined in standings.js and
+// roster.js, loaded after this script, hence the arrows).
+const VIEW_LOADERS = {
+    matches: null,
+    standings: id => loadStandings(id),
+    teams: id => loadTeams(id),
+    players: id => loadPlayers(id),
+};
+const VIEWS = Object.keys(VIEW_LOADERS);
 
 // Unknown or missing ?view= falls back to the matches.
 const wantedView = () => {
@@ -97,7 +105,7 @@ function activateView(view, record = 'push') {
     document.querySelectorAll('[data-view-panel]').forEach(el => {
         setHidden(el, el.dataset.viewPanel !== view);
     });
-    if (view === 'standings') loadStandings(state.activeTournament);
+    VIEW_LOADERS[view]?.(state.activeTournament);
     if (record) syncUrl(record === 'replace');
 }
 

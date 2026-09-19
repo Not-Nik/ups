@@ -184,25 +184,25 @@
     grid-column: 1 / -1;
 }
 
-/* Standings view: one group's card at a time, picked by the tabs above it, as wide
-   as the page. Headers and cells share the tabs' and predictions' .875rem. */
-.standings-table {
+/* Tables of the Standings and Players views, as wide as the page. Headers and cells
+   share the tabs' and predictions' .875rem. */
+.data-table {
     width: 100%;
     table-layout: fixed;
     font-size: .875rem;
 }
 
-.standings-table th {
+.data-table th {
     font-weight: 600;
     color: var(--bs-secondary-color);
 }
 
-.standings-table th,
-.standings-table td {
+.data-table th,
+.data-table td {
     padding: .6rem .5rem;
 }
 
-.standings-table tbody tr {
+.data-table tbody tr {
     border-top: 1px solid var(--bs-border-color);
 }
 
@@ -226,10 +226,30 @@
     width: 4rem;
 }
 
+/* Teams view: one tile per team, the same grid as the matches. */
+.roster-team-logo {
+    width: 2rem;
+    height: 2rem;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Lets the name column shrink so text-truncate can cut it. */
+.roster-team .min-w-0 {
+    min-width: 0;
+}
+
+/* Players view: long names and BattleTags are cut rather than wrapped. */
+.roster-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Phones: keep the vertical breathing room, but give the width back to the team names. */
 @media (max-width: 575.98px) {
-    .standings-table th,
-    .standings-table td {
+    .data-table th,
+    .data-table td {
         padding-left: .25rem;
         padding-right: .25rem;
     }

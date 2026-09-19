@@ -67,6 +67,8 @@
     <nav id="view-bar" class="mb-3">
         <button class="view-btn btn" data-view="matches">Matches</button>
         <button class="view-btn btn" data-view="standings">Standings</button>
+        <button class="view-btn btn" data-view="teams">Teams</button>
+        <button class="view-btn btn" data-view="players">Players</button>
     </nav>
     <div class="d-flex align-items-start gap-2 mb-3" data-view-panel="matches">
         <div id="tabs-bar" class="flex-grow-1"></div>
@@ -95,7 +97,25 @@
     </div>
     <div id="grid" class="matches-grid" data-view-panel="matches"></div>
     <div id="standings-tabs" class="mb-3 d-none" data-view-panel="standings"></div>
-    <div id="standings" class="standings-grid d-none" data-view-panel="standings"></div>
+    <div id="standings" class="d-none" data-view-panel="standings"></div>
+    <div class="d-none" data-view-panel="teams">
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <input type="search" id="teams-search" class="form-control" placeholder="Search teams"
+                   aria-label="Search teams" autocomplete="off">
+            <span id="teams-count" class="text-secondary small text-nowrap"></span>
+        </div>
+        <p id="teams-empty" class="text-secondary text-center py-5 d-none">No team matches your search.</p>
+        <div id="teams" class="matches-grid"></div>
+    </div>
+    <div class="d-none" data-view-panel="players">
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <input type="search" id="players-search" class="form-control"
+                   placeholder="Search players, BattleTags or teams" aria-label="Search players" autocomplete="off">
+            <span id="players-count" class="text-secondary small text-nowrap"></span>
+        </div>
+        <p id="players-empty" class="text-secondary text-center py-5 d-none">No player matches your search.</p>
+        <div id="players"></div>
+    </div>
     <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
         <span class="d-flex gap-3">
             <a href="privacy.html" class="text-secondary small">Privacy Policy</a>
@@ -189,5 +209,6 @@
 <script src="bracket.js"></script>
 <script src="incidents.js"></script>
 <script src="standings.js"></script>
+<script src="roster.js"></script>
 </body>
 </html>
