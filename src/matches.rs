@@ -358,7 +358,7 @@ pub async fn get_standings(
 ) -> sqlx::Result<Vec<Standing>> {
     let mut standings_query = sqlx::query(
         "SELECT s.Name AS StageName, s.Number AS StageNumber, s.Type AS StageType,
-                g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank,
+                g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank, t.TeamID,
                 t.Name AS Team, t.ShortName, t.Logo, st.Points, st.Played, st.Wins, st.Draws,
                 st.Losses, st.Forfeits, st.ScoreFor, st.ScoreAgainst,
                 st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped
@@ -383,6 +383,7 @@ pub async fn get_standings(
             group_number: row.try_get("GroupNumber")?,
             position: row.try_get("Position")?,
             rank: row.try_get("Rank")?,
+            team_id: row.try_get("TeamID")?,
             team: row.try_get("Team")?,
             short_name: row.try_get("ShortName")?,
             logo: row.try_get("Logo")?,
@@ -433,7 +434,7 @@ pub async fn get_players(
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Player>> {
     let mut players_query = sqlx::query(
-        "SELECT t.Name AS Team, t.ShortName, t.Logo, p.Position, p.Name, p.BattleTag,
+        "SELECT t.TeamID, t.Name AS Team, t.ShortName, t.Logo, p.Position, p.Name, p.BattleTag,
                 p.ToornamentUserId
          FROM players p
                   JOIN teams t ON t.TeamID = p.TeamID
@@ -447,6 +448,7 @@ pub async fn get_players(
 
     while let Some(row) = players_query.try_next().await? {
         players.push(Player {
+            team_id: row.try_get("TeamID")?,
             team: row.try_get("Team")?,
             short_name: row.try_get("ShortName")?,
             logo: row.try_get("Logo")?,

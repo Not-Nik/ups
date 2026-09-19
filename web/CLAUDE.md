@@ -39,7 +39,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
 | GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way |
 | GET    | `/api/teams/:id`       | -    | Every team of one tournament as `{id, name, short_name, logo, toornament_id}`, sorted by name. Names aren't unique, so `id` is the key to tell two teams apart; `toornament_id` is `null` for teams added by hand. Same refresh and `X-Refreshing` as `/api/matches/:id` |
-| GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by team name then lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
+| GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team_id, team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by team name then lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions                                                             |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
@@ -51,7 +51,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | -      | `/api/proxy`           | -    | Image proxy used by html2canvas for cross-origin team logos                                 |
 
 A standings row carries `stage_name`, `stage_number`, `stage_type`, `group_name`, `group_number`, `position`, `rank`
-(ties share a rank, `position` breaks them), `team`, `short_name`, `logo`, `points`, `played`, `wins`, `draws`,
+(ties share a rank, `position` breaks them), `team_id` (the `id` from `/api/teams/:id`), `team`, `short_name`, `logo`, `points`, `played`, `wins`, `draws`,
 `losses`, `forfeits`, `score_for`, `score_against`, `score_difference` and `dropped`. Swiss groups have no map scores:
 the three score fields are `null` there, and `points` is toornament's tiebreaker-weighted value (925, 818, …), so show
 W/L for swiss rather than points.

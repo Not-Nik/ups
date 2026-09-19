@@ -71,6 +71,7 @@ pub struct Standing {
     pub group_number: u64,
     pub position: u64,
     pub rank: u64,
+    pub team_id: u64,
     pub team: String,
     pub short_name: Option<String>,
     pub logo: String,
@@ -97,6 +98,7 @@ pub struct Team {
 
 #[derive(Serialize, Debug)]
 pub struct Player {
+    pub team_id: u64,
     pub team: String,
     pub short_name: Option<String>,
     pub logo: String,
