@@ -4,6 +4,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use serde_derive::{Deserialize, Serialize};
+use sqlx::FromRow;
 use std::str::FromStr;
 
 #[derive(Serialize)]
@@ -11,108 +12,185 @@ pub struct User {
     pub name: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct Tournament {
+    #[sqlx(rename = "TournamentID")]
     pub tournament_id: u64,
+    #[sqlx(rename = "Name")]
     pub name: String,
+    #[sqlx(rename = "ToornamentId")]
     pub toornament_id: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct Match {
+    #[sqlx(rename = "MatchID")]
     pub id: u64,
+    #[sqlx(rename = "TournamentID")]
     pub tournament_id: u64,
+    #[sqlx(rename = "TeamA")]
     pub team_a: String,
+    #[sqlx(rename = "TeamB")]
     pub team_b: String,
+    #[sqlx(rename = "LogoA")]
     pub logo_a: String,
+    #[sqlx(rename = "LogoB")]
     pub logo_b: String,
+    #[sqlx(rename = "ScoreA")]
     pub score_a: Option<u64>,
+    #[sqlx(rename = "ScoreB")]
     pub score_b: Option<u64>,
+    #[sqlx(rename = "ToornamentId")]
     pub toornament_id: Option<String>,
+    #[sqlx(rename = "StageType")]
     pub stage_type: Option<String>,
+    #[sqlx(rename = "StageNumber")]
     pub stage_number: Option<u64>,
+    #[sqlx(rename = "StageName")]
     pub stage_name: String,
+    #[sqlx(rename = "GroupName")]
     pub group_name: String,
+    #[sqlx(rename = "RoundName")]
     pub round_name: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct BracketNode {
+    #[sqlx(rename = "NodeId")]
     pub node_id: String,
+    #[sqlx(rename = "TournamentID")]
     pub tournament_id: u32,
+    #[sqlx(rename = "StageId")]
     pub stage_id: String,
+    #[sqlx(rename = "StageName")]
     pub stage_name: String,
+    #[sqlx(rename = "StageNumber")]
     pub stage_number: u64,
+    #[sqlx(rename = "StageType")]
     pub stage_type: String,
+    #[sqlx(rename = "GroupName")]
     pub group_name: String,
+    #[sqlx(rename = "Branch")]
     pub branch: Option<String>,
+    #[sqlx(rename = "RoundNumber")]
     pub round_number: u64,
+    #[sqlx(rename = "Position")]
     pub position: u64,
+    #[sqlx(rename = "Depth")]
     pub depth: u64,
+    #[sqlx(rename = "TeamA")]
     pub team_a: Option<String>,
+    #[sqlx(rename = "TeamB")]
     pub team_b: Option<String>,
+    #[sqlx(rename = "LogoA")]
     pub logo_a: Option<String>,
+    #[sqlx(rename = "LogoB")]
     pub logo_b: Option<String>,
+    #[sqlx(rename = "ScoreA")]
     pub score_a: Option<u64>,
+    #[sqlx(rename = "ScoreB")]
     pub score_b: Option<u64>,
+    #[sqlx(rename = "SourceTypeA")]
     pub source_type_a: Option<String>,
+    #[sqlx(rename = "SourceA")]
     pub source_a: Option<String>,
+    #[sqlx(rename = "SourceTypeB")]
     pub source_type_b: Option<String>,
+    #[sqlx(rename = "SourceB")]
     pub source_b: Option<String>,
+    #[sqlx(rename = "MatchID")]
     pub match_id: Option<u64>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, FromRow)]
 pub struct Standing {
+    #[sqlx(rename = "StageName")]
     pub stage_name: String,
+    #[sqlx(rename = "StageNumber")]
     pub stage_number: u64,
+    #[sqlx(rename = "StageType")]
     pub stage_type: String,
+    #[sqlx(rename = "GroupName")]
     pub group_name: String,
+    #[sqlx(rename = "GroupNumber")]
     pub group_number: u64,
+    #[sqlx(rename = "Position")]
     pub position: u64,
+    #[sqlx(rename = "Rank")]
     pub rank: u64,
+    #[sqlx(rename = "TeamID")]
     pub team_id: u64,
+    #[sqlx(rename = "Team")]
     pub team: String,
+    #[sqlx(rename = "ShortName")]
     pub short_name: Option<String>,
+    #[sqlx(rename = "Logo")]
     pub logo: String,
+    #[sqlx(rename = "Points")]
     pub points: Option<i64>,
+    #[sqlx(rename = "Played")]
     pub played: u64,
+    #[sqlx(rename = "Wins")]
     pub wins: u64,
+    #[sqlx(rename = "Draws")]
     pub draws: u64,
+    #[sqlx(rename = "Losses")]
     pub losses: u64,
+    #[sqlx(rename = "Forfeits")]
     pub forfeits: u64,
+    #[sqlx(rename = "ScoreFor")]
     pub score_for: Option<u64>,
+    #[sqlx(rename = "ScoreAgainst")]
     pub score_against: Option<u64>,
+    #[sqlx(rename = "ScoreDifference")]
     pub score_difference: Option<i64>,
+    #[sqlx(rename = "Dropped")]
     pub dropped: bool,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, FromRow)]
 pub struct Team {
+    #[sqlx(rename = "TeamID")]
     pub id: u64,
+    #[sqlx(rename = "Name")]
     pub name: String,
+    #[sqlx(rename = "ShortName")]
     pub short_name: Option<String>,
+    #[sqlx(rename = "Logo")]
     pub logo: String,
+    #[sqlx(rename = "ToornamentId")]
     pub toornament_id: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, FromRow)]
 pub struct Player {
+    #[sqlx(rename = "TeamID")]
     pub team_id: u64,
+    #[sqlx(rename = "Team")]
     pub team: String,
+    #[sqlx(rename = "ShortName")]
     pub short_name: Option<String>,
+    #[sqlx(rename = "Logo")]
     pub logo: String,
+    #[sqlx(rename = "Position")]
     pub position: u64,
+    #[sqlx(rename = "Name")]
     pub name: String,
+    #[sqlx(rename = "BattleTag")]
     pub battle_tag: Option<String>,
+    #[sqlx(rename = "ToornamentUserId")]
     pub toornament_user_id: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, FromRow)]
 pub struct Prediction {
+    #[sqlx(rename = "Name")]
     pub name: String,
+    #[sqlx(rename = "MatchID")]
     pub id: u64,
+    #[sqlx(rename = "ScoreA")]
     pub score_a: u64,
+    #[sqlx(rename = "ScoreB")]
     pub score_b: u64,
 }
 
@@ -150,10 +228,13 @@ pub struct ProxyQuery {
     pub url: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, FromRow)]
 pub struct Bracket {
+    #[sqlx(rename = "TournamentID")]
     pub tournament_id: u64,
+    #[sqlx(rename = "Stage")]
     pub stage: String,
+    #[sqlx(rename = "Group")]
     pub group: String,
 }
 

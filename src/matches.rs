@@ -7,8 +7,7 @@
 use crate::structures::{Bracket, BracketNode, Match, Player, Standing, Team, Tournament};
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
-use sqlx::sqlite::SqliteRow;
-use sqlx::{QueryBuilder, Row, SqliteConnection};
+use sqlx::{QueryBuilder, SqliteConnection};
 use std::ops::DerefMut;
 use tokio::sync::MutexGuard;
 
@@ -29,17 +28,13 @@ pub async fn get_tournaments(
     conn: &mut MutexGuard<'_, SqliteConnection>,
 ) -> sqlx::Result<Vec<Tournament>> {
     let mut tournament_query =
-        sqlx::query("SELECT TournamentID, Name, ToornamentId FROM tournaments")
+        sqlx::query_as::<_, Tournament>("SELECT TournamentID, Name, ToornamentId FROM tournaments")
             .fetch(conn.deref_mut());
 
     let mut tournaments = Vec::new();
 
-    while let Some(row) = tournament_query.try_next().await? {
-        tournaments.push(Tournament {
-            tournament_id: row.try_get("TournamentID")?,
-            name: row.try_get("Name")?,
-            toornament_id: row.try_get("ToornamentId")?,
-        });
+    while let Some(tour) = tournament_query.try_next().await? {
+        tournaments.push(tour);
     }
 
     Ok(tournaments)
@@ -63,7 +58,7 @@ pub async fn get_matches(
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Match>> {
     let sql = format!("{MATCH_SELECT} WHERE m.TournamentID = ?");
-    let match_query = sqlx::query(&sql)
+    let match_query = sqlx::query_as::<_, Match>(&sql)
         .bind(tournament_id)
         .fetch(conn.deref_mut());
 
@@ -85,33 +80,18 @@ pub async fn get_matches_filter(
         }
         qb.push(")");
     }
-    let match_query = qb.build().fetch(conn.deref_mut());
+    let match_query = qb.build_query_as::<Match>().fetch(conn.deref_mut());
 
     fetch_matches(match_query).await
 }
 
 pub async fn fetch_matches(
-    mut match_query: BoxStream<'_, sqlx::Result<SqliteRow>>,
+    mut match_query: BoxStream<'_, sqlx::Result<Match>>,
 ) -> sqlx::Result<Vec<Match>> {
     let mut matches = Vec::new();
 
-    while let Some(row) = match_query.try_next().await? {
-        matches.push(Match {
-            id: row.try_get("MatchID")?,
-            tournament_id: row.try_get("TournamentID")?,
-            team_a: row.try_get("TeamA")?,
-            team_b: row.try_get("TeamB")?,
-            logo_a: row.try_get("LogoA")?,
-            logo_b: row.try_get("LogoB")?,
-            score_a: row.try_get("ScoreA")?,
-            score_b: row.try_get("ScoreB")?,
-            toornament_id: row.try_get("ToornamentId")?,
-            stage_type: row.try_get("StageType")?,
-            stage_number: row.try_get("StageNumber")?,
-            stage_name: row.try_get("StageName")?,
-            group_name: row.try_get("GroupName")?,
-            round_name: row.try_get("RoundName")?,
-        });
+    while let Some(mat) = match_query.try_next().await? {
+        matches.push(mat);
     }
 
     Ok(matches)
@@ -274,7 +254,7 @@ pub async fn get_bracket_nodes(
     stage: String,
     group: String,
 ) -> sqlx::Result<Vec<BracketNode>> {
-    let mut bracket_query = sqlx::query(
+    let mut bracket_query = sqlx::query_as::<_, BracketNode>(
         "SELECT b.NodeId, b.TournamentID, COALESCE(s.ToornamentId, '') AS StageId,
                 s.Name AS StageName, s.Number AS StageNumber, s.Type AS StageType,
                 g.Name AS GroupName, b.Branch, r.Number AS RoundNumber, b.Position, b.Depth,
@@ -295,31 +275,8 @@ pub async fn get_bracket_nodes(
 
     let mut matches = Vec::new();
 
-    while let Some(row) = bracket_query.try_next().await? {
-        matches.push(BracketNode {
-            node_id: row.try_get("NodeId")?,
-            tournament_id: row.try_get("TournamentID")?,
-            stage_id: row.try_get("StageId")?,
-            stage_name: row.try_get("StageName")?,
-            stage_number: row.try_get("StageNumber")?,
-            stage_type: row.try_get("StageType")?,
-            group_name: row.try_get("GroupName")?,
-            branch: row.try_get("Branch")?,
-            round_number: row.try_get("RoundNumber")?,
-            position: row.try_get("Position")?,
-            depth: row.try_get("Depth")?,
-            team_a: row.try_get("TeamA")?,
-            team_b: row.try_get("TeamB")?,
-            logo_a: row.try_get("LogoA")?,
-            logo_b: row.try_get("LogoB")?,
-            score_a: row.try_get("ScoreA")?,
-            score_b: row.try_get("ScoreB")?,
-            source_type_a: row.try_get("SourceTypeA")?,
-            source_a: row.try_get("SourceA")?,
-            source_type_b: row.try_get("SourceTypeB")?,
-            source_b: row.try_get("SourceB")?,
-            match_id: row.try_get("MatchID")?,
-        });
+    while let Some(bq) = bracket_query.try_next().await? {
+        matches.push(bq);
     }
 
     Ok(matches)
@@ -329,8 +286,8 @@ pub async fn get_brackets(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Bracket>> {
-    let mut bracket_query = sqlx::query(
-        "SELECT DISTINCT s.Name AS StageName, g.Name AS GroupName
+    let mut bracket_query = sqlx::query_as::<_, Bracket>(
+        "SELECT DISTINCT b.TournamentID, s.Name AS Stage, g.Name AS \"Group\"
          FROM bracket_nodes b
                   JOIN groups g ON g.GroupID = b.GroupID
                   JOIN stages s ON s.StageID = g.StageID
@@ -341,12 +298,8 @@ pub async fn get_brackets(
 
     let mut matches = Vec::new();
 
-    while let Some(row) = bracket_query.try_next().await? {
-        matches.push(Bracket {
-            tournament_id: tournament_id as u64,
-            stage: row.try_get("StageName")?,
-            group: row.try_get("GroupName")?,
-        });
+    while let Some(brack) = bracket_query.try_next().await? {
+        matches.push(brack);
     }
 
     Ok(matches)
@@ -356,7 +309,7 @@ pub async fn get_standings(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Standing>> {
-    let mut standings_query = sqlx::query(
+    let mut standings_query = sqlx::query_as::<_, Standing>(
         "SELECT s.Name AS StageName, s.Number AS StageNumber, s.Type AS StageType,
                 g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank, t.TeamID,
                 t.Name AS Team, t.ShortName, t.Logo, st.Points, st.Played, st.Wins, st.Draws,
@@ -374,30 +327,8 @@ pub async fn get_standings(
 
     let mut standings = Vec::new();
 
-    while let Some(row) = standings_query.try_next().await? {
-        standings.push(Standing {
-            stage_name: row.try_get("StageName")?,
-            stage_number: row.try_get("StageNumber")?,
-            stage_type: row.try_get("StageType")?,
-            group_name: row.try_get("GroupName")?,
-            group_number: row.try_get("GroupNumber")?,
-            position: row.try_get("Position")?,
-            rank: row.try_get("Rank")?,
-            team_id: row.try_get("TeamID")?,
-            team: row.try_get("Team")?,
-            short_name: row.try_get("ShortName")?,
-            logo: row.try_get("Logo")?,
-            points: row.try_get("Points")?,
-            played: row.try_get("Played")?,
-            wins: row.try_get("Wins")?,
-            draws: row.try_get("Draws")?,
-            losses: row.try_get("Losses")?,
-            forfeits: row.try_get("Forfeits")?,
-            score_for: row.try_get("ScoreFor")?,
-            score_against: row.try_get("ScoreAgainst")?,
-            score_difference: row.try_get("ScoreDifference")?,
-            dropped: row.try_get("Dropped")?,
-        });
+    while let Some(stand) = standings_query.try_next().await? {
+        standings.push(stand);
     }
 
     Ok(standings)
@@ -407,7 +338,7 @@ pub async fn get_teams(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Team>> {
-    let mut teams_query = sqlx::query(
+    let mut teams_query = sqlx::query_as::<_, Team>(
         "SELECT TeamID, Name, ShortName, Logo, ToornamentId FROM teams WHERE TournamentID = ?
          ORDER BY Name COLLATE NOCASE, TeamID",
     )
@@ -416,14 +347,8 @@ pub async fn get_teams(
 
     let mut teams = Vec::new();
 
-    while let Some(row) = teams_query.try_next().await? {
-        teams.push(Team {
-            id: row.try_get("TeamID")?,
-            name: row.try_get("Name")?,
-            short_name: row.try_get("ShortName")?,
-            logo: row.try_get("Logo")?,
-            toornament_id: row.try_get("ToornamentId")?,
-        });
+    while let Some(team) = teams_query.try_next().await? {
+        teams.push(team);
     }
 
     Ok(teams)
@@ -433,7 +358,7 @@ pub async fn get_players(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Player>> {
-    let mut players_query = sqlx::query(
+    let mut players_query = sqlx::query_as::<_, Player>(
         "SELECT t.TeamID, t.Name AS Team, t.ShortName, t.Logo, p.Position, p.Name, p.BattleTag,
                 p.ToornamentUserId
          FROM players p
@@ -446,17 +371,8 @@ pub async fn get_players(
 
     let mut players = Vec::new();
 
-    while let Some(row) = players_query.try_next().await? {
-        players.push(Player {
-            team_id: row.try_get("TeamID")?,
-            team: row.try_get("Team")?,
-            short_name: row.try_get("ShortName")?,
-            logo: row.try_get("Logo")?,
-            position: row.try_get("Position")?,
-            name: row.try_get("Name")?,
-            battle_tag: row.try_get("BattleTag")?,
-            toornament_user_id: row.try_get("ToornamentUserId")?,
-        });
+    while let Some(player) = players_query.try_next().await? {
+        players.push(player);
     }
 
     Ok(players)

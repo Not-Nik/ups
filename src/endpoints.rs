@@ -189,7 +189,16 @@ async fn store_match(conn: &mut SqliteConnection, match_: Match) -> sqlx::Result
         }
     }
 
-    matches::add_match(&mut tx, tournament_id, group_id, round_id, team_a, team_b, match_).await?;
+    matches::add_match(
+        &mut tx,
+        tournament_id,
+        group_id,
+        round_id,
+        team_a,
+        team_b,
+        match_,
+    )
+    .await?;
     tx.commit().await
 }
 

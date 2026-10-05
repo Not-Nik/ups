@@ -6,7 +6,7 @@
 
 use crate::structures::Prediction;
 use futures_util::TryStreamExt;
-use sqlx::{QueryBuilder, Row, SqliteConnection};
+use sqlx::{QueryBuilder, SqliteConnection};
 use std::ops::DerefMut;
 use tokio::sync::MutexGuard;
 
@@ -24,17 +24,12 @@ pub async fn get_predictions(
         qb.push_bind(id);
     }
     qb.push(")");
-    let mut pred_query = qb.build().fetch(conn.deref_mut());
+    let mut pred_query = qb.build_query_as::<Prediction>().fetch(conn.deref_mut());
 
     let mut predictions = Vec::new();
 
-    while let Some(row) = pred_query.try_next().await? {
-        predictions.push(Prediction {
-            name: row.try_get("Name")?,
-            id: row.try_get("MatchID")?,
-            score_a: row.try_get("ScoreA")?,
-            score_b: row.try_get("ScoreB")?,
-        });
+    while let Some(pred) = pred_query.try_next().await? {
+        predictions.push(pred);
     }
 
     Ok(predictions)
@@ -44,20 +39,16 @@ pub async fn get_user_predictions(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
 ) -> sqlx::Result<Vec<Prediction>> {
-    let mut pred_query =
-        sqlx::query("SELECT MatchID, ScoreA, ScoreB FROM predictions WHERE Name = ?")
-            .bind(name)
-            .fetch(conn.deref_mut());
+    let mut pred_query = sqlx::query_as::<_, Prediction>(
+        "SELECT Name, MatchID, ScoreA, ScoreB FROM predictions WHERE Name = ?",
+    )
+    .bind(name)
+    .fetch(conn.deref_mut());
 
     let mut predictions = Vec::new();
 
-    while let Some(row) = pred_query.try_next().await? {
-        predictions.push(Prediction {
-            name: name.clone(),
-            id: row.try_get("MatchID")?,
-            score_a: row.try_get("ScoreA")?,
-            score_b: row.try_get("ScoreB")?,
-        });
+    while let Some(pred) = pred_query.try_next().await? {
+        predictions.push(pred);
     }
 
     Ok(predictions)
@@ -68,21 +59,17 @@ pub async fn get_user_match_predictions(
     name: &String,
     id: u32,
 ) -> sqlx::Result<Vec<Prediction>> {
-    let mut pred_query =
-        sqlx::query("SELECT ScoreA, ScoreB FROM predictions WHERE Name = ? AND MatchID = ?")
-            .bind(name)
-            .bind(id)
-            .fetch(conn.deref_mut());
+    let mut pred_query = sqlx::query_as::<_, Prediction>(
+        "SELECT Name, MatchID, ScoreA, ScoreB FROM predictions WHERE Name = ? AND MatchID = ?",
+    )
+    .bind(name)
+    .bind(id)
+    .fetch(conn.deref_mut());
 
     let mut predictions = Vec::new();
 
-    while let Some(row) = pred_query.try_next().await? {
-        predictions.push(Prediction {
-            name: name.clone(),
-            id: id as u64,
-            score_a: row.try_get("ScoreA")?,
-            score_b: row.try_get("ScoreB")?,
-        });
+    while let Some(pred) = pred_query.try_next().await? {
+        predictions.push(pred);
     }
 
     Ok(predictions)
