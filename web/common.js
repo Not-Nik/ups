@@ -18,6 +18,11 @@ const firstInt = s => {
     return m ? parseInt(m[0], 10) : NaN;
 };
 
+// Whether a prediction got the winner of a finished match right. Compares the sign of
+// the score differences, so a predicted draw counts only on an actual draw.
+const sameOutcome = (pred, match) =>
+    Math.sign(pred.score_a - pred.score_b) === Math.sign(match.score_a - match.score_b);
+
 // ============== Tournaments ==============
 // Newest (highest id) first, so the landing grid opens with the current season.
 const byNewestTournament = (a, b) => b.tournament_id - a.tournament_id;

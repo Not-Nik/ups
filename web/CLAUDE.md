@@ -12,13 +12,14 @@ standings are pulled from toornament by `../src/loader.rs`, on demand whenever `
 Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 
 - `index.html` / `index.js` — landing page: every tournament as a tiled grid
-- `tournament.html` — one tournament: Matches (predictions grid), Standings, Teams and Players views
+- `tournament.html` — one tournament: Matches (predictions grid), Standings, Teams, Players and Leaderboard views
 - `404.html` — error page
 - `privacy.html` / `privacy.js` — privacy policy
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
 - `roster.js` — the searchable Teams and Players views
+- `leaderboard.js` — the Leaderboard view (ranked from matches + predictions on the client)
 - `auth.js` — header Log in button / user menu and the name + logout modals; loaded by index.html and
   tournament.html (both carry that markup), before app.js
 - `common.js` — shared theme toggle (loaded by every page)
@@ -78,7 +79,7 @@ Back walks through it. `localStorage` is only for the token and the theme.
   unknown or missing redirects to `/`. `TOURNAMENT_PARAM` / `tournamentHref(id)` in common.js are the
   one place that spells this param, so the landing grid links in without knowing how app.js reads it.
   `index.js` forwards the old `/?tournament=` links to tournament.html.
-- `?view=matches|standings|teams|players` — which view tab is open (`VIEWS`, `activateView`). Unknown or missing
+- `?view=matches|standings|teams|players|leaderboard` — which view tab is open (`VIEWS`, `activateView`). Unknown or missing
   falls back to `matches`.
 - `?table=<stage>[:<group>]` — which standings table is open; the group is appended only where the
   stage holds several (`standingsParam` in standings.js). Unknown or missing falls back to the first.
@@ -104,7 +105,7 @@ Tournaments are ordered newest first (`byNewestTournament` in common.js — desc
 CSS grid over the sorted list). Cards link to tournament.html via `tournamentHref`.
 
 tournament.html's second header line (`#back-bar`) holds a "← Back to tournaments" `.bar-link` to `/`.
-The `.view-btn` tabs — Matches, Standings, Teams and Players — sit in `#view-bar` in main, between the
+The `.view-btn` tabs — Matches, Standings, Teams, Players and Leaderboard — sit in `#view-bar` in main, between the
 tournament name and the matches' day tabs. Each view shows the main-area elements
 marked `data-view-panel="<view>"` and hides the rest. The matches load on page load whatever the view;
 every other view loads once, the first time it opens, through its entry in `VIEW_LOADERS` (app.js).
@@ -119,6 +120,20 @@ The Teams view is a tile per team (`/api/teams/:id`); the Players view one `.dat
 entry (`/api/players/:id`). Both live in roster.js and share `bindSearch`: a search box filtering the
 loaded list on the client, case- and accent-insensitive, keeping items that contain every typed word.
 Players match on name, BattleTag, team and short name. The search text is not kept in the URL.
+
+The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of its own: it fetches
+`/api/matches/:id`, keeps the matches with a final score, and posts their ids to `POST /api/predictions`.
+An exact score earns `EXACT_POINTS` (3), any other correct winner `WINNER_POINTS` (1) — the winner
+check is `sameOutcome` in common.js, shared with me.js's ✓/✗: sign of the score difference, so a draw
+only counts on an actual draw. Ranked by points, then exact scores; users tied on both share a rank.
+Columns are headed by whole words: Rank, Name, Predicted (predictions on finished matches), Winners
+(correct winners, exact included), Exact, % (accuracy: Winners / Predicted), Points. Each
+header has a `leaderboard-col-<key>` class sized to just fit its word plus the sort arrow; together
+they're wider than the standings' columns, so on narrow screens the table scrolls sideways (`.leaderboard-scroll`). The logged-in user's row is highlighted.
+Every header is a `.sort-btn` (`LEADERBOARD_COLUMNS`): the first click sorts in the column's `asc`
+direction (rank and name ascending, counts descending), a second flips it; `aria-sort` on the `th`
+drives the arrow. Ties keep rank order, the Rank cell always shows the points rank, and the sort is not
+kept in the URL (like the roster search).
 
 ## Section / day model
 

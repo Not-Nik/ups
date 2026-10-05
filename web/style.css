@@ -246,6 +246,74 @@
     white-space: nowrap;
 }
 
+/* Leaderboard view: the logged-in user's own row. */
+.leaderboard-me td {
+    background-color: var(--bs-secondary-bg);
+}
+
+/* Leaderboard columns are headed by whole words, so they're wider than the standings'
+   (these rules outrank the phone sizes below). Where that leaves too little room for
+   the names, the table scrolls sideways inside its card. */
+.leaderboard-scroll {
+    overflow-x: auto;
+}
+
+.leaderboard-table {
+    min-width: 38rem;
+}
+
+/* Each column just fits its header word plus the sort arrow. */
+.leaderboard-table .leaderboard-col-rank {
+    width: 3.75rem;
+}
+
+.leaderboard-table .leaderboard-col-predicted {
+    width: 6rem;
+}
+
+.leaderboard-table .leaderboard-col-correct {
+    width: 5.25rem;
+}
+
+.leaderboard-table .leaderboard-col-exact {
+    width: 4.25rem;
+}
+
+.leaderboard-table .leaderboard-col-accuracy {
+    width: 4rem;
+}
+
+.leaderboard-table .leaderboard-col-points {
+    width: 4.75rem;
+}
+
+/* Sortable headers: a bare button that looks like the header text, with an arrow on
+   the sorted column. */
+.sort-btn {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.sort-btn:hover,
+th[aria-sort] .sort-btn {
+    color: var(--bs-body-color);
+}
+
+th[aria-sort="ascending"] .sort-btn::after {
+    content: "\2191";
+    margin-left: .25rem;
+}
+
+th[aria-sort="descending"] .sort-btn::after {
+    content: "\2193";
+    margin-left: .25rem;
+}
+
 /* Phones: keep the vertical breathing room, but give the width back to the team names. */
 @media (max-width: 575.98px) {
     .data-table th,

@@ -69,6 +69,7 @@
         <button class="view-btn btn" data-view="standings">Standings</button>
         <button class="view-btn btn" data-view="teams">Teams</button>
         <button class="view-btn btn" data-view="players">Players</button>
+        <button class="view-btn btn" data-view="leaderboard">Leaderboard</button>
     </nav>
     <div class="d-flex align-items-start gap-2 mb-3" data-view-panel="matches">
         <div id="tabs-bar" class="flex-grow-1"></div>
@@ -116,6 +117,7 @@
         <p id="players-empty" class="text-secondary text-center py-5 d-none">No player matches your search.</p>
         <div id="players"></div>
     </div>
+    <div id="leaderboard" class="d-none" data-view-panel="leaderboard"></div>
     <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
         <span class="d-flex gap-3">
             <a href="privacy.html" class="text-secondary small">Privacy Policy</a>
@@ -210,5 +212,6 @@
 <script src="incidents.js"></script>
 <script src="standings.js"></script>
 <script src="roster.js"></script>
+<script src="leaderboard.js"></script>
 </body>
 </html>

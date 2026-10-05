@@ -78,15 +78,16 @@ function applyLocation() {
 }
 
 // ============== Views ==============
-// The Matches / Standings / Teams / Players tabs. Each shows the main-area elements
-// marked with its data-view-panel. The matches load with the page; every other view
-// loads the first time it opens, through its loader (defined in standings.js and
-// roster.js, loaded after this script, hence the arrows).
+// The Matches / Standings / Teams / Players / Leaderboard tabs. Each shows the main-area
+// elements marked with its data-view-panel. The matches load with the page; every other
+// view loads the first time it opens, through its loader (defined in standings.js,
+// roster.js and leaderboard.js, loaded after this script, hence the arrows).
 const VIEW_LOADERS = {
     matches: null,
     standings: id => loadStandings(id),
     teams: id => loadTeams(id),
     players: id => loadPlayers(id),
+    leaderboard: id => loadLeaderboard(id),
 };
 const VIEWS = Object.keys(VIEW_LOADERS);
 

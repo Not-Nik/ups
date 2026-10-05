@@ -3,16 +3,13 @@
 
 const SIDES = ['a', 'b'];
 
-const sideWon = (score, other) => score > other;
-const sameOutcome = (pa, pb, ma, mb) => sideWon(pa, pb) === sideWon(ma, mb);
-
 function predictionRowHTML(pred, match) {
     const teams = match
         ? SIDES.map(k => escapeHtml(match[`team_${k}`])).join(' vs ')
         : `Match #${pred.id}`;
     let outcome = '';
     if (match && match.score_a != null && match.score_b != null) {
-        const correct = sameOutcome(pred.score_a, pred.score_b, match.score_a, match.score_b);
+        const correct = sameOutcome(pred, match);
         outcome = `<span class="ms-2 small ${correct ? 'text-success' : 'text-danger'}">${correct ? '&#10003;' : '&#10007;'} ` +
             `${match.score_a}:${match.score_b}</span>`;
     }
