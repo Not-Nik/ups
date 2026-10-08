@@ -44,7 +44,7 @@ async function init() {
 
     let predictions;
     try {
-        predictions = await api('/api/predictions/me');
+        predictions = (await api('/api/predictions/me')).matches;
     } catch {
         $('profile-sub').textContent = 'Failed to load predictions.';
         return;

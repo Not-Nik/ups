@@ -785,7 +785,7 @@ function applyPastPrediction(p) {
 async function loadPastPredictions() {
     if (!getToken()) return;
     const predictions = await tryFetch(() => api('/api/predictions/me'));
-    predictions?.forEach(applyPastPrediction);
+    predictions?.matches.forEach(applyPastPrediction);
 }
 
 function applyFinalScoreStates() {
