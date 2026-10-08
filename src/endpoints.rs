@@ -16,8 +16,7 @@ use crate::matches::{
 };
 use crate::predictions::{
     count_group_tournament_teams, get_group_status, get_predictions, get_standing_predictions,
-    get_user_match_predictions, get_user_predictions, set_standing_prediction, submit_prediction,
-    update_prediction,
+    get_user_predictions, set_prediction, set_standing_prediction,
 };
 use crate::structures::*;
 
@@ -417,32 +416,15 @@ pub async fn submit(
         if mat.score_a.is_some() || mat.score_b.is_some() {
             continue;
         }
-        if get_user_match_predictions(&mut conn_lock, &name, pred.id as u32)
-            .await
-            .map_err(|_| warp::reject::custom(InternalError))?
-            .len()
-            > 0
-        {
-            update_prediction(
-                &mut conn_lock,
-                &name,
-                pred.id as u32,
-                pred.score_a as u32,
-                pred.score_b as u32,
-            )
-            .await
-            .map_err(|_| warp::reject::custom(InternalError))?;
-        } else {
-            submit_prediction(
-                &mut conn_lock,
-                &name,
-                pred.id as u32,
-                pred.score_a as u32,
-                pred.score_b as u32,
-            )
-            .await
-            .map_err(|_| warp::reject::custom(InternalError))?;
-        }
+        set_prediction(
+            &mut conn_lock,
+            &name,
+            pred.id as u32,
+            pred.score_a as u32,
+            pred.score_b as u32,
+        )
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
     }
 
     for standing in open_standings {

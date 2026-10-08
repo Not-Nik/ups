@@ -68,59 +68,31 @@ pub async fn get_user_predictions(
     Ok(UserPredictions { matches, standings })
 }
 
-pub async fn get_user_match_predictions(
-    conn: &mut MutexGuard<'_, SqliteConnection>,
-    name: &String,
-    id: u32,
-) -> sqlx::Result<Vec<Prediction>> {
-    let mut pred_query = sqlx::query_as::<_, Prediction>(
-        "SELECT Name, MatchID, ScoreA, ScoreB FROM predictions WHERE Name = ? AND MatchID = ?",
-    )
-    .bind(name)
-    .bind(id)
-    .fetch(conn.deref_mut());
-
-    let mut predictions = Vec::new();
-
-    while let Some(pred) = pred_query.try_next().await? {
-        predictions.push(pred);
-    }
-
-    Ok(predictions)
-}
-
-pub async fn submit_prediction(
-    conn: &mut MutexGuard<'_, SqliteConnection>,
+/// Replace a user's prediction for one match.
+pub async fn set_prediction(
+    conn: &mut SqliteConnection,
     name: &String,
     id: u32,
     score_a: u32,
     score_b: u32,
 ) -> sqlx::Result<()> {
+    let mut tx = conn.begin().await?;
+
+    sqlx::query("DELETE FROM predictions WHERE Name = ? AND MatchID = ?")
+        .bind(name)
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
     sqlx::query("INSERT INTO predictions (Name, MatchID, ScoreA, ScoreB) VALUES (?, ?, ?, ?)")
         .bind(name)
         .bind(id)
         .bind(score_a)
         .bind(score_b)
-        .execute(conn.deref_mut())
-        .await
-        .map(|_| ())
-}
+        .execute(&mut *tx)
+        .await?;
 
-pub async fn update_prediction(
-    conn: &mut MutexGuard<'_, SqliteConnection>,
-    name: &String,
-    id: u32,
-    score_a: u32,
-    score_b: u32,
-) -> sqlx::Result<()> {
-    sqlx::query("UPDATE predictions SET ScoreA = ?, ScoreB = ? WHERE Name = ? AND MatchID = ?")
-        .bind(score_a)
-        .bind(score_b)
-        .bind(name)
-        .bind(id)
-        .execute(conn.deref_mut())
-        .await
-        .map(|_| ())
+    tx.commit().await
 }
 
 pub async fn get_standing_predictions(
