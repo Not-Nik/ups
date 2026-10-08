@@ -44,15 +44,16 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team_id, team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by team name then lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions                                                             |
+| GET    | `/api/standings/predictions/:id` | - | All users' top-four predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1–4). The server only stores them; any scoring happens on the client |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
-| POST   | `/api/submit`          | opt  | `{predictions, name?}` — name only when no token; returns `{token}` for new accounts        |
+| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to 4 distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups that are already `completed` are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more than 4 teams or a team from another tournament |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
 | POST   | `/api/match`           | admin| Full `Match` body: `tournament_id`, `team_a/b`, `logo_a/b`, `score_a/b?`, `stage_name`, `group_name`, `round_name`, plus optional `stage_type`, `stage_number`, `toornament_id` (+ dummy `id`) |
 | -      | `/api/proxy`           | -    | Image proxy used by html2canvas for cross-origin team logos                                 |
 
-A standings row carries `stage_name`, `stage_number`, `stage_type`, `group_name`, `group_number`, `position`, `rank`
+A standings row carries `stage_name`, `stage_number`, `stage_type`, `group_id` (what a `/api/submit` standings entry takes), `group_name`, `group_number`, `position`, `rank`
 (ties share a rank, `position` breaks them), `team_id` (the `id` from `/api/teams/:id`), `team`, `short_name`, `logo`, `points`, `played`, `wins`, `draws`,
 `losses`, `forfeits`, `score_for`, `score_against`, `score_difference` and `dropped`. Swiss groups have no map scores:
 the three score fields are `null` there, and `points` is toornament's tiebreaker-weighted value (925, 818, …), so show

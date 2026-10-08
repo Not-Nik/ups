@@ -203,6 +203,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::user_predictions);
 
+    let standing_predictions = warp::path!("api" / "standings" / "predictions" / u32)
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and_then(endpoints::standing_predictions);
+
     let submit = warp::path!("api" / "submit")
         .and(rate_limit.clone())
         .and(warp::post())
@@ -259,6 +265,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(single_prediction)
         .or(multi_prediction)
         .or(user_predictions)
+        .or(standing_predictions)
         .or(submit)
         .or(login)
         .or(logout)

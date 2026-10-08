@@ -15,7 +15,8 @@ use crate::matches::{
     get_standings, get_team_id, get_teams, get_tournaments,
 };
 use crate::predictions::{
-    get_predictions, get_user_match_predictions, get_user_predictions, submit_prediction,
+    count_group_tournament_teams, get_group_status, get_predictions, get_standing_predictions,
+    get_user_match_predictions, get_user_predictions, set_standing_prediction, submit_prediction,
     update_prediction,
 };
 use crate::structures::*;
@@ -23,6 +24,7 @@ use crate::structures::*;
 use crate::matches;
 use log::debug;
 use sqlx::{Connection, SqliteConnection};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -366,6 +368,14 @@ pub async fn submit(
     debug!("Submission: {:#?}", submission);
     let mut conn_lock = conn.lock().await;
 
+    // Checked before the account is created, so a bad request doesn't leave one behind.
+    let mut open_standings = Vec::new();
+    for standing in &submission.standings {
+        if check_standing_prediction(&mut conn_lock, standing).await? {
+            open_standings.push(standing);
+        }
+    }
+
     let (name, token) = if let Some(auth) = auth {
         let token = auth.strip_prefix("Bearer ").ok_or(BadRequest)?;
         let name = verify_session(&mut conn_lock, token)
@@ -435,7 +445,57 @@ pub async fn submit(
         }
     }
 
+    for standing in open_standings {
+        set_standing_prediction(&mut conn_lock, &name, standing.group_id, &standing.teams)
+            .await
+            .map_err(|_| warp::reject::custom(InternalError))?;
+    }
+
     Ok(warp::reply::json(&Token { token }))
+}
+
+pub async fn standing_predictions(
+    tournament_id: u32,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let predictions = get_standing_predictions(&mut conn_lock, tournament_id)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&predictions))
+}
+
+/// Reject a malformed standing prediction; `Ok(false)` when it's fine but its group is
+/// already completed, so it's skipped like a prediction for a match that has a score.
+async fn check_standing_prediction(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    submission: &StandingPredictionSubmission,
+) -> Result<bool, warp::Rejection> {
+    let teams = &submission.teams;
+    let distinct: HashSet<_> = teams.iter().collect();
+    if teams.len() > 4 || distinct.len() != teams.len() {
+        Err(warp::reject::custom(BadRequest))?
+    }
+
+    let Some(status) = get_group_status(conn, submission.group_id)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?
+    else {
+        Err(warp::reject::custom(BadRequest))?
+    };
+
+    if !teams.is_empty()
+        && count_group_tournament_teams(conn, submission.group_id, teams)
+            .await
+            .map_err(|_| warp::reject::custom(InternalError))?
+            != teams.len() as i64
+    {
+        Err(warp::reject::custom(BadRequest))?
+    }
+
+    Ok(status.as_deref() != Some("completed"))
 }
 
 pub async fn delete(

@@ -110,6 +110,8 @@ pub struct Standing {
     pub stage_number: u64,
     #[sqlx(rename = "StageType")]
     pub stage_type: String,
+    #[sqlx(rename = "GroupID")]
+    pub group_id: u64,
     #[sqlx(rename = "GroupName")]
     pub group_name: String,
     #[sqlx(rename = "GroupNumber")]
@@ -204,7 +206,30 @@ pub struct PredictionSubmission {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Submission {
     pub name: Option<String>,
+    #[serde(default)]
     pub predictions: Vec<PredictionSubmission>,
+    #[serde(default)]
+    pub standings: Vec<StandingPredictionSubmission>,
+}
+
+#[derive(Serialize, Debug, FromRow)]
+pub struct StandingPrediction {
+    #[sqlx(rename = "Name")]
+    pub name: String,
+    #[sqlx(rename = "GroupID")]
+    pub group_id: u64,
+    #[sqlx(rename = "Position")]
+    pub position: u64,
+    #[sqlx(rename = "TeamID")]
+    pub team_id: u64,
+}
+
+/// A user's top four for one group: `teams[0]` is the predicted 1st place, and so on.
+/// Replaces the user's previous prediction for that group; an empty list clears it.
+#[derive(Deserialize, Serialize, Debug)]
+pub struct StandingPredictionSubmission {
+    pub group_id: u64,
+    pub teams: Vec<u64>,
 }
 
 #[derive(Serialize, Debug)]

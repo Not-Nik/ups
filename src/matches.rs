@@ -311,7 +311,7 @@ pub async fn get_standings(
 ) -> sqlx::Result<Vec<Standing>> {
     let mut standings_query = sqlx::query_as::<_, Standing>(
         "SELECT s.Name AS StageName, s.Number AS StageNumber, s.Type AS StageType,
-                g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank, t.TeamID,
+                g.GroupID, g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank, t.TeamID,
                 t.Name AS Team, t.ShortName, t.Logo, st.Points, st.Played, st.Wins, st.Draws,
                 st.Losses, st.Forfeits, st.ScoreFor, st.ScoreAgainst,
                 st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped
