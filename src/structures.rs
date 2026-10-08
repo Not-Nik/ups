@@ -224,6 +224,12 @@ pub struct StandingPrediction {
     pub team_id: u64,
 }
 
+#[derive(Serialize, Debug)]
+pub struct UserPredictions {
+    pub matches: Vec<Prediction>,
+    pub standings: Vec<StandingPrediction>,
+}
+
 /// A user's top four for one group: `teams[0]` is the predicted 1st place, and so on.
 /// Replaces the user's previous prediction for that group; an empty list clears it.
 #[derive(Deserialize, Serialize, Debug)]

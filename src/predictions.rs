@@ -4,7 +4,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::structures::{Prediction, StandingPrediction};
+use crate::structures::{Prediction, StandingPrediction, UserPredictions};
 use futures_util::TryStreamExt;
 use sqlx::{Connection, QueryBuilder, SqliteConnection};
 use std::ops::DerefMut;
@@ -38,20 +38,34 @@ pub async fn get_predictions(
 pub async fn get_user_predictions(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     name: &String,
-) -> sqlx::Result<Vec<Prediction>> {
+) -> sqlx::Result<UserPredictions> {
     let mut pred_query = sqlx::query_as::<_, Prediction>(
         "SELECT Name, MatchID, ScoreA, ScoreB FROM predictions WHERE Name = ?",
     )
     .bind(name)
     .fetch(conn.deref_mut());
 
-    let mut predictions = Vec::new();
+    let mut matches = Vec::new();
 
     while let Some(pred) = pred_query.try_next().await? {
-        predictions.push(pred);
+        matches.push(pred);
+    }
+    drop(pred_query);
+
+    let mut standing_query = sqlx::query_as::<_, StandingPrediction>(
+        "SELECT Name, GroupID, Position, TeamID FROM standing_predictions WHERE Name = ?
+         ORDER BY GroupID, Position",
+    )
+    .bind(name)
+    .fetch(conn.deref_mut());
+
+    let mut standings = Vec::new();
+
+    while let Some(pred) = standing_query.try_next().await? {
+        standings.push(pred);
     }
 
-    Ok(predictions)
+    Ok(UserPredictions { matches, standings })
 }
 
 pub async fn get_user_match_predictions(
