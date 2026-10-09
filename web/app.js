@@ -707,9 +707,9 @@ const imageDialog = {
 };
 
 // ============== Submission ==============
-async function submitPredictions(predictions, name = null) {
-    const body = getToken() ? {predictions} : {predictions, name};
-    const data = await api('/api/submit', {method: 'POST', body});
+// `body` is the /api/submit body without the name: {predictions} and/or {standings}.
+async function postSubmission(body, name = null) {
+    const data = await api('/api/submit', {method: 'POST', body: getToken() ? body : {...body, name}});
     if (data.token) {
         saveToken(data.token);
         loadCurrentUser();
@@ -719,43 +719,48 @@ async function submitPredictions(predictions, name = null) {
 
 const failSubmission = () => alert('Submission failed. Please try again.');
 
-async function doSubmit(indices) {
-    const predictions = indices.map(i => {
-        const [score_a, score_b] = state.scores[i];
-        return {id: state.matches[i].id, score_a, score_b};
-    });
-
+// Submit, asking a logged-out user for a name first (and again while it's taken).
+// Resolves true once stored; false when cancelled or failed, after telling the user.
+async function submitWithName(body) {
     if (getToken()) {
         try {
-            await submitPredictions(predictions);
-            indices.forEach(markSubmitted);
+            await postSubmission(body);
+            return true;
         } catch (e) {
             if (!e.rateLimited) failSubmission();
+            return false;
         }
-        return;
     }
 
     let name = await nameModal.prompt();
     while (name) {
         try {
-            const isNew = await submitPredictions(predictions, name);
+            const isNew = await postSubmission(body, name);
             if (isNew) await nameModal.promptPassword(name);
             nameModal.close(null);
-            indices.forEach(markSubmitted);
-            return;
+            return true;
         } catch (e) {
             if (e.rateLimited) {
                 nameModal.close(null);
-                return;
+                return false;
             }
             if (e.code !== 'AccountExists') {
                 nameModal.close(null);
                 failSubmission();
-                return;
+                return false;
             }
             name = await nameModal.prompt('That name is already taken. Please choose another.');
         }
     }
+    return false;
+}
+
+async function doSubmit(indices) {
+    const predictions = indices.map(i => {
+        const [score_a, score_b] = state.scores[i];
+        return {id: state.matches[i].id, score_a, score_b};
+    });
+    if (await submitWithName({predictions})) indices.forEach(markSubmitted);
 }
 
 // ============== Past predictions / finished matches ==============

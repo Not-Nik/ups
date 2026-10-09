@@ -15,8 +15,8 @@ use crate::matches::{
     get_standings, get_team_id, get_teams, get_tournaments,
 };
 use crate::predictions::{
-    count_group_tournament_teams, get_group_status, get_predictions, get_standing_predictions,
-    get_user_predictions, set_prediction, set_standing_prediction,
+    count_group_tournament_teams, get_predictions, get_standing_predictions, get_user_predictions,
+    is_group_open, set_prediction, set_standing_prediction,
 };
 use crate::structures::*;
 
@@ -449,8 +449,8 @@ pub async fn standing_predictions(
     Ok(warp::reply::json(&predictions))
 }
 
-/// Reject a malformed standing prediction; `Ok(false)` when it's fine but its group is
-/// already completed, so it's skipped like a prediction for a match that has a score.
+/// Reject a malformed standing prediction; `Ok(false)` when it's fine but a match of its
+/// group already has a score, so it's skipped like a prediction for that match would be.
 async fn check_standing_prediction(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     submission: &StandingPredictionSubmission,
@@ -461,7 +461,7 @@ async fn check_standing_prediction(
         Err(warp::reject::custom(BadRequest))?
     }
 
-    let Some(status) = get_group_status(conn, submission.group_id)
+    let Some(open) = is_group_open(conn, submission.group_id)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?
     else {
@@ -477,7 +477,7 @@ async fn check_standing_prediction(
         Err(warp::reject::custom(BadRequest))?
     }
 
-    Ok(status.as_deref() != Some("completed"))
+    Ok(open)
 }
 
 pub async fn delete(

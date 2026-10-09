@@ -314,7 +314,10 @@ pub async fn get_standings(
                 g.GroupID, g.Name AS GroupName, g.Number AS GroupNumber, st.Position, st.Rank, t.TeamID,
                 t.Name AS Team, t.ShortName, t.Logo, st.Points, st.Played, st.Wins, st.Draws,
                 st.Losses, st.Forfeits, st.ScoreFor, st.ScoreAgainst,
-                st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped
+                st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped,
+                NOT EXISTS (SELECT 1 FROM matches m
+                            WHERE m.GroupID = g.GroupID
+                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)) AS Open
          FROM standings st
                   JOIN groups g ON g.GroupID = st.GroupID
                   JOIN stages s ON s.StageID = g.StageID

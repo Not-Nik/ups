@@ -76,6 +76,173 @@ function renderStandingsTabs() {
     bar.replaceChildren(top, makeEl('div', {id: 'standings-group-tabs', className: 'd-flex flex-wrap d-none'}));
 }
 
+// ============== Top-four predictions ==============
+// Under each group's table: the logged-in user's predicted top four. While the group
+// is `open` (none of its matches has a score) every team is listed and dragged into
+// order by its handle, or moved with the arrow keys; the first PICK_COUNT are saved
+// through /api/submit. Once the group is locked only the saved picks are shown.
+
+const PICK_COUNT = 4;
+
+// Map of group_id -> the user's picked team ids, 1st place first. Empty when logged out.
+async function loadStandingPicks() {
+    const picks = new Map();
+    if (!getToken()) return picks;
+    const data = await tryFetch(() => api('/api/predictions/me'));
+    // Sorted by group, then position.
+    data?.standings.forEach(p => {
+        if (!picks.has(p.group_id)) picks.set(p.group_id, []);
+        picks.get(p.group_id).push(p.team_id);
+    });
+    return picks;
+}
+
+function pickRow(team, draggable) {
+    const row = makeEl('li', {className: 'pick-row', dataset: {team: team.team_id}});
+    row.insertAdjacentHTML('beforeend', `
+        ${draggable ? `<button type="button" class="pick-handle" aria-label="Move ${escapeAttr(team.team)}">&#8801;</button>` : ''}
+        <span class="pick-place"></span>
+        ${team.logo ? `<img src="${escapeAttr(team.logo)}" class="team-logo" alt="">` : ''}
+        <span class="text-truncate">${escapeHtml(team.team)}</span>`);
+    return row;
+}
+
+function numberPicks(list) {
+    [...list.children].forEach((row, i) => {
+        row.querySelector('.pick-place').textContent = i < PICK_COUNT ? `${i + 1}.` : '';
+    });
+}
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Run `reorder`, which moves rows of `list`, then slide every row but `skip` from where
+// it was drawn into its new slot. Starting from the drawn position (not the old slot)
+// lets a row that's still sliding change course without a jump.
+function slideRows(list, reorder, skip = null) {
+    const rows = [...list.children].filter(row => row !== skip);
+    const from = new Map(rows.map(row => [row, row.getBoundingClientRect().top]));
+    reorder();
+    if (reducedMotion()) return;
+    rows.forEach(row => {
+        row.getAnimations().forEach(a => a.cancel());
+        const dy = from.get(row) - row.getBoundingClientRect().top;
+        if (dy) row.animate([{transform: `translateY(${dy}px)`}, {transform: 'none'}], {duration: 150, easing: 'ease-out'});
+    });
+}
+
+// Reorder `list` by dragging a row's handle (mouse or touch) or with the arrow keys on
+// a focused handle. Calls onChange after every move.
+function makePickable(list, onChange) {
+    list.addEventListener('pointerdown', e => {
+        const handle = e.target.closest('.pick-handle');
+        if (!handle || e.button !== 0) return;
+        e.preventDefault();
+        const row = handle.closest('.pick-row');
+        row.classList.add('dragging');
+        // Where in the row it was grabbed, so that point stays under the pointer.
+        const grab = e.clientY - row.getBoundingClientRect().top;
+        // On the document rather than captured on the handle: moving the row in the DOM
+        // would drop a pointer capture.
+        const move = ev => {
+            // Slots by layout (offsetTop ignores transforms), so rows that are still
+            // sliding don't make the order flip back and forth.
+            const y = ev.clientY - list.getBoundingClientRect().top;
+            const before = [...list.children].find(other =>
+                other !== row && y < other.offsetTop + other.offsetHeight / 2) ?? null;
+            if (row.nextElementSibling !== before) {
+                slideRows(list, () => list.insertBefore(row, before), row);
+                onChange();
+            }
+            // The row sits in its new slot; shift it from there to follow the pointer, but
+            // never past the top or bottom of the list.
+            row.style.transform = '';
+            const slot = row.getBoundingClientRect();
+            const bounds = list.getBoundingClientRect();
+            const top = Math.min(Math.max(ev.clientY - grab, bounds.top), bounds.bottom - slot.height);
+            row.style.transform = `translateY(${top - slot.top}px)`;
+        };
+        const end = () => {
+            row.style.transform = '';
+            row.classList.remove('dragging');
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', end);
+            document.removeEventListener('pointercancel', end);
+        };
+        document.addEventListener('pointermove', move);
+        document.addEventListener('pointerup', end);
+        document.addEventListener('pointercancel', end);
+    });
+    // Moves the neighbour rather than the row itself, so the handle keeps focus.
+    list.addEventListener('keydown', e => {
+        const row = e.target.closest('.pick-handle')?.closest('.pick-row');
+        if (!row) return;
+        const {previousElementSibling: prev, nextElementSibling: next} = row;
+        if (e.key === 'ArrowUp' && prev) {
+            slideRows(list, () => list.insertBefore(prev, next));
+        } else if (e.key === 'ArrowDown' && next) {
+            slideRows(list, () => list.insertBefore(next, row));
+        } else {
+            return;
+        }
+        e.preventDefault();
+        onChange();
+    });
+}
+
+// The prediction block for one group's table, or null when there's nothing to show
+// (a locked group the user didn't predict).
+function standingsPrediction(rows, saved) {
+    const {group_id, open} = rows[0];
+    const teams = new Map(rows.map(r => [r.team_id, r]));
+    const picked = saved.filter(id => teams.has(id));
+    if (!open && !picked.length) return null;
+
+    const box = makeEl('div', {className: 'pick-box mt-4'});
+    box.insertAdjacentHTML('beforeend', `<div class="section-title mb-1">Your top ${PICK_COUNT}</div>`);
+    const list = makeEl('ol', {className: 'pick-list'});
+
+    if (!open) {
+        picked.forEach(id => list.appendChild(pickRow(teams.get(id), false)));
+        numberPicks(list);
+        box.appendChild(list);
+        return box;
+    }
+
+    box.insertAdjacentHTML('beforeend', `
+        <p class="small text-secondary mb-2">
+            Drag the teams into the order you expect.${rows.length > PICK_COUNT ? ` The top ${PICK_COUNT} are submitted.` : ''}
+        </p>`);
+    // Saved picks first, then the rest in table order.
+    [...picked, ...rows.map(r => r.team_id).filter(id => !picked.includes(id))]
+        .forEach(id => list.appendChild(pickRow(teams.get(id), true)));
+    numberPicks(list);
+
+    const save = makeEl('button', {className: 'btn btn-success btn-sm mt-3'});
+    // Worded like the matches' "Submit Predictions" button.
+    const setSaved = isSaved => {
+        save.disabled = isSaved;
+        save.textContent = isSaved ? 'Submitted' : 'Submit Prediction';
+    };
+    setSaved(picked.length > 0);
+    makePickable(list, () => {
+        numberPicks(list);
+        setSaved(false);
+    });
+    save.addEventListener('click', async () => {
+        save.disabled = true;
+        const top = [...list.children].slice(0, PICK_COUNT).map(row => Number(row.dataset.team));
+        if (await submitWithName({standings: [{group_id, teams: top}]})) {
+            setSaved(true);
+            showToast('Prediction submitted.');
+        } else {
+            save.disabled = false;
+        }
+    });
+
+    box.append(list, save);
+    return box;
+}
+
 const standingsStatus = (cls, text) => makeEl('p', {
     className: `${cls} text-center py-5`,
     textContent: text,
@@ -85,7 +252,10 @@ async function renderStandings(id) {
     const root = $('standings');
     root.replaceChildren(standingsStatus('text-secondary', 'Loading…'));
     try {
-        const {data: rows, res} = await api(`/api/standings/${id}`, {response: true});
+        const [{data: rows, res}, picks] = await Promise.all([
+            api(`/api/standings/${id}`, {response: true}),
+            loadStandingPicks(),
+        ]);
         // Same background toornament refresh as /api/matches (see loadTournament).
         if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
         if (!rows.length) {
@@ -103,6 +273,8 @@ async function renderStandings(id) {
                     const {group_name} = groupRows[0];
                     const param = standingsParam(name, group_name, groups.length === 1);
                     const card = standingsTable(groupRows);
+                    const prediction = standingsPrediction(groupRows, picks.get(groupRows[0].group_id) ?? []);
+                    if (prediction) card.querySelector('.card-body').appendChild(prediction);
                     card.dataset.table = param;
                     root.appendChild(card);
                     return {param, label: group_name || name};

@@ -119,15 +119,22 @@ pub async fn get_standing_predictions(
     Ok(predictions)
 }
 
-/// `None` when the group doesn't exist, `Some(None)` when it exists without a status.
-pub async fn get_group_status(
+/// Whether a group still takes standing predictions: none of its matches has a score.
+/// `None` when the group doesn't exist.
+pub async fn is_group_open(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     group_id: u64,
-) -> sqlx::Result<Option<Option<String>>> {
-    sqlx::query_scalar("SELECT Status FROM groups WHERE GroupID = ?")
-        .bind(group_id as i64)
-        .fetch_optional(conn.deref_mut())
-        .await
+) -> sqlx::Result<Option<bool>> {
+    sqlx::query_scalar(
+        "SELECT NOT EXISTS (SELECT 1 FROM matches m
+                            WHERE m.GroupID = g.GroupID
+                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL))
+         FROM groups g
+         WHERE g.GroupID = ?",
+    )
+    .bind(group_id as i64)
+    .fetch_optional(conn.deref_mut())
+    .await
 }
 
 /// How many of `teams` belong to the tournament that `group_id` is part of.

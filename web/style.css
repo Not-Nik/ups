@@ -343,6 +343,76 @@ th[aria-sort="descending"] .sort-btn::after {
     text-decoration: line-through;
 }
 
+/* Standings view: the user's top-four prediction under an open group's table. Every team
+   is listed, the user drags them into order, and a dashed line under the 4th marks what
+   gets saved. */
+/* With the card body's .25rem bottom padding, the same 1rem under the save button as
+   above it. */
+.pick-box {
+    padding-bottom: .75rem;
+}
+
+.pick-list {
+    /* The rows' offsetTop, which the drag reads, is measured from the list. */
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: .875rem;
+}
+
+.pick-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .45rem .5rem;
+    border-top: 1px solid var(--bs-border-color);
+    background-color: var(--bs-card-bg);
+}
+
+/* Only where teams are left out below it: in a group of four or fewer, all are saved. */
+.pick-row:nth-child(4):not(:last-child) {
+    border-bottom: 2px dashed var(--accent);
+}
+
+.pick-row:nth-child(n+5) {
+    color: var(--bs-secondary-color);
+}
+
+.pick-place {
+    width: 1.5rem;
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+/* Only the handle starts a drag, so touching the rest of a row still scrolls the page. */
+.pick-handle {
+    flex-shrink: 0;
+    padding: 0 .4rem;
+    border: 0;
+    background: none;
+    color: var(--bs-secondary-color);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: grab;
+    touch-action: none;
+}
+
+.pick-handle:hover,
+.pick-handle:focus-visible {
+    color: var(--bs-body-color);
+}
+
+.pick-row.dragging {
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .3);
+}
+
+.pick-row.dragging .pick-handle {
+    cursor: grabbing;
+}
+
 .section-header {
     display: flex;
     align-items: center;

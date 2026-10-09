@@ -46,7 +46,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions as `{matches, standings}`: `matches` in the `/api/predictions/:id` shape, `standings` as `{name, group_id, position, team_id}` across every tournament, sorted by group then `position` |
 | GET    | `/api/standings/predictions/:id` | - | All users' top-four predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1–4). The server only stores them; any scoring happens on the client |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
-| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to 4 distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups that are already `completed` are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more than 4 teams or a team from another tournament |
+| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to 4 distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more than 4 teams or a team from another tournament |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
@@ -55,7 +55,8 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 
 A standings row carries `stage_name`, `stage_number`, `stage_type`, `group_id` (what a `/api/submit` standings entry takes), `group_name`, `group_number`, `position`, `rank`
 (ties share a rank, `position` breaks them), `team_id` (the `id` from `/api/teams/:id`), `team`, `short_name`, `logo`, `points`, `played`, `wins`, `draws`,
-`losses`, `forfeits`, `score_for`, `score_against`, `score_difference` and `dropped`. Swiss groups have no map scores:
+`losses`, `forfeits`, `score_for`, `score_against`, `score_difference`, `dropped` and `open` (true while none of the
+group's matches has a score — the same rule `/api/submit` uses to accept or skip a standings entry). Swiss groups have no map scores:
 the three score fields are `null` there, and `points` is toornament's tiebreaker-weighted value (925, 818, …), so show
 W/L for swiss rather than points.
 
@@ -116,6 +117,20 @@ matches one: a `.category-btn` per stage on top, and the open stage's group tabs
 the stage has a single group. League and
 pools tables show P/W/L, maps, map difference and points; swiss tables show P/W/L only. A D column
 appears only where a group has draws. Dropped teams are dimmed and struck through.
+
+Under each table sits the user's top-four prediction ("Your top 4", `standingsPrediction` in standings.js). The
+user's saved picks come from `/api/predictions/me` (`loadStandingPicks`, fetched alongside the standings; empty
+when logged out). While the group is `open`, every team is listed — saved picks first, then the rest in table
+order — and dragged into order by its `.pick-handle`, or moved with the arrow keys on a focused handle
+(`makePickable`). While dragged, a row moves into the slot under the pointer and is shifted from there with
+`translateY`, so it follows the pointer smoothly, kept within the list's top and bottom edges.
+The rows it displaces slide into their new slots (`slideRows`, a FLIP animation through the Web Animations API, also
+used for arrow-key moves; skipped under `prefers-reduced-motion`). Slots are picked by `offsetTop`, which ignores
+the slide transforms, so a row mid-slide can't flip the order back. Dragging uses pointer events on the document, not HTML5 drag and drop, so it works on touch;
+the handle has `touch-action: none` and the rest of the row still scrolls the page. A dashed line under the 4th
+row marks the cut, only where a 5th row exists (in a group of four, every team is saved). "Submit Prediction" (worded like the matches' "Submit Predictions", "Submitted" once stored) posts the first four as a `standings` entry through `submitWithName`
+(app.js), the same name prompt / taken-name retry / password prompt as match predictions. Once the group is
+locked, only the saved picks are shown, without handles; a locked group without picks shows nothing.
 
 The Teams view is a tile per team (`/api/teams/:id`); the Players view one `.data-table` row per lineup
 entry (`/api/players/:id`). Both live in roster.js and share `bindSearch`: a search box filtering the

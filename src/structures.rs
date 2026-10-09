@@ -148,6 +148,9 @@ pub struct Standing {
     pub score_difference: Option<i64>,
     #[sqlx(rename = "Dropped")]
     pub dropped: bool,
+    /// Whether the group still takes standing predictions: none of its matches has a score.
+    #[sqlx(rename = "Open")]
+    pub open: bool,
 }
 
 #[derive(Serialize, Debug, FromRow)]
