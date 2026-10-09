@@ -227,10 +227,41 @@ pub struct StandingPrediction {
     pub team_id: u64,
 }
 
+/// One of the user's own standing picks, with the names the me page shows.
+#[derive(Serialize, Debug, FromRow)]
+pub struct UserStandingPrediction {
+    #[sqlx(rename = "GroupID")]
+    pub group_id: u64,
+    #[sqlx(rename = "Position")]
+    pub position: u64,
+    #[sqlx(rename = "TeamID")]
+    pub team_id: u64,
+    #[sqlx(rename = "Team")]
+    pub team: String,
+    #[sqlx(rename = "ShortName")]
+    pub short_name: Option<String>,
+    #[sqlx(rename = "Logo")]
+    pub logo: String,
+    #[sqlx(rename = "TournamentID")]
+    pub tournament_id: u64,
+    #[sqlx(rename = "Tournament")]
+    pub tournament: String,
+    #[sqlx(rename = "StageName")]
+    pub stage_name: String,
+    #[sqlx(rename = "GroupName")]
+    pub group_name: String,
+    /// The team's place in the group's standings now; None while it has none.
+    #[sqlx(rename = "CurrentPosition")]
+    pub current_position: Option<u64>,
+    /// Same rule as Standing::open.
+    #[sqlx(rename = "Open")]
+    pub open: bool,
+}
+
 #[derive(Serialize, Debug)]
 pub struct UserPredictions {
     pub matches: Vec<Prediction>,
-    pub standings: Vec<StandingPrediction>,
+    pub standings: Vec<UserStandingPrediction>,
 }
 
 /// A user's top four for one group: `teams[0]` is the predicted 1st place, and so on.

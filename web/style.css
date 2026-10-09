@@ -1055,6 +1055,11 @@ th[aria-sort="descending"] .sort-btn::after {
     white-space: nowrap;
 }
 
+/* Me page: lets a picked team's name shrink so text-truncate can cut it. */
+.league-pick {
+    min-width: 0;
+}
+
 /* ============== Bracket view ============== */
 /* A bracket block spans the grid and scrolls horizontally; its canvas positions the
    same score-box cards absolutely (one column per round) over an SVG edge layer. */

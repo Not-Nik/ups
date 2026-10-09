@@ -14,6 +14,9 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `index.html` / `index.js` — landing page: every tournament as a tiled grid
 - `tournament.html` — one tournament: Matches (predictions grid), Standings, Teams, Players and Leaderboard views
 - `404.html` — error page
+- `me.html` / `me.js` — the user's profile: league (top-four) predictions, newest league first, each pick
+  with the team's current place once the league has started (green where it matches) or an Edit link to
+  the Standings view while it's open; then match predictions with ✓/✗ on finished matches
 - `privacy.html` / `privacy.js` — privacy policy
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
@@ -43,7 +46,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/teams/:id`       | -    | Every team of one tournament as `{id, name, short_name, logo, toornament_id}`, sorted by name. Names aren't unique, so `id` is the key to tell two teams apart; `toornament_id` is `null` for teams added by hand. Same refresh and `X-Refreshing` as `/api/matches/:id` |
 | GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team_id, team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by team name then lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
-| GET    | `/api/predictions/me`  | yes  | Current user's past predictions as `{matches, standings}`: `matches` in the `/api/predictions/:id` shape, `standings` as `{name, group_id, position, team_id}` across every tournament, sorted by group then `position` |
+| GET    | `/api/predictions/me`  | yes  | Current user's past predictions as `{matches, standings}`: `matches` in the `/api/predictions/:id` shape, `standings` as `{group_id, position, team_id, team, short_name, logo, tournament_id, tournament, stage_name, group_name, current_position, open}` across every tournament, sorted by group then `position`. `current_position` is the team's place in the group's standings now (`null` without a standings row); `open` is the same as on a standings row |
 | GET    | `/api/standings/predictions/:id` | - | All users' top-four predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1–4). The server only stores them; any scoring happens on the client |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
 | POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to 4 distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more than 4 teams or a team from another tournament |

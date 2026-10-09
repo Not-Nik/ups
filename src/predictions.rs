@@ -4,7 +4,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::structures::{Prediction, StandingPrediction, UserPredictions};
+use crate::structures::{
+    Prediction, StandingPrediction, UserPredictions, UserStandingPrediction,
+};
 use futures_util::TryStreamExt;
 use sqlx::{Connection, QueryBuilder, SqliteConnection};
 use std::ops::DerefMut;
@@ -52,9 +54,21 @@ pub async fn get_user_predictions(
     }
     drop(pred_query);
 
-    let mut standing_query = sqlx::query_as::<_, StandingPrediction>(
-        "SELECT Name, GroupID, Position, TeamID FROM standing_predictions WHERE Name = ?
-         ORDER BY GroupID, Position",
+    let mut standing_query = sqlx::query_as::<_, UserStandingPrediction>(
+        "SELECT p.GroupID, p.Position, p.TeamID, t.Name AS Team, t.ShortName, t.Logo,
+                tr.TournamentID, tr.Name AS Tournament, s.Name AS StageName,
+                g.Name AS GroupName, st.Position AS CurrentPosition,
+                NOT EXISTS (SELECT 1 FROM matches m
+                            WHERE m.GroupID = g.GroupID
+                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)) AS Open
+         FROM standing_predictions p
+                  JOIN groups g ON g.GroupID = p.GroupID
+                  JOIN stages s ON s.StageID = g.StageID
+                  JOIN tournaments tr ON tr.TournamentID = s.TournamentID
+                  JOIN teams t ON t.TeamID = p.TeamID
+                  LEFT JOIN standings st ON st.GroupID = p.GroupID AND st.TeamID = p.TeamID
+         WHERE p.Name = ?
+         ORDER BY p.GroupID, p.Position",
     )
     .bind(name)
     .fetch(conn.deref_mut());
