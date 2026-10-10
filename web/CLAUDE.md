@@ -158,10 +158,10 @@ The view has two sub-tabs (not kept in the URL): League predictions, open first,
 above). A sub-tab without data shows a short status line. League predictions (`LEAGUE_COLUMNS`, same sortable table) are scored on the
 client from `/api/standings/:id` and `/api/standings/predictions/:id`. Only groups that have started
 (`open` false on the standings rows) count; each predicted team is compared with its current `position`
-(`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), Difference (sum of
-`diff`, the only column where fewer is better, so it sorts ascending first), Top 4 (predicted teams
-currently in the top four), Exact (`diff` 0), Points (legacy: `LEGACY_POINTS` 10 minus `diff`, at least 0, per
-team). Ranked by points, then exact, then Top 4, then the smaller Difference; ties share a rank.
+(`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), Top 4 (predicted teams
+currently in the top four), Exact (`diff` 0), Points (last season's script: per team `teams in group - diff`; a group's sum
+÷ (teams in group × predicted teams) × `STAGE_POINTS` (40) ÷ groups in its stage, rounded to halves, so a perfect
+league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then Top 4; ties share a rank. Points, the main score, is higher-is-better like every other count.
 
 ## Section / day model
 

@@ -50,35 +50,56 @@ function rankLeaderboard(matches, predictions) {
 // A league prediction scores once the group has started (`open` is false on its
 // standings rows); until then it can still change and is left out.
 // Per predicted team, with `diff` = |predicted place - current place|:
-//   legacy points: LEGACY_POINTS - diff, at least 0 (10 exact, 9 off by one, ...)
+//   legacy points, as in last season's script: a team earns (teams in the group - diff);
+//   a group's sum is divided by (teams in the group * predicted teams) and scaled to
+//   STAGE_POINTS, shared equally by the stage's groups (40 for one group, 20 each for
+//   two), then rounded to halves.
 //   exact: diff is 0; top4: the team currently sits in the top four.
-const LEGACY_POINTS = 10;
+const STAGE_POINTS = 40;
 const TOP_PLACES = 4;
+const roundHalf = x => Math.round(x * 2) / 2;
 
-// [{name, leagues, diff, legacy, exact, top4, rank}], best first: most legacy points,
-// then exact, then top-four teams, then the smaller total difference. Ties share a rank.
+// [{name, leagues, legacy, exact, top4, rank}], best first: most legacy points, then
+// exact, then top-four teams. Ties share a rank.
 function rankLeaguePredictions(standingRows, predictions) {
     const current = new Map();
-    standingRows.filter(r => !r.open).forEach(r => current.set(`${r.group_id}:${r.team_id}`, r.position));
+    const teamCount = new Map();
+    const stageGroups = new Map();
+    const groupWeight = new Map();
+    standingRows.forEach(r => {
+        teamCount.set(r.group_id, (teamCount.get(r.group_id) ?? 0) + 1);
+        if (!stageGroups.has(r.stage_number)) stageGroups.set(r.stage_number, new Set());
+        stageGroups.get(r.stage_number).add(r.group_id);
+        if (!r.open) current.set(`${r.group_id}:${r.team_id}`, r.position);
+    });
+    stageGroups.forEach(ids => ids.forEach(g => groupWeight.set(g, STAGE_POINTS / ids.size)));
+
     const byName = new Map();
-    const groups = new Map();
+    // name -> group_id -> {sum, count} for the legacy points
+    const perGroup = new Map();
     predictions.forEach(p => {
         const now = current.get(`${p.group_id}:${p.team_id}`);
         if (now === undefined) return;
         if (!byName.has(p.name)) {
-            byName.set(p.name, {name: p.name, leagues: 0, diff: 0, legacy: 0, exact: 0, top4: 0});
-            groups.set(p.name, new Set());
+            byName.set(p.name, {name: p.name, leagues: 0, legacy: 0, exact: 0, top4: 0});
+            perGroup.set(p.name, new Map());
         }
         const e = byName.get(p.name);
-        groups.get(p.name).add(p.group_id);
+        const g = perGroup.get(p.name);
+        if (!g.has(p.group_id)) g.set(p.group_id, {sum: 0, count: 0});
         const diff = Math.abs(p.position - now);
-        e.diff += diff;
-        e.legacy += Math.max(0, LEGACY_POINTS - diff);
+        g.get(p.group_id).sum += teamCount.get(p.group_id) - diff;
+        g.get(p.group_id).count++;
         if (diff === 0) e.exact++;
         if (now <= TOP_PLACES) e.top4++;
     });
-    byName.forEach((e, name) => e.leagues = groups.get(name).size);
-    const key = e => [-e.legacy, -e.exact, -e.top4, e.diff];
+    byName.forEach((e, name) => {
+        perGroup.get(name).forEach(({sum, count}, groupId) => {
+            e.legacy += roundHalf(sum / (teamCount.get(groupId) * count) * groupWeight.get(groupId));
+            e.leagues++;
+        });
+    });
+    const key = e => [-e.legacy, -e.exact, -e.top4];
     const cmp = (a, b) => key(a).map((v, i) => v - key(b)[i]).find(d => d) ?? 0;
     const rows = [...byName.values()].sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
     rows.forEach((r, i) => {
@@ -152,16 +173,14 @@ const LEADERBOARD_COLUMNS = [
 
 const RANK_NAME_COLUMNS = LEADERBOARD_COLUMNS.slice(0, 2);
 
-// League predictions; `diff` is the one count where fewer is better.
+// League predictions; Points is the main score, higher is better.
 const LEAGUE_COLUMNS = [
     ...RANK_NAME_COLUMNS,
     {key: 'leagues', head: 'Leagues', cls: 'standings-num', title: 'Leagues with a prediction that has started'},
-    {key: 'diff', head: 'Difference', cls: 'standings-num', asc: true,
-        title: 'Total distance between predicted and current place'},
     {key: 'top4', head: 'Top 4', cls: 'standings-num', title: 'Predicted teams currently in the top four'},
     {key: 'exact', head: 'Exact', cls: 'standings-num', title: 'Teams predicted on exactly their current place'},
     {key: 'legacy', head: 'Points', cls: 'standings-num fw-semibold',
-        title: `${LEGACY_POINTS} for the exact place, one less per place off`},
+        title: `Up to ${STAGE_POINTS} per stage (shared by its groups), less for every place off`},
 ];
 
 // Clicking a header sorts by it; clicking the sorted one again flips it. Rows arrive
