@@ -246,9 +246,11 @@
     white-space: nowrap;
 }
 
-/* Leaderboard view: the logged-in user's own row. */
-.leaderboard-me td {
-    background-color: var(--bs-secondary-bg);
+/* Leaderboard view: "You" next to the logged-in user's own name. */
+.leaderboard-you {
+    color: var(--accent);
+    font-weight: 600;
+    margin-left: .5rem;
 }
 
 /* Leaderboard columns are headed by whole words, so they're wider than the standings'
@@ -259,32 +261,17 @@
 }
 
 .leaderboard-table {
-    min-width: 38rem;
+    min-width: 42rem;
 }
 
-/* Each column just fits its header word plus the sort arrow. */
-.leaderboard-table .leaderboard-col-rank {
+/* Rank, then the name, then five equally wide count columns (wide enough for the
+   longest header and its sort arrow), so the match and league tables line up. */
+.leaderboard-table th:first-child {
     width: 3.75rem;
 }
 
-.leaderboard-table .leaderboard-col-predicted {
-    width: 6rem;
-}
-
-.leaderboard-table .leaderboard-col-correct {
-    width: 5.25rem;
-}
-
-.leaderboard-table .leaderboard-col-exact {
-    width: 4.25rem;
-}
-
-.leaderboard-table .leaderboard-col-accuracy {
-    width: 4rem;
-}
-
-.leaderboard-table .leaderboard-col-points {
-    width: 4.75rem;
+.leaderboard-table th:nth-child(n+3) {
+    width: 6.5rem;
 }
 
 /* Sortable headers: a bare button that looks like the header text, with an arrow on

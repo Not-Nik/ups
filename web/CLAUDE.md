@@ -147,12 +147,21 @@ check is `sameOutcome` in common.js, shared with me.js's ✓/✗: sign of the sc
 only counts on an actual draw. Ranked by points, then exact scores; users tied on both share a rank.
 Columns are headed by whole words: Rank, Name, Predicted (predictions on finished matches), Winners
 (correct winners, exact included), Exact, % (accuracy: Winners / Predicted), Points. Each
-header has a `leaderboard-col-<key>` class sized to just fit its word plus the sort arrow; together
-they're wider than the standings' columns, so on narrow screens the table scrolls sideways (`.leaderboard-scroll`). The logged-in user's row is highlighted.
+header has a `leaderboard-col-<key>` class; the count columns share one width (`th:nth-child(n+3)`) so the match and league tables line up; together
+they're wider than the standings' columns, so on narrow screens the table scrolls sideways (`.leaderboard-scroll`). The logged-in user's name is followed by a "You" in the accent color (`.leaderboard-you`), in both tables.
 Every header is a `.sort-btn` (`LEADERBOARD_COLUMNS`): the first click sorts in the column's `asc`
 direction (rank and name ascending, counts descending), a second flips it; `aria-sort` on the `th`
 drives the arrow. Ties keep rank order, the Rank cell always shows the points rank, and the sort is not
 kept in the URL (like the roster search).
+
+The view has two sub-tabs (not kept in the URL): League predictions, open first, and Match predictions (the table
+above). A sub-tab without data shows a short status line. League predictions (`LEAGUE_COLUMNS`, same sortable table) are scored on the
+client from `/api/standings/:id` and `/api/standings/predictions/:id`. Only groups that have started
+(`open` false on the standings rows) count; each predicted team is compared with its current `position`
+(`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), Difference (sum of
+`diff`, the only column where fewer is better, so it sorts ascending first), Top 4 (predicted teams
+currently in the top four), Exact (`diff` 0), Points (legacy: `LEGACY_POINTS` 10 minus `diff`, at least 0, per
+team). Ranked by points, then exact, then Top 4, then the smaller Difference; ties share a rank.
 
 ## Section / day model
 

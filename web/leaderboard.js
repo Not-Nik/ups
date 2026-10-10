@@ -47,21 +47,86 @@ function rankLeaderboard(matches, predictions) {
     return rows;
 }
 
+// A league prediction scores once the group has started (`open` is false on its
+// standings rows); until then it can still change and is left out.
+// Per predicted team, with `diff` = |predicted place - current place|:
+//   legacy points: LEGACY_POINTS - diff, at least 0 (10 exact, 9 off by one, ...)
+//   exact: diff is 0; top4: the team currently sits in the top four.
+const LEGACY_POINTS = 10;
+const TOP_PLACES = 4;
+
+// [{name, leagues, diff, legacy, exact, top4, rank}], best first: most legacy points,
+// then exact, then top-four teams, then the smaller total difference. Ties share a rank.
+function rankLeaguePredictions(standingRows, predictions) {
+    const current = new Map();
+    standingRows.filter(r => !r.open).forEach(r => current.set(`${r.group_id}:${r.team_id}`, r.position));
+    const byName = new Map();
+    const groups = new Map();
+    predictions.forEach(p => {
+        const now = current.get(`${p.group_id}:${p.team_id}`);
+        if (now === undefined) return;
+        if (!byName.has(p.name)) {
+            byName.set(p.name, {name: p.name, leagues: 0, diff: 0, legacy: 0, exact: 0, top4: 0});
+            groups.set(p.name, new Set());
+        }
+        const e = byName.get(p.name);
+        groups.get(p.name).add(p.group_id);
+        const diff = Math.abs(p.position - now);
+        e.diff += diff;
+        e.legacy += Math.max(0, LEGACY_POINTS - diff);
+        if (diff === 0) e.exact++;
+        if (now <= TOP_PLACES) e.top4++;
+    });
+    byName.forEach((e, name) => e.leagues = groups.get(name).size);
+    const key = e => [-e.legacy, -e.exact, -e.top4, e.diff];
+    const cmp = (a, b) => key(a).map((v, i) => v - key(b)[i]).find(d => d) ?? 0;
+    const rows = [...byName.values()].sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
+    rows.forEach((r, i) => {
+        r.rank = i && cmp(rows[i - 1], r) === 0 ? rows[i - 1].rank : i + 1;
+    });
+    return rows;
+}
+
+function showLeaderboardPanel(panels, buttons, active) {
+    panels.forEach((p, i) => {
+        p.node.classList.toggle('d-none', p !== active);
+        buttons[i].classList.toggle('active', p === active);
+    });
+}
+
 async function renderLeaderboard(id) {
     const root = $('leaderboard');
     root.replaceChildren(leaderboardStatus('text-secondary', 'Loading…'));
     try {
-        const matches = (await api(`/api/matches/${id}`))
-            .filter(m => m.score_a != null && m.score_b != null);
+        const [allMatches, standingRows, standingPicks] = await Promise.all([
+            api(`/api/matches/${id}`),
+            api(`/api/standings/${id}`),
+            api(`/api/standings/predictions/${id}`),
+        ]);
+        const matches = allMatches.filter(m => m.score_a != null && m.score_b != null);
         const predictions = matches.length
             ? await api('/api/predictions', {method: 'POST', body: matches.map(m => m.id)})
             : [];
         const rows = rankLeaderboard(matches, predictions);
-        if (!rows.length) {
-            root.replaceChildren(leaderboardStatus('text-secondary', 'No predictions on finished matches yet.'));
-            return;
-        }
-        root.replaceChildren(leaderboardTable(rows));
+        const leagueRows = rankLeaguePredictions(standingRows, standingPicks);
+        // League predictions come first. The sub-tab isn't kept in the URL.
+        const panels = [
+            {label: 'League predictions', node: leagueRows.length
+                ? leaderboardTable(leagueRows, LEAGUE_COLUMNS)
+                : leaderboardStatus('text-secondary', 'No predictions on started leagues yet.')},
+            {label: 'Match predictions', node: rows.length
+                ? leaderboardTable(rows, LEADERBOARD_COLUMNS)
+                : leaderboardStatus('text-secondary', 'No predictions on finished matches yet.')},
+        ];
+        const bar = makeEl('div', {className: 'd-flex flex-wrap mb-3'});
+        const buttons = panels.map(panel => {
+            const btn = makeEl('button', {className: 'tab-btn btn category-btn', textContent: panel.label});
+            btn.addEventListener('click', () => showLeaderboardPanel(panels, buttons, panel));
+            bar.appendChild(btn);
+            return btn;
+        });
+        root.replaceChildren(bar, ...panels.map(p => p.node));
+        showLeaderboardPanel(panels, buttons, panels[0]);
     } catch {
         // Let the next open try again.
         leaderboardLoad = null;
@@ -85,10 +150,24 @@ const LEADERBOARD_COLUMNS = [
         title: `${WINNER_POINTS} per correct winner, ${EXACT_POINTS} per exact score`},
 ];
 
+const RANK_NAME_COLUMNS = LEADERBOARD_COLUMNS.slice(0, 2);
+
+// League predictions; `diff` is the one count where fewer is better.
+const LEAGUE_COLUMNS = [
+    ...RANK_NAME_COLUMNS,
+    {key: 'leagues', head: 'Leagues', cls: 'standings-num', title: 'Leagues with a prediction that has started'},
+    {key: 'diff', head: 'Difference', cls: 'standings-num', asc: true,
+        title: 'Total distance between predicted and current place'},
+    {key: 'top4', head: 'Top 4', cls: 'standings-num', title: 'Predicted teams currently in the top four'},
+    {key: 'exact', head: 'Exact', cls: 'standings-num', title: 'Teams predicted on exactly their current place'},
+    {key: 'legacy', head: 'Points', cls: 'standings-num fw-semibold',
+        title: `${LEGACY_POINTS} for the exact place, one less per place off`},
+];
+
 // Clicking a header sorts by it; clicking the sorted one again flips it. Rows arrive
 // in rank order, and the sort is stable, so ties keep that order either way. The rank
 // shown is always the points rank. The sort isn't kept in the URL.
-function leaderboardTable(rows) {
+function leaderboardTable(rows, columns) {
     // The logged-in user's row is highlighted; empty when logged out.
     const me = $('user-menu').classList.contains('d-none') ? '' : $('user-name').textContent;
     const card = makeEl('div', {className: 'card'});
@@ -97,7 +176,7 @@ function leaderboardTable(rows) {
             <table class="data-table leaderboard-table">
                 <thead>
                     <tr>
-                        ${LEADERBOARD_COLUMNS.map(c => `
+                        ${columns.map(c => `
                             <th class="${c.cls} leaderboard-col-${c.key}"${c.title ? ` title="${escapeAttr(c.title)}"` : ''}>
                                 <button class="sort-btn" data-key="${c.key}">${c.head}</button>
                             </th>`).join('')}
@@ -108,15 +187,21 @@ function leaderboardTable(rows) {
         </div>`);
     const body = card.querySelector('tbody');
     const trs = new Map(rows.map(r => {
-        const tr = makeEl('tr', {className: r.name === me ? 'leaderboard-me' : ''});
-        tr.insertAdjacentHTML('beforeend', LEADERBOARD_COLUMNS
+        const tr = makeEl('tr');
+        tr.insertAdjacentHTML('beforeend', columns
             .map(c => `<td class="${c.cls}">${c.cell ? c.cell(r) : r[c.key]}</td>`).join(''));
+        if (r.name === me) {
+            tr.querySelector('.standings-team').append(' ', makeEl('span', {
+                className: 'leaderboard-you',
+                textContent: 'You',
+            }));
+        }
         return [r, tr];
     }));
 
     const sort = {key: 'rank', asc: true};
     const apply = () => {
-        const col = LEADERBOARD_COLUMNS.find(c => c.key === sort.key);
+        const col = columns.find(c => c.key === sort.key);
         const compare = col.compare ?? ((a, b) => a[col.key] - b[col.key]);
         const sorted = [...rows].sort((a, b) => sort.asc ? compare(a, b) : compare(b, a));
         body.replaceChildren(...sorted.map(r => trs.get(r)));
@@ -127,7 +212,7 @@ function leaderboardTable(rows) {
         });
     };
     card.querySelectorAll('.sort-btn').forEach(btn => btn.addEventListener('click', () => {
-        const col = LEADERBOARD_COLUMNS.find(c => c.key === btn.dataset.key);
+        const col = columns.find(c => c.key === btn.dataset.key);
         sort.asc = sort.key === col.key ? !sort.asc : !!col.asc;
         sort.key = col.key;
         apply();
