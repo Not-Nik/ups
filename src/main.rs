@@ -9,6 +9,7 @@ mod endpoints;
 mod error;
 mod loader;
 mod matches;
+mod migrate;
 mod predictions;
 mod structures;
 
@@ -91,11 +92,17 @@ fn with_rate_limit(
         .untuple_one()
 }
 
+const DB_PATH: &str = "db.sqlite3";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
-    let db = Arc::new(Mutex::new(SqliteConnection::connect("db.sqlite3").await?));
+    let mut connection = SqliteConnection::connect(DB_PATH).await?;
+    migrate::migrate(&mut connection, DB_PATH)
+        .await
+        .map_err(|e| e.to_string())?;
+    let db = Arc::new(Mutex::new(connection));
     db.lock().await.execute("PRAGMA foreign_keys = ON;").await?;
     let refresher = loader::Refresher::new(db.clone());
     let refresh = warp::any().map(move || refresher.clone());

@@ -26,4 +26,8 @@ DROP TABLE standing_predictions;
 ALTER TABLE standing_predictions_new
     RENAME TO standing_predictions;
 
+-- The last script applied by hand: the server migrates on its own from here on, and
+-- reads where the database is from this number.
+PRAGMA user_version = 7;
+
 COMMIT;

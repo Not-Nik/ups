@@ -1,3 +1,7 @@
+-- The number of the last script in migration/ this schema includes. The server reads it
+-- on startup and applies the newer ones; raise it whenever a migration is added.
+PRAGMA user_version = 7;
+
 CREATE TABLE users
 (
     Name     TEXT PRIMARY KEY,
