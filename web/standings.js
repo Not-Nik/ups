@@ -76,13 +76,12 @@ function renderStandingsTabs() {
     bar.replaceChildren(top, makeEl('div', {id: 'standings-group-tabs', className: 'd-flex flex-wrap d-none'}));
 }
 
-// ============== Top-four predictions ==============
-// Under each group's table: the logged-in user's predicted top four. While the group
-// is `open` (none of its matches has a score) every team is listed and dragged into
-// order by its handle, or moved with the arrow keys; the first PICK_COUNT are saved
-// through /api/submit. Once the group is locked only the saved picks are shown.
-
-const PICK_COUNT = 4;
+// ============== Top-N predictions ==============
+// Under each group's table: the logged-in user's predicted top N, N being the stage's
+// `pick_count` (set in the admin panel, 4 by default). While the group is `open` (none
+// of its matches has a score) every team is listed and dragged into order by its
+// handle, or moved with the arrow keys; the first `pick_count` are saved through
+// /api/submit. Once the group is locked only the saved picks are shown.
 
 // Map of group_id -> the user's picked team ids, 1st place first. Empty when logged out.
 async function loadStandingPicks() {
@@ -107,9 +106,14 @@ function pickRow(team, draggable) {
     return row;
 }
 
-function numberPicks(list) {
-    [...list.children].forEach((row, i) => {
-        row.querySelector('.pick-place').textContent = i < PICK_COUNT ? `${i + 1}.` : '';
+// Number the first `count` rows, the ones that are saved; the rest are greyed out below
+// a line (.pick-cut), which is only drawn where rows are left out below it.
+function numberPicks(list, count) {
+    const rows = [...list.children];
+    rows.forEach((row, i) => {
+        row.querySelector('.pick-place').textContent = i < count ? `${i + 1}.` : '';
+        row.classList.toggle('pick-cut', i === count - 1 && i < rows.length - 1);
+        row.classList.toggle('pick-out', i >= count);
     });
 }
 
@@ -192,30 +196,31 @@ function makePickable(list, onChange) {
 // The prediction block for one group's table, or null when there's nothing to show
 // (a locked group the user didn't predict).
 function standingsPrediction(rows, saved) {
-    const {group_id, open} = rows[0];
+    const {group_id, open, pick_count: count} = rows[0];
     const teams = new Map(rows.map(r => [r.team_id, r]));
     const picked = saved.filter(id => teams.has(id));
     if (!open && !picked.length) return null;
 
     const box = makeEl('div', {className: 'pick-box mt-4'});
-    box.insertAdjacentHTML('beforeend', `<div class="section-title mb-1">Your top ${PICK_COUNT}</div>`);
+    box.insertAdjacentHTML('beforeend', `<div class="section-title mb-1">Your top ${Math.min(count, rows.length)}</div>`);
     const list = makeEl('ol', {className: 'pick-list'});
 
     if (!open) {
         picked.forEach(id => list.appendChild(pickRow(teams.get(id), false)));
-        numberPicks(list);
+        // Every saved pick counts, even if the stage's pick count was lowered since.
+        numberPicks(list, picked.length);
         box.appendChild(list);
         return box;
     }
 
     box.insertAdjacentHTML('beforeend', `
         <p class="small text-secondary mb-2">
-            Drag the teams into the order you expect.${rows.length > PICK_COUNT ? ` The top ${PICK_COUNT} are submitted.` : ''}
+            Drag the teams into the order you expect.${rows.length > count ? ` The top ${count} are submitted.` : ''}
         </p>`);
     // Saved picks first, then the rest in table order.
     [...picked, ...rows.map(r => r.team_id).filter(id => !picked.includes(id))]
         .forEach(id => list.appendChild(pickRow(teams.get(id), true)));
-    numberPicks(list);
+    numberPicks(list, count);
 
     const save = makeEl('button', {className: 'btn btn-success btn-sm mt-3'});
     // Worded like the matches' "Submit Predictions" button.
@@ -225,12 +230,12 @@ function standingsPrediction(rows, saved) {
     };
     setSaved(picked.length > 0);
     makePickable(list, () => {
-        numberPicks(list);
+        numberPicks(list, count);
         setSaved(false);
     });
     save.addEventListener('click', async () => {
         save.disabled = true;
-        const top = [...list.children].slice(0, PICK_COUNT).map(row => Number(row.dataset.team));
+        const top = [...list.children].slice(0, count).map(row => Number(row.dataset.team));
         if (await submitWithName({standings: [{group_id, teams: top}]})) {
             setSaved(true);
             showToast('Prediction submitted.');

@@ -12,11 +12,11 @@ use crate::loader::{Refresher, BRACKET_TYPES};
 use crate::matches::{
     add_group, add_round, add_stage, add_team, add_tournament, get_bracket_nodes, get_brackets,
     get_group_id, get_matches, get_matches_filter, get_players, get_round_id, get_stage_id,
-    get_standings, get_team_id, get_teams, get_tournaments,
+    get_stages, get_standings, get_team_id, get_teams, get_tournaments, set_stage_pick_count,
 };
 use crate::predictions::{
     count_group_tournament_teams, get_predictions, get_standing_predictions, get_user_predictions,
-    is_group_open, set_prediction, set_standing_prediction,
+    get_group_picking, set_prediction, set_standing_prediction,
 };
 use crate::structures::*;
 
@@ -92,6 +92,45 @@ pub async fn tournament(
     add_tournament(&mut conn_lock, tournament)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply())
+}
+
+pub async fn stages(
+    tournament_id: u32,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    let stages = get_stages(&mut conn_lock, tournament_id)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?;
+
+    Ok(warp::reply::json(&stages))
+}
+
+/// The most places a stage can ask users to predict.
+const MAX_PICK_COUNT: u64 = 32;
+
+pub async fn stage_pick_count(
+    conn: Arc<Mutex<SqliteConnection>>,
+    auth: String,
+    update: StagePickCount,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    verify_admin(&mut conn_lock, auth.clone()).await?;
+
+    if update.pick_count < 1 || update.pick_count > MAX_PICK_COUNT {
+        Err(warp::reject::custom(BadRequest))?
+    }
+
+    if !set_stage_pick_count(&mut conn_lock, update.stage_id, update.pick_count)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?
+    {
+        Err(warp::reject::custom(BadRequest))?
+    }
 
     Ok(warp::reply())
 }
@@ -457,16 +496,20 @@ async fn check_standing_prediction(
 ) -> Result<bool, warp::Rejection> {
     let teams = &submission.teams;
     let distinct: HashSet<_> = teams.iter().collect();
-    if teams.len() > 4 || distinct.len() != teams.len() {
+    if distinct.len() != teams.len() {
         Err(warp::reject::custom(BadRequest))?
     }
 
-    let Some(open) = is_group_open(conn, submission.group_id)
+    let Some((open, pick_count)) = get_group_picking(conn, submission.group_id)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?
     else {
         Err(warp::reject::custom(BadRequest))?
     };
+
+    if teams.len() as i64 > pick_count {
+        Err(warp::reject::custom(BadRequest))?
+    }
 
     if !teams.is_empty()
         && count_group_tournament_teams(conn, submission.group_id, teams)

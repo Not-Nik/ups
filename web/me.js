@@ -22,7 +22,7 @@ function predictionRowHTML(pred, match) {
     </li>`;
 }
 
-// One league's top-four picks (sorted by position). Once the league has started, each
+// One league's top-N picks (sorted by position). Once the league has started, each
 // pick shows the team's current place, green where it's the predicted one. While it's
 // still open, an Edit link leads to the tournament's Standings view.
 function leagueHTML(picks) {

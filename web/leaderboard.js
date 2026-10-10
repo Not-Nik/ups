@@ -54,19 +54,21 @@ function rankLeaderboard(matches, predictions) {
 //   a group's sum is divided by (teams in the group * predicted teams) and scaled to
 //   STAGE_POINTS, shared equally by the stage's groups (40 for one group, 20 each for
 //   two), then rounded to halves.
-//   exact: diff is 0; top4: the team currently sits in the top four.
+//   exact: diff is 0; top: the team currently sits inside the predicted range, the
+//   top `pick_count` of its group (4, or what the admin panel sets for the stage).
 const STAGE_POINTS = 40;
-const TOP_PLACES = 4;
 const roundHalf = x => Math.round(x * 2) / 2;
 
-// [{name, leagues, legacy, exact, top4, rank}], best first: most legacy points, then
-// exact, then top-four teams. Ties share a rank.
+// [{name, leagues, legacy, exact, top, rank}], best first: most legacy points, then
+// exact, then teams inside the predicted range. Ties share a rank.
 function rankLeaguePredictions(standingRows, predictions) {
     const current = new Map();
     const teamCount = new Map();
     const stageGroups = new Map();
     const groupWeight = new Map();
+    const pickCount = new Map();
     standingRows.forEach(r => {
+        pickCount.set(r.group_id, r.pick_count);
         teamCount.set(r.group_id, (teamCount.get(r.group_id) ?? 0) + 1);
         if (!stageGroups.has(r.stage_number)) stageGroups.set(r.stage_number, new Set());
         stageGroups.get(r.stage_number).add(r.group_id);
@@ -81,7 +83,7 @@ function rankLeaguePredictions(standingRows, predictions) {
         const now = current.get(`${p.group_id}:${p.team_id}`);
         if (now === undefined) return;
         if (!byName.has(p.name)) {
-            byName.set(p.name, {name: p.name, leagues: 0, legacy: 0, exact: 0, top4: 0});
+            byName.set(p.name, {name: p.name, leagues: 0, legacy: 0, exact: 0, top: 0});
             perGroup.set(p.name, new Map());
         }
         const e = byName.get(p.name);
@@ -91,7 +93,7 @@ function rankLeaguePredictions(standingRows, predictions) {
         g.get(p.group_id).sum += teamCount.get(p.group_id) - diff;
         g.get(p.group_id).count++;
         if (diff === 0) e.exact++;
-        if (now <= TOP_PLACES) e.top4++;
+        if (now <= pickCount.get(p.group_id)) e.top++;
     });
     byName.forEach((e, name) => {
         perGroup.get(name).forEach(({sum, count}, groupId) => {
@@ -99,7 +101,7 @@ function rankLeaguePredictions(standingRows, predictions) {
             e.leagues++;
         });
     });
-    const key = e => [-e.legacy, -e.exact, -e.top4];
+    const key = e => [-e.legacy, -e.exact, -e.top];
     const cmp = (a, b) => key(a).map((v, i) => v - key(b)[i]).find(d => d) ?? 0;
     const rows = [...byName.values()].sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
     rows.forEach((r, i) => {
@@ -177,7 +179,8 @@ const RANK_NAME_COLUMNS = LEADERBOARD_COLUMNS.slice(0, 2);
 const LEAGUE_COLUMNS = [
     ...RANK_NAME_COLUMNS,
     {key: 'leagues', head: 'Leagues', cls: 'standings-num', title: 'Leagues with a prediction that has started'},
-    {key: 'top4', head: 'Top 4', cls: 'standings-num', title: 'Predicted teams currently in the top four'},
+    {key: 'top', head: 'In top', cls: 'standings-num',
+        title: 'Predicted teams currently inside the predicted range (the top 4 of their league, or as many as it asks for)'},
     {key: 'exact', head: 'Exact', cls: 'standings-num', title: 'Teams predicted on exactly their current place'},
     {key: 'legacy', head: 'Points', cls: 'standings-num fw-semibold',
         title: `Up to ${STAGE_POINTS} per stage (shared by its groups), less for every place off`},

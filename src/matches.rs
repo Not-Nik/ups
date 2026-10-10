@@ -4,7 +4,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::structures::{Bracket, BracketNode, Match, Player, Standing, Team, Tournament};
+use crate::loader::STANDINGS_TYPES;
+use crate::structures::{
+    Bracket, BracketNode, Match, Player, Stage, Standing, Team, Tournament,
+};
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
 use sqlx::{QueryBuilder, SqliteConnection};
@@ -317,7 +320,8 @@ pub async fn get_standings(
                 st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped,
                 NOT EXISTS (SELECT 1 FROM matches m
                             WHERE m.GroupID = g.GroupID
-                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)) AS Open
+                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)) AS Open,
+                s.PickCount
          FROM standings st
                   JOIN groups g ON g.GroupID = st.GroupID
                   JOIN stages s ON s.StageID = g.StageID
@@ -335,6 +339,40 @@ pub async fn get_standings(
     }
 
     Ok(standings)
+}
+
+/// The stages of a tournament that have standings, and so take standing predictions.
+pub async fn get_stages(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u32,
+) -> sqlx::Result<Vec<Stage>> {
+    let mut qb = QueryBuilder::new(
+        "SELECT StageID, Number, Name, Type, PickCount FROM stages WHERE TournamentID = ",
+    );
+    qb.push_bind(tournament_id);
+    qb.push(" AND Type IN (");
+    for (idx, kind) in STANDINGS_TYPES.iter().enumerate() {
+        if idx > 0 {
+            qb.push(", ");
+        }
+        qb.push_bind(*kind);
+    }
+    qb.push(") ORDER BY Number");
+    qb.build_query_as::<Stage>().fetch_all(conn.deref_mut()).await
+}
+
+/// Whether a stage with that id existed.
+pub async fn set_stage_pick_count(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    stage_id: u64,
+    pick_count: u64,
+) -> sqlx::Result<bool> {
+    let result = sqlx::query("UPDATE stages SET PickCount = ? WHERE StageID = ?")
+        .bind(pick_count as i64)
+        .bind(stage_id as i64)
+        .execute(conn.deref_mut())
+        .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 pub async fn get_teams(

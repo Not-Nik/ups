@@ -35,8 +35,20 @@
 
     <div id="admin-cards" class="d-none">
         <div class="row g-4">
-            <div class="col-lg-5">
-                <div class="card border-0 shadow-sm h-100">
+            <div class="col-lg-5 d-flex flex-column gap-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">League predictions</h2>
+                        <p class="text-secondary small mb-3">How many places of a league users predict (their "top N").</p>
+                        <div class="mb-3">
+                            <label for="picks-tournament" class="form-label">Tournament</label>
+                            <select id="picks-tournament" class="form-select"></select>
+                        </div>
+                        <div id="picks-stages" class="mb-3"></div>
+                        <button id="picks-submit" class="btn btn-primary w-100">Save</button>
+                    </div>
+                </div>
+                <div class="card border-0 shadow-sm flex-grow-1">
                     <div class="card-body p-4">
                         <h2 class="h5 fw-bold">New tournament</h2>
                         <div class="mb-3">

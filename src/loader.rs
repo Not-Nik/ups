@@ -35,7 +35,7 @@ pub const BRACKET_TYPES: [&str; 4] =
     ["single_elimination", "double_elimination", "bracket_groups", "custom_bracket"];
 
 // Stage types whose groups have a ranking table, stored in standings.
-const STANDINGS_TYPES: [&str; 3] = ["league", "swiss", "pools"];
+pub const STANDINGS_TYPES: [&str; 3] = ["league", "swiss", "pools"];
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 

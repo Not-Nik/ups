@@ -127,6 +127,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::body::json())
         .and_then(endpoints::tournament);
 
+    let stages = warp::path!("api" / "stages" / u32)
+        .and(rate_limit.clone())
+        .and(warp::get())
+        .and(conn.clone())
+        .and_then(endpoints::stages);
+
+    let stage_pick_count = warp::path!("api" / "stage" / "picks")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(conn.clone())
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and_then(endpoints::stage_pick_count);
+
     let matches = warp::path!("api" / "matches" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
@@ -254,6 +268,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let routes = me
         .or(tournaments)
         .or(tournament)
+        .or(stages)
+        .or(stage_pick_count)
         .or(matches)
         .or(match_)
         .or(add_match)

@@ -1,6 +1,7 @@
 // ============== Admin ==============
-// Panel for adding tournaments and matches. Both endpoints require a valid
-// token belonging to an admin account; the server answers 404 otherwise.
+// Panel for adding tournaments and matches and setting how many places of a league
+// users predict. The endpoints require a valid token belonging to an admin account;
+// the server answers 404 otherwise.
 
 const shake = el => {
     el.classList.remove('shake');
@@ -40,7 +41,10 @@ function render() {
     setHidden($('logout'), !loggedIn);
     if (loggedIn) {
         loadCurrentUser();
-        loadTournamentOptions().then(loadTournamentData);
+        loadTournamentOptions().then(() => {
+            loadTournamentData();
+            loadPickCounts();
+        });
     }
 }
 
@@ -84,10 +88,11 @@ $('login-password').addEventListener('keydown', e => {
 async function loadTournamentOptions() {
     const list = await tryFetch(() => api('/api/tournaments'));
     if (!Array.isArray(list)) return;
-    const select = $('match-tournament');
-    select.replaceChildren(...list.slice().sort(byNewestTournament).map(t =>
-        makeEl('option', {value: t.tournament_id, textContent: t.name})
-    ));
+    for (const select of [$('match-tournament'), $('picks-tournament')]) {
+        select.replaceChildren(...list.slice().sort(byNewestTournament).map(t =>
+            makeEl('option', {value: t.tournament_id, textContent: t.name})
+        ));
+    }
 }
 
 async function submitTournament(btn) {
@@ -107,8 +112,75 @@ async function submitTournament(btn) {
         $('tournament-name').value = '';
         $('tournament-toornament').value = '';
         await loadTournamentOptions(); // the new tournament lands in the match form
+        loadPickCounts(); // ... and the select above the pick counts starts over
     } catch (e) {
         report(e, 'Tournament could not be added');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ============== League predictions ==============
+// One number input per stage that has standings: how many places of its groups users
+// predict. Save posts the stages whose value changed.
+
+const MAX_PICK_COUNT = 32; // same limit as the server
+
+async function loadPickCounts() {
+    const box = $('picks-stages');
+    const tid = parseInt($('picks-tournament').value, 10);
+    const stages = isNaN(tid) ? [] : await tryFetch(() => api(`/api/stages/${tid}`));
+    if (!Array.isArray(stages) || !stages.length) {
+        box.replaceChildren(makeEl('p', {
+            className: 'text-secondary small mb-0',
+            textContent: 'No leagues loaded for this tournament yet.',
+        }));
+        return;
+    }
+    box.replaceChildren(...stages.map(stage => {
+        const id = `picks-stage-${stage.stage_id}`;
+        const row = makeEl('div', {className: 'd-flex align-items-center justify-content-between gap-3 mb-2'});
+        const input = makeEl('input', {
+            id,
+            type: 'number',
+            min: 1,
+            max: MAX_PICK_COUNT,
+            className: 'form-control admin-pick-count',
+            value: stage.pick_count,
+            dataset: {stage: stage.stage_id, saved: stage.pick_count},
+        });
+        row.append(makeEl('label', {htmlFor: id, className: 'text-truncate', textContent: stage.name}), input);
+        return row;
+    }));
+}
+
+async function submitPickCounts(btn) {
+    const changed = [];
+    for (const input of $('picks-stages').querySelectorAll('input')) {
+        const pick_count = parseInt(input.value, 10);
+        if (isNaN(pick_count) || pick_count < 1 || pick_count > MAX_PICK_COUNT) {
+            shake(input);
+            input.focus();
+            return;
+        }
+        if (String(pick_count) !== input.dataset.saved) changed.push({input, pick_count});
+    }
+    if (!changed.length) {
+        toast('Nothing changed.');
+        return;
+    }
+    btn.disabled = true;
+    try {
+        for (const {input, pick_count} of changed) {
+            await api('/api/stage/picks', {method: 'POST', body: {
+                stage_id: Number(input.dataset.stage),
+                pick_count,
+            }});
+            input.dataset.saved = pick_count;
+        }
+        toast('Saved.', true);
+    } catch (e) {
+        report(e, 'Could not be saved');
     } finally {
         btn.disabled = false;
     }
@@ -376,5 +448,7 @@ $('tournament-submit').addEventListener('click', () => submitTournament($('tourn
 $('match-submit').addEventListener('click', () => submitMatch($('match-submit')));
 $('login-submit').addEventListener('click', () => submitLogin($('login-submit')));
 $('match-tournament').addEventListener('change', loadTournamentData);
+$('picks-tournament').addEventListener('change', loadPickCounts);
+$('picks-submit').addEventListener('click', () => submitPickCounts($('picks-submit')));
 
 render();

@@ -330,9 +330,9 @@ th[aria-sort="descending"] .sort-btn::after {
     text-decoration: line-through;
 }
 
-/* Standings view: the user's top-four prediction under an open group's table. Every team
-   is listed, the user drags them into order, and a dashed line under the 4th marks what
-   gets saved. */
+/* Standings view: the user's top-N prediction under an open group's table. Every team
+   is listed, the user drags them into order, and a dashed line under the last saved one
+   (.pick-cut, set by numberPicks) marks what gets saved. */
 /* With the card body's .25rem bottom padding, the same 1rem under the save button as
    above it. */
 .pick-box {
@@ -357,12 +357,13 @@ th[aria-sort="descending"] .sort-btn::after {
     background-color: var(--bs-card-bg);
 }
 
-/* Only where teams are left out below it: in a group of four or fewer, all are saved. */
-.pick-row:nth-child(4):not(:last-child) {
+/* Only where teams are left out below it: in a group no bigger than the pick count, all
+   are saved. */
+.pick-row.pick-cut {
     border-bottom: 2px dashed var(--accent);
 }
 
-.pick-row:nth-child(n+5) {
+.pick-row.pick-out {
     color: var(--bs-secondary-color);
 }
 
@@ -449,6 +450,12 @@ th[aria-sort="descending"] .sort-btn::after {
 }
 
 /* Custom team listbox — <option> can't render images */
+/* Admin: the per-stage pick count, a short number input next to the stage's name. */
+.admin-pick-count {
+    width: 5rem;
+    flex-shrink: 0;
+}
+
 .admin-team-picker {
     position: relative;
 }

@@ -14,11 +14,12 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `index.html` / `index.js` — landing page: every tournament as a tiled grid
 - `tournament.html` — one tournament: Matches (predictions grid), Standings, Teams, Players and Leaderboard views
 - `404.html` — error page
-- `me.html` / `me.js` — the user's profile: league (top-four) predictions, newest league first, each pick
+- `me.html` / `me.js` — the user's profile: league (top-N) predictions, newest league first, each pick
   with the team's current place once the league has started (green where it matches) or an Edit link to
   the Standings view while it's open; then match predictions with ✓/✗ on finished matches
 - `privacy.html` / `privacy.js` — privacy policy
-- `admin.html` / `admin.js` — admin panel: add tournaments and matches (login-gated, admin-only)
+- `admin.html` / `admin.js` — admin panel: add tournaments and matches, set each league stage's pick count
+  (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
 - `roster.js` — the searchable Teams and Players views
@@ -42,14 +43,16 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
-| GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way |
+| GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way. Every row carries its group's `group_id`, `open` (no match of the group has a score yet, so it still takes predictions) and `pick_count` (how many places users predict, from its stage) |
+| GET    | `/api/stages/:id`      | -    | The stages of one tournament that have standings (league/swiss/pools) as `{stage_id, number, name, stage_type, pick_count}`, sorted by `number`. Empty until the tournament's first refresh |
+| POST   | `/api/stage/picks`     | admin| `{stage_id, pick_count}` — sets how many places of the stage's groups users predict, 1 to 32 (4 by default). `BadRequest` outside that range or for an unknown stage. Predictions already stored are left alone |
 | GET    | `/api/teams/:id`       | -    | Every team of one tournament as `{id, name, short_name, logo, toornament_id}`, sorted by name. Names aren't unique, so `id` is the key to tell two teams apart; `toornament_id` is `null` for teams added by hand. Same refresh and `X-Refreshing` as `/api/matches/:id` |
 | GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team_id, team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by team name then lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions as `{matches, standings}`: `matches` in the `/api/predictions/:id` shape, `standings` as `{group_id, position, team_id, team, short_name, logo, tournament_id, tournament, stage_name, group_name, current_position, open}` across every tournament, sorted by group then `position`. `current_position` is the team's place in the group's standings now (`null` without a standings row); `open` is the same as on a standings row |
-| GET    | `/api/standings/predictions/:id` | - | All users' top-four predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1–4). The server only stores them; any scoring happens on the client |
+| GET    | `/api/standings/predictions/:id` | - | All users' top-N predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1 to the stage's `pick_count`). The server only stores them; any scoring happens on the client |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
-| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to 4 distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more than 4 teams or a team from another tournament |
+| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to `pick_count` distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more teams than the stage's `pick_count` or a team from another tournament |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
@@ -121,7 +124,8 @@ the stage has a single group. League and
 pools tables show P/W/L, maps, map difference and points; swiss tables show P/W/L only. A D column
 appears only where a group has draws. Dropped teams are dimmed and struck through.
 
-Under each table sits the user's top-four prediction ("Your top 4", `standingsPrediction` in standings.js). The
+Under each table sits the user's top-N prediction ("Your top N", `standingsPrediction` in standings.js). N is the
+row's `pick_count`: 4 by default, set per stage in the admin panel (last season: 6 for Erste Liga, 8 for Vierte Liga). The
 user's saved picks come from `/api/predictions/me` (`loadStandingPicks`, fetched alongside the standings; empty
 when logged out). While the group is `open`, every team is listed — saved picks first, then the rest in table
 order — and dragged into order by its `.pick-handle`, or moved with the arrow keys on a focused handle
@@ -130,8 +134,8 @@ order — and dragged into order by its `.pick-handle`, or moved with the arrow 
 The rows it displaces slide into their new slots (`slideRows`, a FLIP animation through the Web Animations API, also
 used for arrow-key moves; skipped under `prefers-reduced-motion`). Slots are picked by `offsetTop`, which ignores
 the slide transforms, so a row mid-slide can't flip the order back. Dragging uses pointer events on the document, not HTML5 drag and drop, so it works on touch;
-the handle has `touch-action: none` and the rest of the row still scrolls the page. A dashed line under the 4th
-row marks the cut, only where a 5th row exists (in a group of four, every team is saved). "Submit Prediction" (worded like the matches' "Submit Predictions", "Submitted" once stored) posts the first four as a `standings` entry through `submitWithName`
+the handle has `touch-action: none` and the rest of the row still scrolls the page. A dashed line under the Nth
+row marks the cut (`.pick-cut`, set by `numberPicks`), only where a row exists below it (in a group of N or fewer, every team is saved). "Submit Prediction" (worded like the matches' "Submit Predictions", "Submitted" once stored) posts the first N as a `standings` entry through `submitWithName`
 (app.js), the same name prompt / taken-name retry / password prompt as match predictions. Once the group is
 locked, only the saved picks are shown, without handles; a locked group without picks shows nothing.
 
@@ -158,10 +162,10 @@ The view has two sub-tabs (not kept in the URL): League predictions, open first,
 above). A sub-tab without data shows a short status line. League predictions (`LEAGUE_COLUMNS`, same sortable table) are scored on the
 client from `/api/standings/:id` and `/api/standings/predictions/:id`. Only groups that have started
 (`open` false on the standings rows) count; each predicted team is compared with its current `position`
-(`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), Top 4 (predicted teams
-currently in the top four), Exact (`diff` 0), Points (last season's script: per team `teams in group - diff`; a group's sum
+(`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), In top (predicted teams
+currently inside the predicted range, the top `pick_count` of their group), Exact (`diff` 0), Points (last season's script: per team `teams in group - diff`; a group's sum
 ÷ (teams in group × predicted teams) × `STAGE_POINTS` (40) ÷ groups in its stage, rounded to halves, so a perfect
-league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then Top 4; ties share a rank. Points, the main score, is higher-is-better like every other count.
+league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then In top; ties share a rank. Points, the main score, is higher-is-better like every other count.
 
 ## Section / day model
 

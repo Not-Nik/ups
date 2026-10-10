@@ -151,6 +151,29 @@ pub struct Standing {
     /// Whether the group still takes standing predictions: none of its matches has a score.
     #[sqlx(rename = "Open")]
     pub open: bool,
+    /// How many places of the group users predict, set per stage.
+    #[sqlx(rename = "PickCount")]
+    pub pick_count: u64,
+}
+
+#[derive(Serialize, Debug, FromRow)]
+pub struct Stage {
+    #[sqlx(rename = "StageID")]
+    pub stage_id: u64,
+    #[sqlx(rename = "Number")]
+    pub number: u64,
+    #[sqlx(rename = "Name")]
+    pub name: String,
+    #[sqlx(rename = "Type")]
+    pub stage_type: String,
+    #[sqlx(rename = "PickCount")]
+    pub pick_count: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StagePickCount {
+    pub stage_id: u64,
+    pub pick_count: u64,
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -264,7 +287,7 @@ pub struct UserPredictions {
     pub standings: Vec<UserStandingPrediction>,
 }
 
-/// A user's top four for one group: `teams[0]` is the predicted 1st place, and so on.
+/// A user's top N for one group (N is the stage's PickCount): `teams[0]` is the predicted 1st place, and so on.
 /// Replaces the user's previous prediction for that group; an empty list clears it.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct StandingPredictionSubmission {

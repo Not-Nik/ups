@@ -133,17 +133,19 @@ pub async fn get_standing_predictions(
     Ok(predictions)
 }
 
-/// Whether a group still takes standing predictions: none of its matches has a score.
-/// `None` when the group doesn't exist.
-pub async fn is_group_open(
+/// Whether a group still takes standing predictions (none of its matches has a score)
+/// and how many places its stage lets users predict. `None` when the group doesn't exist.
+pub async fn get_group_picking(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     group_id: u64,
-) -> sqlx::Result<Option<bool>> {
-    sqlx::query_scalar(
+) -> sqlx::Result<Option<(bool, i64)>> {
+    sqlx::query_as(
         "SELECT NOT EXISTS (SELECT 1 FROM matches m
                             WHERE m.GroupID = g.GroupID
-                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL))
+                              AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)),
+                s.PickCount
          FROM groups g
+                  JOIN stages s ON s.StageID = g.StageID
          WHERE g.GroupID = ?",
     )
     .bind(group_id as i64)
