@@ -15,7 +15,7 @@ DROP COLUMN needs SQLite >= 3.35 (python -c "import sqlite3; sqlite3.sqlite_vers
 Note: the backend still SELECTs Section, so deploy a Section-free backend together
 with applying this to prod. Run on a copy first:
 
-    python3 migrate_brackets.py path/to/db.sqlite3      # defaults to db.sqlite3
+    python3 001_brackets.py path/to/db.sqlite3      # defaults to db.sqlite3
 """
 import sqlite3
 import sys

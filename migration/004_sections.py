@@ -14,7 +14,7 @@
 Everything runs in one transaction: any check that fails rolls the whole thing back.
 Re-running on an already migrated db is a no-op.
 
-    python3 migrate_sections.py path/to/db.sqlite3      # defaults to db.sqlite3
+    python3 004_sections.py path/to/db.sqlite3      # defaults to db.sqlite3
 """
 import re
 import sqlite3
