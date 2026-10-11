@@ -82,31 +82,32 @@ const loadTeams = id => teamsLoad ??= loadRoster('teams', `/api/teams/${id}`, (r
 // ============== Players ==============
 let playersLoad = null;
 
+const compareText = (a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'});
+
+// Players arrive sorted by name (`order` keeps that). Sorting by team puts each
+// lineup back together, in lineup order; names aren't unique, so teams are told
+// apart by id.
+const PLAYER_COLUMNS = [
+    {key: 'name', head: 'Player', cls: 'fw-semibold', asc: true,
+        compare: (a, b) => a.order - b.order, cell: p => escapeHtml(p.name)},
+    {key: 'battle_tag', head: 'BattleTag', cls: 'text-secondary', asc: true,
+        compare: (a, b) => compareText(a.battle_tag ?? '', b.battle_tag ?? ''),
+        cell: p => escapeHtml(p.battle_tag ?? '')},
+    {key: 'team', head: 'Team', asc: true,
+        compare: (a, b) => compareText(a.team, b.team) || a.team_id - b.team_id || a.position - b.position,
+        cell: p => `
+            <span class="d-flex align-items-center gap-2">
+                ${logoHTML(p.logo, 'team-logo')}
+                <span class="text-truncate">${escapeHtml(p.team)}</span>
+            </span>`},
+];
+
 const loadPlayers = id => playersLoad ??= loadRoster('players', `/api/players/${id}`, (root, players) => {
-    const card = makeEl('div', {className: 'card'});
-    card.insertAdjacentHTML('beforeend', `
-        <div class="card-body">
-            <table class="data-table roster-table">
-                <thead>
-                    <tr><th>Player</th><th>BattleTag</th><th>Team</th></tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>`);
-    const body = card.querySelector('tbody');
+    players.forEach((p, i) => p.order = i);
+    const {card, trs} = sortableTable(players, PLAYER_COLUMNS, {tableClass: 'roster-table'});
     root.appendChild(card);
-    return players.map(p => {
-        const row = makeEl('tr');
-        row.insertAdjacentHTML('beforeend', `
-            <td class="fw-semibold">${escapeHtml(p.name)}</td>
-            <td class="text-secondary">${escapeHtml(p.battle_tag ?? '')}</td>
-            <td>
-                <span class="d-flex align-items-center gap-2">
-                    ${logoHTML(p.logo, 'team-logo')}
-                    <span class="text-truncate">${escapeHtml(p.team)}</span>
-                </span>
-            </td>`);
-        body.appendChild(row);
-        return {el: row, text: searchKey(`${p.name} ${p.battle_tag ?? ''} ${p.team} ${p.short_name ?? ''}`)};
-    });
+    return players.map(p => ({
+        el: trs.get(p),
+        text: searchKey(`${p.name} ${p.battle_tag ?? ''} ${p.team} ${p.short_name ?? ''}`),
+    }));
 }).then(ok => ok || (playersLoad = null));

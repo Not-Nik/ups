@@ -21,6 +21,61 @@ function groupBy(items, key) {
     return map;
 }
 
+// A card holding a `.data-table` whose headers sort it (the Leaderboard and Players
+// views). `columns` is a list of {key, head, cls, title, asc, compare, cell}:
+//   cell(row)      the cell's HTML (escape user strings), `row[key]` as text by default;
+//   compare(a, b)  ascending order, `a[key] - b[key]` by default;
+//   asc            whether the column's first click sorts ascending.
+// Clicking a header sorts by it; clicking the sorted one again flips it. The sort is
+// stable, so ties keep the order `rows` came in. It isn't kept in the URL.
+// `sortKey` is the column sorted at first (ascending). Returns {card, trs}, `trs` a
+// Map from each row to its <tr>.
+function sortableTable(rows, columns, {sortKey = columns[0].key, tableClass = '', bodyClass = ''} = {}) {
+    const card = makeEl('div', {className: 'card'});
+    card.insertAdjacentHTML('beforeend', `
+        <div class="card-body ${bodyClass}">
+            <table class="data-table ${tableClass}">
+                <thead>
+                    <tr>
+                        ${columns.map(c => `
+                            <th class="${c.cls ?? ''} sort-col-${c.key}"${c.title ? ` title="${escapeAttr(c.title)}"` : ''}>
+                                <button class="sort-btn" data-key="${c.key}">${c.head}</button>
+                            </th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>`);
+    const body = card.querySelector('tbody');
+    const trs = new Map(rows.map(r => {
+        const tr = makeEl('tr');
+        tr.insertAdjacentHTML('beforeend', columns
+            .map(c => `<td class="${c.cls ?? ''}">${c.cell ? c.cell(r) : escapeHtml(String(r[c.key]))}</td>`).join(''));
+        return [r, tr];
+    }));
+
+    const sort = {key: sortKey, asc: true};
+    const apply = () => {
+        const col = columns.find(c => c.key === sort.key);
+        const compare = col.compare ?? ((a, b) => a[col.key] - b[col.key]);
+        const sorted = [...rows].sort((a, b) => sort.asc ? compare(a, b) : compare(b, a));
+        body.replaceChildren(...sorted.map(r => trs.get(r)));
+        card.querySelectorAll('.sort-btn').forEach(btn => {
+            const th = btn.parentElement;
+            if (btn.dataset.key === sort.key) th.setAttribute('aria-sort', sort.asc ? 'ascending' : 'descending');
+            else th.removeAttribute('aria-sort');
+        });
+    };
+    card.querySelectorAll('.sort-btn').forEach(btn => btn.addEventListener('click', () => {
+        const col = columns.find(c => c.key === btn.dataset.key);
+        sort.asc = sort.key === col.key ? !sort.asc : !!col.asc;
+        sort.key = col.key;
+        apply();
+    }));
+    apply();
+    return {card, trs};
+}
+
 // ============== State ==============
 const SIDES = ['a', 'b'];
 const OTHER_SIDE = {a: 'b', b: 'a'};

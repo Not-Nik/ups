@@ -188,59 +188,22 @@ const LEAGUE_COLUMNS = [
         title: `Up to ${STAGE_POINTS} per stage (shared by its groups), less for every place off`},
 ];
 
-// Clicking a header sorts by it; clicking the sorted one again flips it. Rows arrive
-// in rank order, and the sort is stable, so ties keep that order either way. The rank
-// shown is always the points rank. The sort isn't kept in the URL.
+// A sortableTable (app.js) of leaderboard rows. They arrive in rank order, and the sort
+// is stable, so ties keep that order either way. The rank shown is always the points rank.
 function leaderboardTable(rows, columns) {
-    // The logged-in user's row is highlighted; empty when logged out.
+    const {card, trs} = sortableTable(rows, columns, {
+        sortKey: 'rank',
+        tableClass: 'leaderboard-table',
+        bodyClass: 'leaderboard-scroll',
+    });
+    // The logged-in user's name is marked; empty when logged out.
     const me = $('user-menu').classList.contains('d-none') ? '' : $('user-name').textContent;
-    const card = makeEl('div', {className: 'card'});
-    card.insertAdjacentHTML('beforeend', `
-        <div class="card-body leaderboard-scroll">
-            <table class="data-table leaderboard-table">
-                <thead>
-                    <tr>
-                        ${columns.map(c => `
-                            <th class="${c.cls} leaderboard-col-${c.key}"${c.title ? ` title="${escapeAttr(c.title)}"` : ''}>
-                                <button class="sort-btn" data-key="${c.key}">${c.head}</button>
-                            </th>`).join('')}
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>`);
-    const body = card.querySelector('tbody');
-    const trs = new Map(rows.map(r => {
-        const tr = makeEl('tr');
-        tr.insertAdjacentHTML('beforeend', columns
-            .map(c => `<td class="${c.cls}">${c.cell ? c.cell(r) : r[c.key]}</td>`).join(''));
-        if (r.name === me) {
-            tr.querySelector('.standings-team').append(' ', makeEl('span', {
-                className: 'leaderboard-you',
-                textContent: 'You',
-            }));
-        }
-        return [r, tr];
-    }));
-
-    const sort = {key: 'rank', asc: true};
-    const apply = () => {
-        const col = columns.find(c => c.key === sort.key);
-        const compare = col.compare ?? ((a, b) => a[col.key] - b[col.key]);
-        const sorted = [...rows].sort((a, b) => sort.asc ? compare(a, b) : compare(b, a));
-        body.replaceChildren(...sorted.map(r => trs.get(r)));
-        card.querySelectorAll('.sort-btn').forEach(btn => {
-            const th = btn.parentElement;
-            if (btn.dataset.key === sort.key) th.setAttribute('aria-sort', sort.asc ? 'ascending' : 'descending');
-            else th.removeAttribute('aria-sort');
-        });
-    };
-    card.querySelectorAll('.sort-btn').forEach(btn => btn.addEventListener('click', () => {
-        const col = columns.find(c => c.key === btn.dataset.key);
-        sort.asc = sort.key === col.key ? !sort.asc : !!col.asc;
-        sort.key = col.key;
-        apply();
-    }));
-    apply();
+    trs.forEach((tr, r) => {
+        if (r.name !== me) return;
+        tr.querySelector('.standings-team').append(' ', makeEl('span', {
+            className: 'leaderboard-you',
+            textContent: 'You',
+        }));
+    });
     return card;
 }

@@ -143,6 +143,8 @@ The Teams view is a tile per team (`/api/teams/:id`); the Players view one `.dat
 entry (`/api/players/:id`). Both live in roster.js and share `bindSearch`: a search box filtering the
 loaded list on the client, case- and accent-insensitive, keeping items that contain every typed word.
 Players match on name, BattleTag, team and short name. The search text is not kept in the URL.
+The players table is a `sortableTable` (`PLAYER_COLUMNS`): sorted by player name at first, a click on
+Team groups the lineups again (team name, then lineup position), BattleTag sorts too.
 
 The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of its own: it fetches
 `/api/matches/:id`, keeps the matches with a final score, and posts their ids to `POST /api/predictions`.
@@ -157,7 +159,7 @@ the left, the bigger share tinted in the accent color; team B's chance at the ri
 end of its part of the bar or, where the name needs the room, right after the name). Ranked by points, then exact scores; users tied on both share a rank.
 Columns are headed by whole words: Rank, Name, Predicted (predictions on finished matches), Winners
 (correct winners, exact included), Exact, % (accuracy: Winners / Predicted), Points. Each
-header has a `leaderboard-col-<key>` class; the count columns share one width (`th:nth-child(n+3)`) so the match and league tables line up; together
+header has a `sort-col-<key>` class; the tables are built by `sortableTable` in app.js, shared with the Players view; the count columns share one width (`th:nth-child(n+3)`) so the match and league tables line up; together
 they're wider than the standings' columns, so on narrow screens the table scrolls sideways (`.leaderboard-scroll`). The logged-in user's name is followed by a "You" in the accent color (`.leaderboard-you`), in both tables.
 Every header is a `.sort-btn` (`LEADERBOARD_COLUMNS`): the first click sorts in the column's `asc`
 direction (rank and name ascending, counts descending), a second flips it; `aria-sort` on the `th`
@@ -215,6 +217,8 @@ Sorting:
     - `loadImage(src)` — Promise wrapper around `new Image()`
     - `firstInt(s)` — first `\d+` match as integer or `NaN`
     - `groupBy(items, key)` — returns `Map<key, [[item, index], ...]>`
+    - `sortableTable(rows, columns, {sortKey, tableClass, bodyClass})` (app.js) — a card with a `.data-table`
+      sorted by clicking its headers; returns `{card, trs}`
     - `api(url, {method, body, response})` — auth + JSON; throws with `.code` from `{err}` on `!ok`. With
       `response: true` it returns `{data, res}` so the caller can read headers
     - `tryFetch(fn)` — swallows errors, returns `undefined` (use for non-critical loads)
