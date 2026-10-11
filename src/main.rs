@@ -7,6 +7,7 @@
 mod account;
 mod endpoints;
 mod error;
+mod image_cache;
 mod loader;
 mod matches;
 mod migrate;
@@ -267,9 +268,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::password);
 
+    let image_cache = image_cache::ImageCache::shared();
+    let images = warp::any().map(move || image_cache.clone());
+
     let proxy = warp::path!("api" / "proxy")
         .and(warp::get())
         .and(warp::query::<ProxyQuery>())
+        .and(images)
         .and_then(endpoints::proxy);
 
     // Boxed every few routes: each `.or` nests the filter's type one level deeper, and

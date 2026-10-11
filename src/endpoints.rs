@@ -8,6 +8,7 @@ use crate::account::{
     set_password, verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
+use crate::image_cache::{Image, SharedImageCache};
 use crate::loader::{Refresher, BRACKET_TYPES};
 use crate::matches::{
     add_group, add_round, add_stage, add_team, add_tournament, get_bracket_nodes, get_brackets,
@@ -608,7 +609,10 @@ pub async fn password(
     Ok(warp::reply::reply())
 }
 
-pub async fn proxy(query: ProxyQuery) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn proxy(
+    query: ProxyQuery,
+    cache: SharedImageCache,
+) -> Result<impl warp::Reply, warp::Rejection> {
     // Checked on the parsed URL, so `..` segments or a look-alike host can't get past it.
     let url = reqwest::Url::parse(&query.url).map_err(|_| warp::reject::custom(BadRequest))?;
     if url.scheme() != "https"
@@ -618,6 +622,14 @@ pub async fn proxy(query: ProxyQuery) -> Result<impl warp::Reply, warp::Rejectio
     {
         return Err(warp::reject::custom(AccessDenied))?;
     }
+
+    // The lock is never held across an await. Two requests for an image that isn't
+    // cached yet both fetch it; the second one's copy simply replaces the first.
+    let cached = cache.lock().unwrap().get(url.as_str());
+    if let Some(image) = cached {
+        return Ok(proxy_reply(image));
+    }
+    let key = url.to_string();
 
     // No redirects: one could lead away from the host checked above.
     let client = reqwest::Client::builder()
@@ -646,11 +658,17 @@ pub async fn proxy(query: ProxyQuery) -> Result<impl warp::Reply, warp::Rejectio
     }
     let body = response.bytes().await.map_err(|_| warp::reject::reject())?;
 
-    let mut reply = warp::reply::Response::new(body.into());
+    let image = Image { content_type, body };
+    cache.lock().unwrap().insert(&key, image.clone());
+    Ok(proxy_reply(image))
+}
+
+fn proxy_reply(image: Image) -> warp::reply::Response {
+    let mut reply = warp::reply::Response::new(image.body.into());
     let headers = reply.headers_mut();
     headers.insert(
         warp::http::header::CONTENT_TYPE,
-        warp::http::HeaderValue::from_static(content_type),
+        warp::http::HeaderValue::from_static(image.content_type),
     );
     headers.insert(
         warp::http::header::X_CONTENT_TYPE_OPTIONS,
@@ -667,7 +685,7 @@ pub async fn proxy(query: ProxyQuery) -> Result<impl warp::Reply, warp::Rejectio
         warp::http::HeaderValue::from_static("public, max-age=86400"),
     );
 
-    Ok(reply)
+    reply
 }
 
 const PROXY_HOST: &str = "play.toornament.com";
