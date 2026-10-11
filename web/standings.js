@@ -101,7 +101,7 @@ function pickRow(team, draggable) {
     row.insertAdjacentHTML('beforeend', `
         ${draggable ? `<button type="button" class="pick-handle" aria-label="Move ${escapeAttr(team.team)}">&#8801;</button>` : ''}
         <span class="pick-place"></span>
-        ${team.logo ? `<img src="${escapeAttr(team.logo)}" class="team-logo" alt="">` : ''}
+        ${team.logo ? `<img src="${escapeAttr(proxied(team.logo))}" class="team-logo" alt="">` : ''}
         <span class="text-truncate">${escapeHtml(team.team)}</span>`);
     return row;
 }
@@ -324,7 +324,7 @@ function standingsTable(rows) {
             <td class="standings-rank">${r.rank}</td>
             <td class="standings-team">
                 <span class="d-flex align-items-center gap-2">
-                    ${r.logo ? `<img src="${escapeAttr(r.logo)}" class="team-logo" alt="">` : ''}
+                    ${r.logo ? `<img src="${escapeAttr(proxied(r.logo))}" class="team-logo" alt="">` : ''}
                     <span class="text-truncate">${escapeHtml(r.team)}</span>
                 </span>
             </td>

@@ -609,22 +609,67 @@ pub async fn password(
 }
 
 pub async fn proxy(query: ProxyQuery) -> Result<impl warp::Reply, warp::Rejection> {
-    if !query
-        .url
-        .starts_with("https://play.toornament.com/media/file")
+    // Checked on the parsed URL, so `..` segments or a look-alike host can't get past it.
+    let url = reqwest::Url::parse(&query.url).map_err(|_| warp::reject::custom(BadRequest))?;
+    if url.scheme() != "https"
+        || url.host_str() != Some(PROXY_HOST)
+        || url.port().is_some()
+        || !url.path().starts_with(PROXY_PATH)
     {
         return Err(warp::reject::custom(AccessDenied))?;
     }
 
-    let response = reqwest::get(query.url)
+    // No redirects: one could lead away from the host checked above.
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| warp::reject::custom(InternalError))?;
+    let response = client
+        .get(url)
+        .send()
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
 
-    let status = response.status();
+    // The body is served from our own origin, so only pass on images that can't carry
+    // script (no SVG, no HTML), under the type from this list rather than upstream's.
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.split(';').next().unwrap_or("").trim().to_ascii_lowercase())
+        .and_then(|v| PROXY_TYPES.iter().copied().find(|t| *t == v));
+    let Some(content_type) = content_type else {
+        return Err(warp::reject::custom(AccessDenied))?;
+    };
+    if !response.status().is_success() {
+        return Err(warp::reject::custom(AccessDenied))?;
+    }
     let body = response.bytes().await.map_err(|_| warp::reject::reject())?;
 
-    Ok(warp::reply::with_status(
-        warp::reply::Response::new(body.into()),
-        status,
-    ))
+    let mut reply = warp::reply::Response::new(body.into());
+    let headers = reply.headers_mut();
+    headers.insert(
+        warp::http::header::CONTENT_TYPE,
+        warp::http::HeaderValue::from_static(content_type),
+    );
+    headers.insert(
+        warp::http::header::X_CONTENT_TYPE_OPTIONS,
+        warp::http::HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        warp::http::header::CONTENT_SECURITY_POLICY,
+        warp::http::HeaderValue::from_static("default-src 'none'; sandbox"),
+    );
+    // Every page loads its team logos through here; let the browser keep them for a
+    // day. A changed logo comes with a new `?v=` in its URL, so it is fetched anew.
+    headers.insert(
+        warp::http::header::CACHE_CONTROL,
+        warp::http::HeaderValue::from_static("public, max-age=86400"),
+    );
+
+    Ok(reply)
 }
+
+const PROXY_HOST: &str = "play.toornament.com";
+const PROXY_PATH: &str = "/media/file/";
+const PROXY_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];

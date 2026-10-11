@@ -58,7 +58,7 @@ async function loadRoster(view, url, render) {
     }
 }
 
-const logoHTML = (logo, cls) => logo ? `<img src="${escapeAttr(logo)}" class="${cls}" alt="">` : '';
+const logoHTML = (logo, cls) => logo ? `<img src="${escapeAttr(proxied(logo))}" class="${cls}" alt="">` : '';
 
 // ============== Teams ==============
 let teamsLoad = null;

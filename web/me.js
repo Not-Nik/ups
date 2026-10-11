@@ -41,7 +41,7 @@ function leagueHTML(picks) {
         return `<li class="prediction-item">
             <span class="league-pick d-flex align-items-center gap-2 small fw-semibold">
                 <span class="pick-place">${p.position}.</span>
-                ${p.logo ? `<img src="${escapeAttr(p.logo)}" class="team-logo" alt="">` : ''}
+                ${p.logo ? `<img src="${escapeAttr(proxied(p.logo))}" class="team-logo" alt="">` : ''}
                 <span class="text-truncate">${escapeHtml(p.team)}</span>
             </span>
             ${now}

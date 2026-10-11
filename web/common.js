@@ -72,6 +72,10 @@ const escapeHtml = str => {
 };
 const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 
+// Team logos live on toornament; every page loads them through the server's proxy
+// instead, so they are same-origin (no third-party request, and a canvas can read them).
+const proxied = url => `/api/proxy?url=${encodeURIComponent(url)}`;
+
 // ============== DOM helpers ==============
 const show = el => el.classList.remove('d-none');
 const hide = el => el.classList.add('d-none');

@@ -305,7 +305,7 @@ const label = (name, placeholder) => makeEl('span', {
 const teamRender = name => {
     const nodes = [];
     const logo = name ? teamLogos.get(name) : '';
-    if (logo) nodes.push(makeEl('img', {className: 'admin-team-logo', src: logo, alt: ''}));
+    if (logo) nodes.push(makeEl('img', {className: 'admin-team-logo', src: proxied(logo), alt: ''}));
     nodes.push(label(name, 'Select team…'));
     return nodes;
 };

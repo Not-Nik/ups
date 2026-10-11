@@ -190,8 +190,6 @@ async function fetchMatch(tournamentId, id) {
 // the match picker orders matches identically to the main site's tab bar.
 
 // ============== Logo color ==============
-const proxied = url => `/api/proxy?url=${encodeURIComponent(url)}`;
-
 // Average color of an image's non-transparent pixels, sampled from a 32x32 draw.
 // Same-origin (proxied) images don't taint the canvas, so getImageData works.
 function averageColor(img) {

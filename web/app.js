@@ -238,7 +238,7 @@ async function togglePredictions(match, panel, btn) {
 
 const teamRowHTML = ({name, logo, score, color, side}) => `
   <div class="team-row${side === 1 ? ' mt-1' : ''}">
-    ${logo ? `<img src="${escapeAttr(logo)}" class="team-logo" alt="">` : ''}
+    ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
     <span class="team-name fw-semibold small ${color}">${escapeHtml(name)}</span>
     <input type="text" class="form-control score-input" data-side="${side}" inputmode="numeric" placeholder="0">
     ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${score}</span>` : ''}
@@ -907,8 +907,6 @@ async function renderGridCanvas() {
     const canvas = await html2canvas(target, {
         backgroundColor: bg,
         scale: window.devicePixelRatio,
-        proxy: '/api/proxy',
-        useCORS: false,
     });
     const pad = 16 * window.devicePixelRatio;
     const padded = makeEl('canvas');

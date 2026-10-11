@@ -337,7 +337,7 @@ function bracketPlaceholder(node) {
     const color = (a, b) => final ? winnerColor(a, b) : ''; // green/red only on a final score
     const row = (second, name, logo, score, cls) => `
         <div class="team-row${second ? ' mt-1' : ''}">
-            ${logo ? `<img src="${escapeAttr(logo)}" class="team-logo" alt="">` : ''}
+            ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
             <span class="team-name fw-semibold small ${cls}">${escapeHtml(name ?? 'TBD')}</span>
             ${score != null ? `<span class="actual-score small ${cls || 'text-secondary'}">${score}</span>` : ''}
         </div>`;
