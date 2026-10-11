@@ -405,7 +405,7 @@ pub async fn get_players(
          FROM players p
                   JOIN teams t ON t.TeamID = p.TeamID
          WHERE t.TournamentID = ?
-         ORDER BY t.Name COLLATE NOCASE, t.TeamID, p.Position",
+         ORDER BY p.Name COLLATE NOCASE, t.Name COLLATE NOCASE, t.TeamID, p.Position",
     )
     .bind(tournament_id)
     .fetch(conn.deref_mut());
