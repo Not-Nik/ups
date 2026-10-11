@@ -162,9 +162,11 @@ struct RankingProperties {
 #[derive(Deserialize)]
 struct RankingItem {
     position: i64,
-    rank: i64,
+    // Null until the group has results to rank by.
+    rank: Option<i64>,
     points: Option<i64>,
-    participant: Participant,
+    // Null while the slot is empty: a group that has no teams placed in it yet.
+    participant: Option<Participant>,
     ranking: Ranking,
     properties: RankingProperties,
 }
@@ -413,7 +415,7 @@ async fn upsert_teams(
         .flat_map(|m| &m.opponents)
         .chain(feed.nodes.iter().flat_map(|n| &n.opponents))
         .filter_map(|o| o.participant.as_ref());
-    for p in opponents.chain(feed.rankings.iter().map(|r| &r.participant)) {
+    for p in opponents.chain(feed.rankings.iter().filter_map(|r| r.participant.as_ref())) {
         participants.entry(p.id.as_str()).or_insert(p);
     }
 
@@ -692,11 +694,15 @@ async fn replace_standings(
     }
 
     for item in &feed.rankings {
+        // An empty slot has no team to list.
+        let Some(participant) = &item.participant else {
+            continue;
+        };
         let (Some(&group_id), Some(&team_id)) = (
             ids.groups.get(&item.ranking.group.id),
-            ids.teams.get(&item.participant.id),
+            ids.teams.get(&participant.id),
         ) else {
-            log::warn!("ranking of {} has an unknown group or team", item.participant.name);
+            log::warn!("ranking of {} has an unknown group or team", participant.name);
             continue;
         };
         let p = &item.properties;
@@ -709,7 +715,7 @@ async fn replace_standings(
         .bind(group_id)
         .bind(team_id)
         .bind(item.position)
-        .bind(item.rank)
+        .bind(item.rank.unwrap_or(item.position))
         .bind(item.points)
         .bind(p.played.unwrap_or(0))
         .bind(p.wins.unwrap_or(0))
