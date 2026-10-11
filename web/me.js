@@ -18,7 +18,7 @@ function predictionRowHTML(pred, match) {
             ${match && match.stage_name ? `<div class="text-secondary small">${escapeHtml(sectionTitle(sectionKey(match)))}</div>` : ''}
             <div class="fw-semibold small">${teams}</div>
         </div>
-        <span class="pred-score small">${pred.score_a}:${pred.score_b}${outcome}</span>
+        <span class="pred-score small">${predictionText(pred)}${outcome}</span>
     </li>`;
 }
 

@@ -168,11 +168,28 @@ function updateCardState(card, index) {
 }
 
 // ============== Cards ==============
-const predictionRowHTML = ({name, score_a, score_b}) => `
+const predictionRowHTML = p => `
   <div class="d-flex justify-content-between align-items-baseline gap-3 py-1">
-    <span class="small text-truncate">${escapeHtml(name)}</span>
-    <span class="small fw-semibold text-secondary text-nowrap flex-shrink-0">${score_a} : ${score_b}</span>
+    <span class="small text-truncate">${escapeHtml(p.name)}</span>
+    <span class="small fw-semibold text-secondary text-nowrap flex-shrink-0">${predictionText(p, ' : ')}</span>
   </div>`;
+
+// A percentage prediction, with the row itself as the bar. Its background is split at
+// team A's share (`--share`), team A on the left, and the bigger share is tinted in the
+// accent color (neither at 50:50). Team B's chance sits at the right end; team A's at
+// the right end of its own part of the bar, or right after the name where the name
+// needs more room than that.
+const percentRowHTML = p => {
+    const fav = p.score_a > p.score_b ? ' chance-fav-a' : p.score_b > p.score_a ? ' chance-fav-b' : '';
+    return `
+  <div class="chance-row${fav}" style="--share: ${p.score_a}%" title="${escapeAttr(predictionText(p, ' : '))}">
+    <span class="chance-a">
+      <span class="small text-truncate">${escapeHtml(p.name)}</span>
+      <span class="chance-num small fw-semibold">${p.score_a}%</span>
+    </span>
+    <span class="chance-b chance-num small fw-semibold">${p.score_b}%</span>
+  </div>`;
+};
 
 const statusMsg = (cls, text) => `<p class="${cls} small text-center my-2">${text}</p>`;
 
@@ -189,6 +206,8 @@ const winnerSign = p => Math.sign(p.score_a - p.score_b);
 // With a final score: predictions that picked the winner correctly come first,
 // then incorrect — each group sorted by closeness. Without a score: A-wins on
 // top, then draws, then B-wins, by how strongly each side is favoured.
+// Percentage predictions (60:40) are sorted as a list of their own; they can't be
+// measured against a map score, so "closeness" is the chance they gave the winner.
 function sortPredictions(predictions, match) {
     const hasFinal = match.score_a != null && match.score_b != null;
     const byScore = (a, b) => (a.score_a - b.score_a) || (a.score_b - b.score_b);
@@ -196,7 +215,9 @@ function sortPredictions(predictions, match) {
     if (hasFinal) {
         const target = winnerSign(match);
         const wrong = p => winnerSign(p) === target ? 0 : 1;
-        const dist = p => Math.abs(p.score_a - match.score_a) + Math.abs(p.score_b - match.score_b);
+        const dist = p => isPercentPrediction(p)
+            ? -target * (p.score_a - p.score_b)
+            : Math.abs(p.score_a - match.score_a) + Math.abs(p.score_b - match.score_b);
         return [...predictions].sort((a, b) =>
             (wrong(a) - wrong(b)) || (dist(a) - dist(b)) || byScore(a, b) || byName(a, b)
         );
@@ -209,18 +230,31 @@ function sortPredictions(predictions, match) {
     );
 }
 
-const renderPanelPredictions = (panel, match, predictions) => {
-    if (!predictions.length) return setPanelStatus(panel, 'text-secondary', 'No predictions yet.');
+// One sorted list of rows, with a line where the right picks end (final score) or
+// where team B's backers start (no score yet).
+function predictionRowsHTML(predictions, match, rowHTML) {
     const sorted = sortPredictions(predictions, match);
     const hasFinal = match.score_a != null && match.score_b != null;
     const splitAt = hasFinal
         ? sorted.findIndex(p => winnerSign(p) !== winnerSign(match))
         : sorted.findIndex(p => p.score_b > p.score_a);
-    const rows = sorted.map((p, i) => {
+    return sorted.map((p, i) => {
         const divider = i === splitAt && i > 0 ? '<hr class="prediction-divider">' : '';
-        return divider + predictionRowHTML(p);
-    });
-    setPanelHTML(panel, rows.join(''));
+        return divider + rowHTML(p);
+    }).join('');
+}
+
+// Score predictions first, then the percentage ones under a "Win chance" heading.
+const renderPanelPredictions = (panel, match, predictions) => {
+    if (!predictions.length) return setPanelStatus(panel, 'text-secondary', 'No predictions yet.');
+    const scores = predictions.filter(p => !isPercentPrediction(p));
+    const chances = predictions.filter(isPercentPrediction);
+    let html = predictionRowsHTML(scores, match, predictionRowHTML);
+    if (chances.length) {
+        html += `<div class="chance-heading text-secondary small${scores.length ? ' chance-heading-after' : ''}">Win chance</div>`
+            + predictionRowsHTML(chances, match, percentRowHTML);
+    }
+    setPanelHTML(panel, html);
 };
 
 async function togglePredictions(match, panel, btn) {

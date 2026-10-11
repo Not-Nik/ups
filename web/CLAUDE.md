@@ -148,7 +148,13 @@ The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of 
 `/api/matches/:id`, keeps the matches with a final score, and posts their ids to `POST /api/predictions`.
 An exact score earns `EXACT_POINTS` (3), any other correct winner `WINNER_POINTS` (1) — the winner
 check is `sameOutcome` in common.js, shared with me.js's ✓/✗: sign of the score difference, so a draw
-only counts on an actual draw. Ranked by points, then exact scores; users tied on both share a rank.
+only counts on an actual draw. A prediction whose two numbers add up to 100 is a percentage
+prediction (`isPercentPrediction` in common.js, e.g. 60:40): shown with % signs (`predictionText`),
+earning no leaderboard points (it still counts under Predicted, Winners, Exact and %), and listed after
+the score predictions in a match's predictions panel, under a "Win chance" heading, each row
+its own bar (`percentRowHTML`, `.chance-row`: the row's background is split at team A's share, team A on
+the left, the bigger share tinted in the accent color; team B's chance at the right end, team A's at the
+end of its part of the bar or, where the name needs the room, right after the name). Ranked by points, then exact scores; users tied on both share a rank.
 Columns are headed by whole words: Rank, Name, Predicted (predictions on finished matches), Winners
 (correct winners, exact included), Exact, % (accuracy: Winners / Predicted), Points. Each
 header has a `leaderboard-col-<key>` class; the count columns share one width (`th:nth-child(n+3)`) so the match and league tables line up; together

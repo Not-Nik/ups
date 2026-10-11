@@ -23,6 +23,13 @@ const firstInt = s => {
 const sameOutcome = (pred, match) =>
     Math.sign(pred.score_a - pred.score_b) === Math.sign(match.score_a - match.score_b);
 
+// A prediction whose two numbers add up to 100 is a pair of win chances (60:40), not
+// a map score: shown with % signs, and it earns no leaderboard points.
+const isPercentPrediction = p => p.score_a + p.score_b === 100;
+const predictionText = (p, sep = ':') => isPercentPrediction(p)
+    ? `${p.score_a}%${sep}${p.score_b}%`
+    : `${p.score_a}${sep}${p.score_b}`;
+
 // ============== Tournaments ==============
 // Newest (highest id) first, so the landing grid opens with the current season.
 const byNewestTournament = (a, b) => b.tournament_id - a.tournament_id;

@@ -28,14 +28,16 @@ function rankLeaderboard(matches, predictions) {
         if (!m) return;
         if (!byName.has(p.name)) byName.set(p.name, {name: p.name, predicted: 0, correct: 0, exact: 0, points: 0});
         const e = byName.get(p.name);
+        // Percentage predictions (60:40) count like any other, but earn no points.
+        const scores = !isPercentPrediction(p);
         e.predicted++;
         if (p.score_a === m.score_a && p.score_b === m.score_b) {
             e.exact++;
             e.correct++;
-            e.points += EXACT_POINTS;
+            if (scores) e.points += EXACT_POINTS;
         } else if (sameOutcome(p, m)) {
             e.correct++;
-            e.points += WINNER_POINTS;
+            if (scores) e.points += WINNER_POINTS;
         }
     });
     const rows = [...byName.values()].sort((a, b) =>

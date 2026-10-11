@@ -860,6 +860,71 @@ th[aria-sort="descending"] .sort-btn::after {
     margin: 0.25rem 0;
 }
 
+/* Percentage predictions: a heading, then one split bar per row. */
+.chance-heading {
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-size: .7rem;
+    padding-bottom: .15rem;
+}
+
+.chance-heading-after {
+    margin-top: .5rem;
+    padding-top: .5rem;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+/* The row is the bar: its background is split at team A's share (--share, inline). */
+.chance-row {
+    --chance-a: var(--chance-muted);
+    --chance-b: var(--chance-muted);
+    --chance-muted: color-mix(in srgb, var(--bs-secondary-color) 16%, transparent);
+    --chance-fav: color-mix(in srgb, var(--accent) 30%, transparent);
+    display: flex;
+    align-items: baseline;
+    padding: .2rem 0;
+    margin: 3px 0;
+    border-radius: 4px;
+    background: linear-gradient(to right,
+        var(--chance-a) calc(var(--share) - 1px),
+        transparent calc(var(--share) - 1px), transparent calc(var(--share) + 1px),
+        var(--chance-b) calc(var(--share) + 1px));
+}
+
+/* Name and team A's chance. At least as wide as team A's part of the bar, so the
+   chance ends just inside the split; wider when the name needs it, and the name is
+   only cut short once the row is full. Always leaves room for team B's chance. */
+.chance-a {
+    display: flex;
+    align-items: baseline;
+    flex: 0 1 auto;
+    min-width: min(var(--share), 100% - 3.6rem);
+    padding: 0 .4rem 0 .5rem;
+}
+
+.chance-a > .chance-num {
+    margin-left: auto;
+    padding-left: .75rem;
+}
+
+.chance-b {
+    margin-left: auto;
+    padding: 0 .5rem 0 .4rem;
+}
+
+.chance-num {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.chance-row.chance-fav-a {
+    --chance-a: var(--chance-fav);
+}
+
+.chance-row.chance-fav-b {
+    --chance-b: var(--chance-fav);
+}
+
 .submit-bar {
     position: fixed;
     bottom: 0;
