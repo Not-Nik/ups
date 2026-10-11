@@ -272,6 +272,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::query::<ProxyQuery>())
         .and_then(endpoints::proxy);
 
+    // Boxed every few routes: each `.or` nests the filter's type one level deeper, and
+    // past a couple of dozen the compiler gives up on it ("overflow evaluating the
+    // requirement"). A box starts the nesting over.
     let routes = me
         .or(tournaments)
         .or(tournament)
@@ -282,6 +285,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(add_match)
         .or(brackets)
         .or(bracket)
+        .boxed()
         .or(standings)
         .or(teams)
         .or(players)
@@ -289,13 +293,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(multi_prediction)
         .or(user_predictions)
         .or(standing_predictions)
+        .boxed()
         .or(submit)
         .or(login)
         .or(logout)
         .or(delete)
         .or(password)
         .or(proxy)
-        .or(warp::fs::dir("web"));
+        .or(warp::fs::dir("web"))
+        .boxed();
 
     let https_server = warp::serve(routes.recover(handle_rejection))
         .tls()
