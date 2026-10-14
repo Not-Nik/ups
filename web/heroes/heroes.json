@@ -28,8 +28,16 @@
 "name": "Cassidy"
 },
 {
+"key": "dmon",
+"name": "D.Mon"
+},
+{
 "key": "dva",
 "name": "D.Va"
+},
+{
+"key": "doctrine",
+"name": "Doctrine"
 },
 {
 "key": "domina",
@@ -138,6 +146,10 @@
 {
 "key": "roadhog",
 "name": "Roadhog"
+},
+{
+"key": "shion",
+"name": "Shion"
 },
 {
 "key": "sierra",
