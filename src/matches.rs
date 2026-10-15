@@ -46,7 +46,7 @@ pub async fn add_tournament(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     tournament: Tournament,
 ) -> sqlx::Result<()> {
-    sqlx::query("INSERT INTO tournaments (name, tournament) VALUES (?, ?)")
+    sqlx::query("INSERT INTO tournaments (Name, ToornamentId) VALUES (?, ?)")
         .bind(tournament.name)
         .bind(tournament.toornament_id)
         .execute(conn.deref_mut())
