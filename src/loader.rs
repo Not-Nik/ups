@@ -31,8 +31,12 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 // Stage types played as a bracket rather than a round-robin league. These get a
 // row per match (incl. undecided slots) in bracket_nodes so the bracket can be drawn.
-pub const BRACKET_TYPES: [&str; 4] =
-    ["single_elimination", "double_elimination", "bracket_groups", "custom_bracket"];
+pub const BRACKET_TYPES: [&str; 4] = [
+    "single_elimination",
+    "double_elimination",
+    "bracket_groups",
+    "custom_bracket",
+];
 
 // Stage types whose groups have a ranking table, stored in standings.
 pub const STANDINGS_TYPES: [&str; 3] = ["league", "swiss", "pools"];
@@ -248,7 +252,11 @@ async fn fetch_feed(client: &reqwest::Client, toornament_id: &str) -> Result<Fee
         "stages",
     )
     .await?;
-    let stage_ids = stages.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(",");
+    let stage_ids = stages
+        .iter()
+        .map(|s| s.id.as_str())
+        .collect::<Vec<_>>()
+        .join(",");
 
     let (mut groups, mut rounds) = (Vec::new(), Vec::new());
     if !stages.is_empty() {
@@ -280,13 +288,21 @@ async fn fetch_feed(client: &reqwest::Client, toornament_id: &str) -> Result<Fee
     let mut matches = Vec::new();
     for filter in [PAST_MATCHES, UPCOMING_MATCHES] {
         matches.extend(
-            fetch_items::<RawMatch>(client, &format!("{matches_url}{filter}"), MATCHES_PAGE, "matches")
-                .await?,
+            fetch_items::<RawMatch>(
+                client,
+                &format!("{matches_url}{filter}"),
+                MATCHES_PAGE,
+                "matches",
+            )
+            .await?,
         );
     }
 
     let mut nodes = Vec::new();
-    for stage in stages.iter().filter(|s| BRACKET_TYPES.contains(&s.kind.as_str())) {
+    for stage in stages
+        .iter()
+        .filter(|s| BRACKET_TYPES.contains(&s.kind.as_str()))
+    {
         let url = format!("{BASE_URL}/api/bracket-nodes?stage_ids={}", stage.id);
         nodes.extend(fetch_items::<RawNode>(client, &url, NODES_PAGE, "bracket-nodes").await?);
     }
@@ -327,7 +343,11 @@ async fn fetch_feed(client: &reqwest::Client, toornament_id: &str) -> Result<Fee
 
 /// Delete the matches under one group or round (`column` is GroupID or RoundID), with
 /// their predictions and the bracket nodes there. Nodes point at matches, so they go first.
-async fn delete_matches_under(conn: &mut SqliteConnection, column: &str, id: i64) -> sqlx::Result<()> {
+async fn delete_matches_under(
+    conn: &mut SqliteConnection,
+    column: &str,
+    id: i64,
+) -> sqlx::Result<()> {
     for sql in [
         "DELETE FROM bracket_nodes WHERE {column} = ?",
         "DELETE FROM predictions WHERE MatchID IN (SELECT MatchID FROM matches WHERE {column} = ?)",
@@ -349,7 +369,11 @@ async fn delete_matches_under(conn: &mut SqliteConnection, column: &str, id: i64
 /// predictions on those: toornament will never score them. Standings and league picks go
 /// with their group (ON DELETE CASCADE). Rows added by hand (no ToornamentId) stay. A feed
 /// without stages is more likely a hiccup than a wiped tournament, so it prunes nothing.
-async fn prune_tree(conn: &mut SqliteConnection, tournament_id: i64, feed: &Feed) -> sqlx::Result<()> {
+async fn prune_tree(
+    conn: &mut SqliteConnection,
+    tournament_id: i64,
+    feed: &Feed,
+) -> sqlx::Result<()> {
     if feed.stages.is_empty() {
         return Ok(());
     }
@@ -357,18 +381,27 @@ async fn prune_tree(conn: &mut SqliteConnection, tournament_id: i64, feed: &Feed
     let groups: HashSet<&str> = feed.groups.iter().map(|g| g.id.as_str()).collect();
     let rounds: HashSet<&str> = feed.rounds.iter().map(|r| r.id.as_str()).collect();
     let nodes: HashSet<&str> = feed.nodes.iter().map(|n| n.id.as_str()).collect();
-    let gone = |known: &HashSet<&str>, id: &Option<String>| id.as_deref().is_some_and(|id| !known.contains(id));
+    let gone = |known: &HashSet<&str>, id: &Option<String>| {
+        id.as_deref().is_some_and(|id| !known.contains(id))
+    };
 
-    let tree: Vec<(i64, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>)> =
-        sqlx::query_as(
-            "SELECT s.StageID, s.ToornamentId, g.GroupID, g.ToornamentId, r.RoundID, r.ToornamentId \
+    let tree: Vec<(
+        i64,
+        Option<String>,
+        Option<i64>,
+        Option<String>,
+        Option<i64>,
+        Option<String>,
+    )> = sqlx::query_as(
+        "SELECT s.StageID, s.ToornamentId, g.GroupID, g.ToornamentId, r.RoundID, r.ToornamentId \
              FROM stages s LEFT JOIN groups g ON g.StageID = s.StageID \
              LEFT JOIN rounds r ON r.GroupID = g.GroupID WHERE s.TournamentID = ?",
-        )
-        .bind(tournament_id)
-        .fetch_all(&mut *conn)
-        .await?;
-    let (mut stale_stages, mut stale_groups, mut stale_rounds) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
+    )
+    .bind(tournament_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let (mut stale_stages, mut stale_groups, mut stale_rounds) =
+        (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
     for (stage, stage_tid, group, group_tid, round, round_tid) in tree {
         let stage_gone = gone(&stages, &stage_tid);
         if stage_gone {
@@ -392,7 +425,10 @@ async fn prune_tree(conn: &mut SqliteConnection, tournament_id: i64, feed: &Feed
             .bind(tournament_id)
             .fetch_all(&mut *conn)
             .await?;
-    for node in stored_nodes.iter().filter(|id| !nodes.contains(id.as_str())) {
+    for node in stored_nodes
+        .iter()
+        .filter(|id| !nodes.contains(id.as_str()))
+    {
         for sql in [
             "DELETE FROM bracket_nodes WHERE NodeId = ?",
             "DELETE FROM predictions WHERE MatchID IN (SELECT MatchID FROM matches WHERE ToornamentId = ?)",
@@ -404,14 +440,23 @@ async fn prune_tree(conn: &mut SqliteConnection, tournament_id: i64, feed: &Feed
 
     for &round in &stale_rounds {
         delete_matches_under(conn, "RoundID", round).await?;
-        sqlx::query("DELETE FROM rounds WHERE RoundID = ?").bind(round).execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM rounds WHERE RoundID = ?")
+            .bind(round)
+            .execute(&mut *conn)
+            .await?;
     }
     for &group in &stale_groups {
         delete_matches_under(conn, "GroupID", group).await?;
-        sqlx::query("DELETE FROM groups WHERE GroupID = ?").bind(group).execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM groups WHERE GroupID = ?")
+            .bind(group)
+            .execute(&mut *conn)
+            .await?;
     }
     for &stage in &stale_stages {
-        sqlx::query("DELETE FROM stages WHERE StageID = ?").bind(stage).execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM stages WHERE StageID = ?")
+            .bind(stage)
+            .execute(&mut *conn)
+            .await?;
     }
     if !(stale_stages.is_empty() && stale_groups.is_empty() && stale_rounds.is_empty()) {
         log::info!(
@@ -506,8 +551,11 @@ async fn upsert_teams(
     feed: &Feed,
     ids: &mut Ids,
 ) -> sqlx::Result<()> {
-    let mut participants: HashMap<&str, &Participant> =
-        feed.participants.iter().map(|p| (p.id.as_str(), p)).collect();
+    let mut participants: HashMap<&str, &Participant> = feed
+        .participants
+        .iter()
+        .map(|p| (p.id.as_str(), p))
+        .collect();
     let opponents = feed
         .matches
         .iter()
@@ -573,11 +621,7 @@ async fn upsert_teams(
 
 /// Replace the lineup of every team the participants endpoint returned. Lineup entries
 /// have no id of their own and names aren't unique, so the whole lineup is rewritten.
-async fn replace_players(
-    conn: &mut SqliteConnection,
-    feed: &Feed,
-    ids: &Ids,
-) -> sqlx::Result<()> {
+async fn replace_players(conn: &mut SqliteConnection, feed: &Feed, ids: &Ids) -> sqlx::Result<()> {
     for p in &feed.participants {
         let Some(&team_id) = ids.teams.get(&p.id) else {
             continue;
@@ -783,7 +827,11 @@ async fn replace_standings(
         .filter(|s| STANDINGS_TYPES.contains(&s.kind.as_str()))
         .map(|s| s.id.as_str())
         .collect();
-    for g in feed.groups.iter().filter(|g| ranked_stages.contains(&g.stage.id.as_str())) {
+    for g in feed
+        .groups
+        .iter()
+        .filter(|g| ranked_stages.contains(&g.stage.id.as_str()))
+    {
         if let Some(group_id) = ids.groups.get(&g.id) {
             sqlx::query("DELETE FROM standings WHERE GroupID = ?")
                 .bind(group_id)
@@ -801,7 +849,10 @@ async fn replace_standings(
             ids.groups.get(&item.ranking.group.id),
             ids.teams.get(&participant.id),
         ) else {
-            log::warn!("ranking of {} has an unknown group or team", participant.name);
+            log::warn!(
+                "ranking of {} has an unknown group or team",
+                participant.name
+            );
             continue;
         };
         let p = &item.properties;
@@ -849,7 +900,11 @@ async fn load_tournament(
     upsert_teams(&mut tx, tournament_id, &feed, &mut ids).await?;
     replace_players(&mut tx, &feed, &ids).await?;
 
-    let mut matches: Vec<NewMatch> = feed.matches.iter().filter_map(|m| build_match(m, &ids)).collect();
+    let mut matches: Vec<NewMatch> = feed
+        .matches
+        .iter()
+        .filter_map(|m| build_match(m, &ids))
+        .collect();
     matches.sort_by_key(|m| m.number);
 
     // Matches are written before the nodes so the MatchID links resolve.
@@ -947,7 +1002,10 @@ mod tests {
     // round, a node and a predicted match in it.
     async fn db_with_old_bracket() -> SqliteConnection {
         let mut conn = SqliteConnection::connect("sqlite::memory:").await.unwrap();
-        sqlx::raw_sql(include_str!("init.sql")).execute(&mut conn).await.unwrap();
+        sqlx::raw_sql(include_str!("init.sql"))
+            .execute(&mut conn)
+            .await
+            .unwrap();
         sqlx::raw_sql(
             "PRAGMA foreign_keys = ON;
              INSERT INTO users (Name) VALUES ('fan');
@@ -997,7 +1055,10 @@ mod tests {
     }
 
     async fn count(conn: &mut SqliteConnection, table: &str) -> i64 {
-        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}")).fetch_one(conn).await.unwrap()
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(conn)
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -1007,7 +1068,9 @@ mod tests {
         let feed = feed(&[("g-new", 1)]);
 
         prune_tree(&mut conn, 1, &feed).await.unwrap();
-        upsert_tree(&mut conn, 1, &feed, &mut Ids::default()).await.unwrap();
+        upsert_tree(&mut conn, 1, &feed, &mut Ids::default())
+            .await
+            .unwrap();
 
         let groups: Vec<String> = sqlx::query_scalar("SELECT ToornamentId FROM groups")
             .fetch_all(&mut conn)
@@ -1048,7 +1111,14 @@ mod tests {
 
         prune_tree(&mut conn, 1, &feed).await.unwrap();
 
-        for table in ["stages", "groups", "rounds", "bracket_nodes", "matches", "predictions"] {
+        for table in [
+            "stages",
+            "groups",
+            "rounds",
+            "bracket_nodes",
+            "matches",
+            "predictions",
+        ] {
             assert_eq!(count(&mut conn, table).await, 1, "{table}");
         }
     }

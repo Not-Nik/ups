@@ -35,14 +35,19 @@ pub async fn migrate(conn: &mut SqliteConnection, db_path: &str) -> Result<()> {
 
     let backup = format!("{db_path}.v{version}.bak");
     let _ = std::fs::remove_file(&backup);
-    sqlx::query("VACUUM INTO ?").bind(&backup).execute(&mut *conn).await?;
+    sqlx::query("VACUUM INTO ?")
+        .bind(&backup)
+        .execute(&mut *conn)
+        .await?;
     info!("database is at version {version}, backed up to {backup}");
 
     apply(conn, pending).await
 }
 
 async fn get_version(conn: &mut SqliteConnection) -> sqlx::Result<i64> {
-    sqlx::query_scalar("PRAGMA user_version").fetch_one(conn).await
+    sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(conn)
+        .await
 }
 
 /// The migrations a database at `version` still needs.
@@ -72,9 +77,13 @@ async fn apply(conn: &mut SqliteConnection, migrations: &[(i64, &str)]) -> Resul
     // Scripts may rebuild tables; with foreign keys on, dropping the old table would
     // cascade into the rows that reference it. The check before each commit makes up
     // for it. The pragma can't be changed inside a transaction.
-    sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *conn).await?;
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *conn)
+        .await?;
     let result = apply_each(conn, migrations).await;
-    sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await?;
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *conn)
+        .await?;
     result
 }
 
@@ -85,7 +94,9 @@ async fn apply_each(conn: &mut SqliteConnection, migrations: &[(i64, &str)]) -> 
             .execute(&mut *tx)
             .await
             .map_err(|e| format!("migration {number} failed: {e}"))?;
-        let violations = sqlx::query("PRAGMA foreign_key_check").fetch_all(&mut *tx).await?;
+        let violations = sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&mut *tx)
+            .await?;
         if !violations.is_empty() {
             Err(format!(
                 "migration {number} leaves {} foreign key violations",
@@ -93,7 +104,9 @@ async fn apply_each(conn: &mut SqliteConnection, migrations: &[(i64, &str)]) -> 
             ))?
         }
         // A pragma takes no bind parameters; the number is ours, not user input.
-        sqlx::query(&format!("PRAGMA user_version = {number}")).execute(&mut *tx).await?;
+        sqlx::query(&format!("PRAGMA user_version = {number}"))
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         info!("applied migration {number}");
     }
@@ -120,7 +133,10 @@ mod tests {
     }
 
     async fn count(conn: &mut SqliteConnection, table: &str) -> i64 {
-        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}")).fetch_one(conn).await.unwrap()
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(conn)
+            .await
+            .unwrap()
     }
 
     const ADD_COLUMN: (i64, &str) = (8, "ALTER TABLE parent ADD COLUMN Name TEXT;");
@@ -163,22 +179,36 @@ mod tests {
         let all = [ADD_COLUMN, REBUILD];
         let mut conn = db_at(8).await;
         // 8 is already in: applying it again would fail on the missing column it adds.
-        sqlx::raw_sql(ADD_COLUMN.1).execute(&mut conn).await.unwrap();
+        sqlx::raw_sql(ADD_COLUMN.1)
+            .execute(&mut conn)
+            .await
+            .unwrap();
 
         apply(&mut conn, pending(8, &all).unwrap()).await.unwrap();
 
         assert_eq!(get_version(&mut conn).await.unwrap(), 9);
-        sqlx::query("SELECT Extra FROM parent").execute(&mut conn).await.unwrap();
+        sqlx::query("SELECT Extra FROM parent")
+            .execute(&mut conn)
+            .await
+            .unwrap();
         // The rebuild didn't cascade into the rows pointing at the dropped table.
         assert_eq!(count(&mut conn, "child").await, 1);
     }
 
     #[tokio::test]
     async fn failing_migration_keeps_the_version_before_it() {
-        let all = [ADD_COLUMN, (9, "INSERT INTO parent (ID) VALUES (2); SELECT * FROM missing;")];
+        let all = [
+            ADD_COLUMN,
+            (
+                9,
+                "INSERT INTO parent (ID) VALUES (2); SELECT * FROM missing;",
+            ),
+        ];
         let mut conn = db_at(7).await;
 
-        let err = apply(&mut conn, pending(7, &all).unwrap()).await.unwrap_err();
+        let err = apply(&mut conn, pending(7, &all).unwrap())
+            .await
+            .unwrap_err();
 
         assert!(err.to_string().contains("migration 9 failed"), "{err}");
         assert_eq!(get_version(&mut conn).await.unwrap(), 8);
@@ -190,7 +220,9 @@ mod tests {
         let all = [(8, "DELETE FROM parent;")];
         let mut conn = db_at(7).await;
 
-        let err = apply(&mut conn, pending(7, &all).unwrap()).await.unwrap_err();
+        let err = apply(&mut conn, pending(7, &all).unwrap())
+            .await
+            .unwrap_err();
 
         assert!(err.to_string().contains("foreign key violations"), "{err}");
         assert_eq!(get_version(&mut conn).await.unwrap(), 7);
@@ -200,9 +232,18 @@ mod tests {
     #[test]
     fn refuses_versions_it_cannot_migrate() {
         let all = [ADD_COLUMN];
-        assert!(pending(0, &all).unwrap_err().to_string().contains("by hand"));
-        assert!(pending(9, &all).unwrap_err().to_string().contains("newer than this build"));
+        assert!(pending(0, &all)
+            .unwrap_err()
+            .to_string()
+            .contains("by hand"));
+        assert!(pending(9, &all)
+            .unwrap_err()
+            .to_string()
+            .contains("newer than this build"));
         assert!(pending(8, &all).unwrap().is_empty());
-        assert!(pending(7, &[REBUILD]).unwrap_err().to_string().contains("out of order"));
+        assert!(pending(7, &[REBUILD])
+            .unwrap_err()
+            .to_string()
+            .contains("out of order"));
     }
 }

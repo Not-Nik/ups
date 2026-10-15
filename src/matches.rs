@@ -5,9 +5,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use crate::loader::STANDINGS_TYPES;
-use crate::structures::{
-    Bracket, BracketNode, Match, Player, Stage, Standing, Team, Tournament,
-};
+use crate::structures::{Bracket, BracketNode, Match, Player, Stage, Standing, Team, Tournament};
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
 use sqlx::{QueryBuilder, SqliteConnection};
@@ -358,7 +356,9 @@ pub async fn get_stages(
         qb.push_bind(*kind);
     }
     qb.push(") ORDER BY Number");
-    qb.build_query_as::<Stage>().fetch_all(conn.deref_mut()).await
+    qb.build_query_as::<Stage>()
+        .fetch_all(conn.deref_mut())
+        .await
 }
 
 /// Whether a stage with that id existed.

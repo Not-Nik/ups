@@ -16,8 +16,8 @@ use crate::matches::{
     get_stages, get_standings, get_team_id, get_teams, get_tournaments, set_stage_pick_count,
 };
 use crate::predictions::{
-    count_group_tournament_teams, get_predictions, get_standing_predictions, get_user_predictions,
-    get_group_picking, set_prediction, set_standing_prediction,
+    count_group_tournament_teams, get_group_picking, get_predictions, get_standing_predictions,
+    get_user_predictions, set_prediction, set_standing_prediction,
 };
 use crate::structures::*;
 
@@ -648,7 +648,13 @@ pub async fn proxy(
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(';').next().unwrap_or("").trim().to_ascii_lowercase())
+        .map(|v| {
+            v.split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase()
+        })
         .and_then(|v| PROXY_TYPES.iter().copied().find(|t| *t == v));
     let Some(content_type) = content_type else {
         return Err(warp::reject::custom(AccessDenied))?;
