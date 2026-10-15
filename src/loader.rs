@@ -7,7 +7,7 @@
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use sqlx::{Connection, SqliteConnection};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -323,6 +323,105 @@ async fn fetch_feed(client: &reqwest::Client, toornament_id: &str) -> Result<Fee
         nodes,
         rankings,
     })
+}
+
+/// Delete the matches under one group or round (`column` is GroupID or RoundID), with
+/// their predictions and the bracket nodes there. Nodes point at matches, so they go first.
+async fn delete_matches_under(conn: &mut SqliteConnection, column: &str, id: i64) -> sqlx::Result<()> {
+    for sql in [
+        "DELETE FROM bracket_nodes WHERE {column} = ?",
+        "DELETE FROM predictions WHERE MatchID IN (SELECT MatchID FROM matches WHERE {column} = ?)",
+        "DELETE FROM matches WHERE {column} = ?",
+    ] {
+        sqlx::query(&sql.replace("{column}", column))
+            .bind(id)
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Delete what toornament no longer has. A regenerated bracket comes back with new group,
+/// round and node ids but the old numbers, which clash with the old rows on
+/// UNIQUE (StageID, Number) and fail the whole refresh; even without a clash, the old
+/// bracket would still be drawn. So this tournament's stages, groups, rounds and bracket
+/// nodes whose ToornamentId isn't in the feed go, and with them their matches and the
+/// predictions on those: toornament will never score them. Standings and league picks go
+/// with their group (ON DELETE CASCADE). Rows added by hand (no ToornamentId) stay. A feed
+/// without stages is more likely a hiccup than a wiped tournament, so it prunes nothing.
+async fn prune_tree(conn: &mut SqliteConnection, tournament_id: i64, feed: &Feed) -> sqlx::Result<()> {
+    if feed.stages.is_empty() {
+        return Ok(());
+    }
+    let stages: HashSet<&str> = feed.stages.iter().map(|s| s.id.as_str()).collect();
+    let groups: HashSet<&str> = feed.groups.iter().map(|g| g.id.as_str()).collect();
+    let rounds: HashSet<&str> = feed.rounds.iter().map(|r| r.id.as_str()).collect();
+    let nodes: HashSet<&str> = feed.nodes.iter().map(|n| n.id.as_str()).collect();
+    let gone = |known: &HashSet<&str>, id: &Option<String>| id.as_deref().is_some_and(|id| !known.contains(id));
+
+    let tree: Vec<(i64, Option<String>, Option<i64>, Option<String>, Option<i64>, Option<String>)> =
+        sqlx::query_as(
+            "SELECT s.StageID, s.ToornamentId, g.GroupID, g.ToornamentId, r.RoundID, r.ToornamentId \
+             FROM stages s LEFT JOIN groups g ON g.StageID = s.StageID \
+             LEFT JOIN rounds r ON r.GroupID = g.GroupID WHERE s.TournamentID = ?",
+        )
+        .bind(tournament_id)
+        .fetch_all(&mut *conn)
+        .await?;
+    let (mut stale_stages, mut stale_groups, mut stale_rounds) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
+    for (stage, stage_tid, group, group_tid, round, round_tid) in tree {
+        let stage_gone = gone(&stages, &stage_tid);
+        if stage_gone {
+            stale_stages.insert(stage);
+        }
+        let Some(group) = group else { continue };
+        let group_gone = stage_gone || gone(&groups, &group_tid);
+        if group_gone {
+            stale_groups.insert(group);
+        }
+        if let Some(round) = round {
+            if group_gone || gone(&rounds, &round_tid) {
+                stale_rounds.insert(round);
+            }
+        }
+    }
+
+    // A node toornament dropped from a group that's still there.
+    let stored_nodes: Vec<String> =
+        sqlx::query_scalar("SELECT NodeId FROM bracket_nodes WHERE TournamentID = ?")
+            .bind(tournament_id)
+            .fetch_all(&mut *conn)
+            .await?;
+    for node in stored_nodes.iter().filter(|id| !nodes.contains(id.as_str())) {
+        for sql in [
+            "DELETE FROM bracket_nodes WHERE NodeId = ?",
+            "DELETE FROM predictions WHERE MatchID IN (SELECT MatchID FROM matches WHERE ToornamentId = ?)",
+            "DELETE FROM matches WHERE ToornamentId = ?",
+        ] {
+            sqlx::query(sql).bind(node).execute(&mut *conn).await?;
+        }
+    }
+
+    for &round in &stale_rounds {
+        delete_matches_under(conn, "RoundID", round).await?;
+        sqlx::query("DELETE FROM rounds WHERE RoundID = ?").bind(round).execute(&mut *conn).await?;
+    }
+    for &group in &stale_groups {
+        delete_matches_under(conn, "GroupID", group).await?;
+        sqlx::query("DELETE FROM groups WHERE GroupID = ?").bind(group).execute(&mut *conn).await?;
+    }
+    for &stage in &stale_stages {
+        sqlx::query("DELETE FROM stages WHERE StageID = ?").bind(stage).execute(&mut *conn).await?;
+    }
+    if !(stale_stages.is_empty() && stale_groups.is_empty() && stale_rounds.is_empty()) {
+        log::info!(
+            "Pruned {} stages, {} groups, {} rounds toornament no longer has",
+            stale_stages.len(),
+            stale_groups.len(),
+            stale_rounds.len()
+        );
+    }
+    Ok(())
 }
 
 /// Upsert stages, groups and rounds by their toornament id.
@@ -745,6 +844,7 @@ async fn load_tournament(
     let mut tx = conn.begin().await?;
     let mut ids = Ids::default();
 
+    prune_tree(&mut tx, tournament_id, &feed).await?;
     upsert_tree(&mut tx, tournament_id, &feed, &mut ids).await?;
     upsert_teams(&mut tx, tournament_id, &feed, &mut ids).await?;
     replace_players(&mut tx, &feed, &ids).await?;
@@ -832,5 +932,124 @@ impl Refresher {
         };
         log::info!("Refreshing tournament {tournament_id}");
         load_tournament(&self.db, &self.client, tournament_id as i64, &toornament_id).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node_ref(id: &str) -> NodeRef {
+        NodeRef { id: id.into() }
+    }
+
+    // A tournament whose stage "s" holds the bracket group "g-old" (number 1), with a
+    // round, a node and a predicted match in it.
+    async fn db_with_old_bracket() -> SqliteConnection {
+        let mut conn = SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        sqlx::raw_sql(include_str!("init.sql")).execute(&mut conn).await.unwrap();
+        sqlx::raw_sql(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO users (Name) VALUES ('fan');
+             INSERT INTO tournaments VALUES (1, 'T', 't');
+             INSERT INTO teams (TeamID, TournamentID, Name) VALUES (1, 1, 'A'), (2, 1, 'B');
+             INSERT INTO stages (StageID, TournamentID, Number, Name, Type, ToornamentId)
+                 VALUES (1, 1, 1, 'Wildcard', 'double_elimination', 's');
+             INSERT INTO groups (GroupID, StageID, Number, Name, ToornamentId) VALUES (1, 1, 1, 'WB', 'g-old');
+             INSERT INTO rounds (RoundID, GroupID, Number, Name, ToornamentId) VALUES (1, 1, 1, 'R1', 'r-old');
+             INSERT INTO matches (MatchID, TournamentID, GroupID, RoundID, TeamA, TeamB, ToornamentId)
+                 VALUES (1, 1, 1, 1, 1, 2, 'n-old');
+             INSERT INTO predictions VALUES ('fan', 1, 2, 1);
+             INSERT INTO bracket_nodes (NodeId, TournamentID, GroupID, RoundID, Position, Depth, MatchID)
+                 VALUES ('n-old', 1, 1, 1, 1, 1, 1);",
+        )
+        .execute(&mut conn)
+        .await
+        .unwrap();
+        conn
+    }
+
+    fn feed(groups: &[(&str, i64)]) -> Feed {
+        Feed {
+            stages: vec![RawStage {
+                id: "s".into(),
+                number: 1,
+                name: "Wildcard".into(),
+                kind: "double_elimination".into(),
+                status: None,
+            }],
+            groups: groups
+                .iter()
+                .map(|&(id, number)| RawGroup {
+                    id: id.into(),
+                    number,
+                    name: "WB".into(),
+                    status: None,
+                    stage: node_ref("s"),
+                })
+                .collect(),
+            rounds: vec![],
+            participants: vec![],
+            matches: vec![],
+            nodes: vec![],
+            rankings: vec![],
+        }
+    }
+
+    async fn count(conn: &mut SqliteConnection, table: &str) -> i64 {
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}")).fetch_one(conn).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn regenerated_bracket_replaces_the_old_one() {
+        let mut conn = db_with_old_bracket().await;
+        // Toornament regenerated the bracket: same stage, new group id, same number.
+        let feed = feed(&[("g-new", 1)]);
+
+        prune_tree(&mut conn, 1, &feed).await.unwrap();
+        upsert_tree(&mut conn, 1, &feed, &mut Ids::default()).await.unwrap();
+
+        let groups: Vec<String> = sqlx::query_scalar("SELECT ToornamentId FROM groups")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(groups, ["g-new"]);
+        for table in ["rounds", "bracket_nodes", "matches", "predictions"] {
+            assert_eq!(count(&mut conn, table).await, 0, "{table}");
+        }
+        assert_eq!(count(&mut conn, "stages").await, 1);
+    }
+
+    #[tokio::test]
+    async fn keeps_what_the_feed_still_has() {
+        let mut conn = db_with_old_bracket().await;
+        let mut feed = feed(&[("g-old", 1)]);
+        feed.rounds.push(RawRound {
+            id: "r-old".into(),
+            number: 1,
+            name: "R1".into(),
+            status: None,
+            group: node_ref("g-old"),
+        });
+        // The node is gone from the feed, so it goes; the round it sat in stays.
+        prune_tree(&mut conn, 1, &feed).await.unwrap();
+
+        assert_eq!(count(&mut conn, "groups").await, 1);
+        assert_eq!(count(&mut conn, "rounds").await, 1);
+        assert_eq!(count(&mut conn, "bracket_nodes").await, 0);
+        assert_eq!(count(&mut conn, "matches").await, 0);
+    }
+
+    #[tokio::test]
+    async fn empty_feed_prunes_nothing() {
+        let mut conn = db_with_old_bracket().await;
+        let mut feed = feed(&[]);
+        feed.stages.clear();
+
+        prune_tree(&mut conn, 1, &feed).await.unwrap();
+
+        for table in ["stages", "groups", "rounds", "bracket_nodes", "matches", "predictions"] {
+            assert_eq!(count(&mut conn, table).await, 1, "{table}");
+        }
     }
 }
