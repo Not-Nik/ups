@@ -19,7 +19,7 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
   the Standings view while it's open; then match predictions with ✓/✗ on finished matches
 - `privacy.html` / `privacy.js` — privacy policy
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches, set each league stage's pick count
-  (login-gated, admin-only)
+  and each tournament's refresh interval (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
 - `roster.js` — the searchable Teams and Players views
@@ -38,8 +38,8 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 
 | Method | Path                   | Auth | Notes                                                                                       |
 |--------|------------------------|------|---------------------------------------------------------------------------------------------|
-| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id}` — drives the landing grid                    |
-| GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per 6 h) and answers `X-Refreshing: 1` while one runs |
+| GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id, refresh_interval}` — drives the landing grid. `refresh_interval` is in seconds |
+| GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per the tournament's `refresh_interval`, 6 h by default) and answers `X-Refreshing: 1` while one runs |
 | GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
@@ -56,6 +56,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
+| POST   | `/api/tournament/:id/refresh` | admin| The interval as a bare JSON number (e.g. `21600`) — sets the shortest gap between two toornament refreshes of the tournament, in seconds, 60 to 604800 (a week). `BadRequest` outside that range or for an unknown tournament. Applies to the next request at once; the admin panel edits it in minutes |
 | POST   | `/api/match`           | admin| Full `Match` body: `tournament_id`, `team_a/b`, `logo_a/b`, `score_a/b?`, `stage_name`, `group_name`, `round_name`, plus optional `stage_type`, `stage_number`, `toornament_id` (+ dummy `id`) |
 | -      | `/api/proxy`           | -    | Image proxy for team logos; every `<img>` goes through it (`proxied(url)` in common.js)      |
 

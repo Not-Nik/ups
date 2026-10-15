@@ -1,6 +1,6 @@
 // ============== Admin ==============
-// Panel for adding tournaments and matches and setting how many places of a league
-// users predict. The endpoints require a valid token belonging to an admin account;
+// Panel for adding tournaments and matches, setting how many places of a league users
+// predict and how often each tournament is refreshed from toornament. The endpoints require a valid token belonging to an admin account;
 // the server answers 404 otherwise.
 
 const shake = el => {
@@ -85,14 +85,18 @@ $('login-password').addEventListener('keydown', e => {
 
 // ============== Tournaments ==============
 
+let tournaments = []; // from /api/tournaments, for the refresh interval card
+
 async function loadTournamentOptions() {
     const list = await tryFetch(() => api('/api/tournaments'));
     if (!Array.isArray(list)) return;
-    for (const select of [$('match-tournament'), $('picks-tournament')]) {
+    tournaments = list;
+    for (const select of [$('match-tournament'), $('picks-tournament'), $('refresh-tournament')]) {
         select.replaceChildren(...list.slice().sort(byNewestTournament).map(t =>
             makeEl('option', {value: t.tournament_id, textContent: t.name})
         ));
     }
+    showRefreshInterval();
 }
 
 async function submitTournament(btn) {
@@ -178,6 +182,40 @@ async function submitPickCounts(btn) {
             }});
             input.dataset.saved = pick_count;
         }
+        toast('Saved.', true);
+    } catch (e) {
+        report(e, 'Could not be saved');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ============== Refresh interval ==============
+// How long the server waits between two toornament refreshes of a tournament. Stored
+// in seconds, edited in minutes.
+
+const MAX_REFRESH_MINUTES = 7 * 24 * 60; // same limit as the server, a week
+
+const selectedTournament = () =>
+    tournaments.find(t => String(t.tournament_id) === $('refresh-tournament').value);
+
+function showRefreshInterval() {
+    const t = selectedTournament();
+    $('refresh-minutes').value = t ? Math.round(t.refresh_interval / 60) : '';
+}
+
+async function submitRefreshInterval(btn) {
+    const t = selectedTournament();
+    const minutes = parseInt($('refresh-minutes').value, 10);
+    if (!t || isNaN(minutes) || minutes < 1 || minutes > MAX_REFRESH_MINUTES) {
+        shake(t ? $('refresh-minutes') : $('refresh-tournament'));
+        return;
+    }
+    btn.disabled = true;
+    try {
+        const refresh_interval = minutes * 60;
+        await api(`/api/tournament/${t.tournament_id}/refresh`, {method: 'POST', body: refresh_interval});
+        t.refresh_interval = refresh_interval;
         toast('Saved.', true);
     } catch (e) {
         report(e, 'Could not be saved');
@@ -450,5 +488,7 @@ $('login-submit').addEventListener('click', () => submitLogin($('login-submit'))
 $('match-tournament').addEventListener('change', loadTournamentData);
 $('picks-tournament').addEventListener('change', loadPickCounts);
 $('picks-submit').addEventListener('click', () => submitPickCounts($('picks-submit')));
+$('refresh-tournament').addEventListener('change', showRefreshInterval);
+$('refresh-submit').addEventListener('click', () => submitRefreshInterval($('refresh-submit')));
 
 render();

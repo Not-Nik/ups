@@ -26,8 +26,9 @@ const ROUNDS_PAGE: usize = 50;
 const RANKINGS_PAGE: usize = 50;
 const PARTICIPANTS_PAGE: usize = 48;
 
-// Shortest gap between two refreshes of the same tournament.
-const REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+// Shortest gap between two refreshes of a tournament that isn't in the database (the
+// column's default). Every other tournament has its own, set in the admin panel.
+const DEFAULT_REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 // Stage types played as a bracket rather than a round-robin league. These get a
 // row per match (incl. undecided slots) in bracket_nodes so the bracket can be drawn.
@@ -923,7 +924,7 @@ struct Refresh {
 }
 
 /// Keeps every tournament's data fresh on demand: hitting its matches endpoint
-/// starts a refresh, but at most once per REFRESH_INTERVAL. Refreshes run
+/// starts a refresh, but at most once per the tournament's RefreshInterval. Refreshes run
 /// detached so a visitor never waits on toornament — the endpoint answers with
 /// the data it has and flags that fresher data is on its way.
 pub struct Refresher {
@@ -944,16 +945,16 @@ impl Refresher {
     /// Start a refresh unless one is running or the last one was too recent.
     /// Returns whether a refresh is in flight afterwards.
     pub async fn refresh(self: &Arc<Self>, tournament_id: u32) -> bool {
+        // Read on every call, so a new interval from the admin panel applies at once.
+        // Looked up before taking `state`, so the two locks are never held together.
+        let interval = self.interval(tournament_id).await;
         {
             let mut state = self.state.lock().await;
             let refresh = state.entry(tournament_id).or_default();
             if refresh.running {
                 return true;
             }
-            if refresh
-                .last
-                .is_some_and(|last| last.elapsed() < REFRESH_INTERVAL)
-            {
+            if refresh.last.is_some_and(|last| last.elapsed() < interval) {
                 return false;
             }
             refresh.running = true;
@@ -971,6 +972,23 @@ impl Refresher {
         });
 
         true
+    }
+
+    async fn interval(&self, tournament_id: u32) -> Duration {
+        let secs = sqlx::query_scalar::<_, i64>(
+            "SELECT RefreshInterval FROM tournaments WHERE TournamentID = ?",
+        )
+        .bind(tournament_id)
+        .fetch_optional(self.db.lock().await.deref_mut())
+        .await;
+        match secs {
+            Ok(Some(secs)) => Duration::from_secs(secs.max(0) as u64),
+            Ok(None) => DEFAULT_REFRESH_INTERVAL,
+            Err(err) => {
+                log::error!("reading the refresh interval of tournament {tournament_id} failed: {err}");
+                DEFAULT_REFRESH_INTERVAL
+            }
+        }
     }
 
     async fn load(&self, tournament_id: u32) -> Result<()> {
@@ -1009,7 +1027,7 @@ mod tests {
         sqlx::raw_sql(
             "PRAGMA foreign_keys = ON;
              INSERT INTO users (Name) VALUES ('fan');
-             INSERT INTO tournaments VALUES (1, 'T', 't');
+             INSERT INTO tournaments (TournamentID, Name, ToornamentId) VALUES (1, 'T', 't');
              INSERT INTO teams (TeamID, TournamentID, Name) VALUES (1, 1, 'A'), (2, 1, 'B');
              INSERT INTO stages (StageID, TournamentID, Number, Name, Type, ToornamentId)
                  VALUES (1, 1, 1, 'Wildcard', 'double_elimination', 's');

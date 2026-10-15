@@ -1,6 +1,6 @@
 -- The number of the last script in migration/ this schema includes. The server reads it
 -- on startup and applies the newer ones; raise it whenever a migration is added.
-PRAGMA user_version = 7;
+PRAGMA user_version = 8;
 
 CREATE TABLE users
 (
@@ -27,7 +27,8 @@ CREATE TABLE tournaments
 (
     TournamentID INTEGER PRIMARY KEY,
     Name         TEXT NOT NULL,
-    ToornamentId TEXT
+    ToornamentId TEXT,
+    RefreshInterval INTEGER NOT NULL DEFAULT 21600 -- seconds between toornament refreshes
 );
 
 -- The toornament tree: tournament -> stage -> group -> round. ToornamentId is the

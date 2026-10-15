@@ -28,9 +28,10 @@ const MATCH_SELECT: &str = "SELECT m.MatchID, m.TournamentID, ta.Name AS TeamA, 
 pub async fn get_tournaments(
     conn: &mut MutexGuard<'_, SqliteConnection>,
 ) -> sqlx::Result<Vec<Tournament>> {
-    let mut tournament_query =
-        sqlx::query_as::<_, Tournament>("SELECT TournamentID, Name, ToornamentId FROM tournaments")
-            .fetch(conn.deref_mut());
+    let mut tournament_query = sqlx::query_as::<_, Tournament>(
+        "SELECT TournamentID, Name, ToornamentId, RefreshInterval FROM tournaments",
+    )
+    .fetch(conn.deref_mut());
 
     let mut tournaments = Vec::new();
 
@@ -370,6 +371,19 @@ pub async fn set_stage_pick_count(
     let result = sqlx::query("UPDATE stages SET PickCount = ? WHERE StageID = ?")
         .bind(pick_count as i64)
         .bind(stage_id as i64)
+        .execute(conn.deref_mut())
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn set_refresh_interval(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    tournament_id: u64,
+    secs: u64,
+) -> sqlx::Result<bool> {
+    let result = sqlx::query("UPDATE tournaments SET RefreshInterval = ? WHERE TournamentID = ?")
+        .bind(secs as i64)
+        .bind(tournament_id as i64)
         .execute(conn.deref_mut())
         .await?;
     Ok(result.rows_affected() > 0)

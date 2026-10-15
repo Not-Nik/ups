@@ -135,6 +135,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::body::json())
         .and_then(endpoints::tournament);
 
+    let refresh_interval = warp::path!("api" / "tournament" / u64 / "refresh")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(conn.clone())
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and_then(endpoints::refresh_interval);
+
     let stages = warp::path!("api" / "stages" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
@@ -283,6 +291,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let routes = me
         .or(tournaments)
         .or(tournament)
+        .or(refresh_interval)
         .or(stages)
         .or(stage_pick_count)
         .or(matches)

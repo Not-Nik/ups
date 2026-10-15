@@ -20,6 +20,11 @@ pub struct Tournament {
     pub name: String,
     #[sqlx(rename = "ToornamentId")]
     pub toornament_id: Option<String>,
+    /// Seconds between toornament refreshes. Ignored when creating a tournament, which
+    /// starts at the column's default.
+    #[sqlx(rename = "RefreshInterval")]
+    #[serde(default)]
+    pub refresh_interval: u64,
 }
 
 #[derive(Deserialize, Serialize, Debug, FromRow)]

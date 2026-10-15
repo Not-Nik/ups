@@ -13,7 +13,8 @@ use crate::loader::{Refresher, BRACKET_TYPES};
 use crate::matches::{
     add_group, add_round, add_stage, add_team, add_tournament, get_bracket_nodes, get_brackets,
     get_group_id, get_matches, get_matches_filter, get_players, get_round_id, get_stage_id,
-    get_stages, get_standings, get_team_id, get_teams, get_tournaments, set_stage_pick_count,
+    get_stages, get_standings, get_team_id, get_teams, get_tournaments, set_refresh_interval,
+    set_stage_pick_count,
 };
 use crate::predictions::{
     count_group_tournament_teams, get_group_picking, get_predictions, get_standing_predictions,
@@ -607,6 +608,34 @@ pub async fn password(
         .map_err(|_| warp::reject::custom(InternalError))?;
 
     Ok(warp::reply::reply())
+}
+
+/// Bounds of a tournament's refresh interval, in seconds: a minute to a week.
+const MIN_REFRESH_INTERVAL: u64 = 60;
+const MAX_REFRESH_INTERVAL: u64 = 7 * 24 * 60 * 60;
+
+pub async fn refresh_interval(
+    tournament_id: u64,
+    conn: Arc<Mutex<SqliteConnection>>,
+    auth: String,
+    secs: u64,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    verify_admin(&mut conn_lock, auth.clone()).await?;
+
+    if !(MIN_REFRESH_INTERVAL..=MAX_REFRESH_INTERVAL).contains(&secs) {
+        Err(warp::reject::custom(BadRequest))?
+    }
+
+    if !set_refresh_interval(&mut conn_lock, tournament_id, secs)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?
+    {
+        Err(warp::reject::custom(BadRequest))?
+    }
+
+    Ok(warp::reply())
 }
 
 pub async fn proxy(

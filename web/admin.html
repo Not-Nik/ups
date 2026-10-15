@@ -48,6 +48,21 @@
                         <button id="picks-submit" class="btn btn-primary w-100">Save</button>
                     </div>
                 </div>
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">Refresh interval</h2>
+                        <p class="text-secondary small mb-3">How often a tournament's data is pulled from toornament, at most.</p>
+                        <div class="mb-3">
+                            <label for="refresh-tournament" class="form-label">Tournament</label>
+                            <select id="refresh-tournament" class="form-select"></select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="refresh-minutes" class="form-label">Minutes <span class="text-secondary">(1 to 10080)</span></label>
+                            <input id="refresh-minutes" type="number" min="1" max="10080" class="form-control">
+                        </div>
+                        <button id="refresh-submit" class="btn btn-primary w-100">Save</button>
+                    </div>
+                </div>
                 <div class="card border-0 shadow-sm flex-grow-1">
                     <div class="card-body p-4">
                         <h2 class="h5 fw-bold">New tournament</h2>
