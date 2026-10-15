@@ -101,7 +101,10 @@ function mergeConnected(brackets) {
     return out;
 }
 
-// Pure layout: assign every node an {x, y, col} and resolve the source edges into
+// The edge slots bracketLayout worked out per bracket (its nodes array).
+const slotCache = new WeakMap();
+
+// Layout: assign every node an {x, y, col} and resolve the source edges into
 // orthogonal paths. Columns come from longest-path layering over the feed graph: a
 // node sits one column past its deepest feeder (cross-branch drops included), so a
 // match lines up with whatever actually feeds it (e.g. a losers round that only takes
@@ -229,107 +232,244 @@ function bracketLayout(nodes, expanded = new Map()) {
         });
     }
 
-    // Routing. Forward-adjacent edges are simple 3-segment elbows (source stub, vertical
-    // trunk in the gap, target stub) — the common case. Everything else (long drops, the
-    // odd same-column cross-branch drop) detours through the clear inter-branch band as a
-    // 5-segment "channel". An adjacent elbow only falls back to a 5-segment route (turning
-    // in the left/right halves of the gap with its own crossing lane) when its plain trunk
-    // would actually share a line with an already-placed edge — so most stay 3-segment.
+    // Routing. Every vertical run of a line sits on a slot: a lane in the gap between two
+    // columns, slot 0 leftmost. A run comes in horizontally from the gap's left edge at
+    // `leftY` and leaves towards its right edge at `rightY`. Two runs need different slots
+    // when they overlap along the height they pass; and where one comes in at the height
+    // another leaves at, the incoming one must sit left of the leaving one, or their
+    // horizontals would lie on top of each other. That's VLSI channel routing turned on
+    // its side (gap = channel, slot = track, the second rule = the vertical constraint
+    // graph), so each gap gets the constrained left-edge algorithm: fill slots left to
+    // right, each with the runs whose required left neighbours are all placed already,
+    // taken top-down and skipping any that overlap a run already on the slot. A cycle of
+    // ordering rules can't be met; it's broken at the run with the fewest unplaced left
+    // neighbours. The slots are then spread evenly across the gap. Forward-adjacent
+    // edges are 3-segment elbows with one run; longer edges detour through the clear
+    // inter-branch band as a 5-segment "channel", with a run in the gap after the source
+    // and one in the gap before the target.
     const gapLeft = c => LEFT_PAD + c * COL_STRIDE + COL_W; // x where the gap after col c starts
-    const adjEdges = raw.filter(e => e.to.col - e.from.col === 1);
+    const RUN_MARGIN = 4; // keeps two runs on one slot from meeting end to end
+    const near = (y0, y1) => Math.abs(y0 - y1) < RUN_MARGIN;
+    // gaps: gap -> {count, runs}, each run {lo, hi, leftY, rightY, slot}
+    const addRun = (gaps, gap, leftY, rightY) => {
+        const g = gaps.get(gap) ?? gaps.set(gap, {count: 0, runs: []}).get(gap);
+        const r = {gap, g, lo: Math.min(leftY, rightY), hi: Math.max(leftY, rightY), leftY, rightY, slot: null};
+        if (!near(leftY, rightY)) g.runs.push(r); // a straight line has no run and takes no slot
+        return r;
+    };
+    const assignSlots = g => {
+        const leftOf = new Map(g.runs.map(r => [r, g.runs.filter(o => o !== r && near(o.leftY, r.rightY))]));
+        const unplaced = r => r.slot == null;
+        let todo = g.runs.slice().sort((a, b) => a.lo - b.lo);
+        while (todo.length) {
+            let ready = todo.filter(r => !leftOf.get(r).some(unplaced));
+            if (!ready.length) {
+                const blocked = r => leftOf.get(r).filter(unplaced).length;
+                ready = [todo.reduce((a, b) => blocked(b) < blocked(a) ? b : a)];
+            }
+            const onSlot = [];
+            for (const r of ready)
+                if (onSlot.every(o => r.hi + RUN_MARGIN <= o.lo || o.hi + RUN_MARGIN <= r.lo)) {
+                    r.slot = g.count;
+                    onSlot.push(r);
+                }
+            g.count++;
+            todo = todo.filter(unplaced);
+        }
+    };
+    const slotX = ({gap, g, slot}) => gapLeft(gap) + GAP * (slot == null ? 0.5 : (slot + 1) / (g.count + 1));
+
+    // One line per edge: its runs (one for an elbow, two for a channel) and, for a channel,
+    // its lane across the band, lane 0 on top. Lanes start in edge order.
     const spanEdges = raw.filter(e => e.to.col - e.from.col !== 1);
-
-    // Fallback turn x's: source-side in the left part of a gap, target-side in the right
-    // part, so a fallback source stub and target stub can never lie on the same lane.
-    const sxOf = new Map(), exOf = new Map(), laneOf = new Map();
-    const leftTurns = new Map(), rightTurns = new Map();
-    for (const e of [...adjEdges, ...spanEdges]) {
-        pushTo(leftTurns, e.from.col, e);
-        pushTo(rightTurns, e.to.col - 1, e);
-    }
-    const spread = (list, x0, x1, keyY, out) => {
-        list.sort((a, b) => keyY(a) - keyY(b));
-        const n = list.length;
-        list.forEach((e, i) => out.set(e, n === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * i / (n - 1)));
-    };
-    for (const [c, list] of leftTurns)
-        spread(list, gapLeft(c) + GAP * 0.12, gapLeft(c) + GAP * 0.42, e => e.exitY, sxOf);
-    for (const [c, list] of rightTurns)
-        spread(list, gapLeft(c) + GAP * 0.58, gapLeft(c) + GAP * 0.88, e => e.enterY, exOf);
-    const adjByGap = new Map();
-    for (const e of adjEdges) pushTo(adjByGap, e.from.col, e);
-    for (const list of adjByGap.values()) {
-        list.sort((a, b) => (a.exitY + a.enterY) - (b.exitY + b.enterY));
-        let last = -Infinity;
-        for (const e of list) {
-            const y = Math.max((e.exitY + e.enterY) / 2, last + 8);
-            laneOf.set(e, y);
-            last = y;
-        }
-    }
-
-    // Greedy placement: collinear-overlap check against already-routed segments.
-    const EPS = 1;
-    const routeSegs = e => {
-        const p = edgePath(e).replace(/[ML]/g, ' ').trim().split(/\s+/).map(s => s.split(',').map(Number));
-        return p.slice(0, -1).map((a, i) => [a, p[i + 1]]);
-    };
-    const overlap = ([[ax, ay], [bx, by]], [[cx, cy], [dx, dy]]) => {
-        const span = (lo1, hi1, lo2, hi2) => Math.min(hi1, hi2) - Math.max(lo1, lo2) > EPS;
-        if (Math.abs(ax - bx) < EPS && Math.abs(cx - dx) < EPS && Math.abs(ax - cx) < EPS)
-            return span(Math.min(ay, by), Math.max(ay, by), Math.min(cy, dy), Math.max(cy, dy));
-        if (Math.abs(ay - by) < EPS && Math.abs(cy - dy) < EPS && Math.abs(ay - cy) < EPS)
-            return span(Math.min(ax, bx), Math.max(ax, bx), Math.min(cx, dx), Math.max(cx, dx));
-        return false;
-    };
-    const placed = [];
-    const conflicts = segs => segs.some(s => placed.some(t => overlap(s, t)));
-    const commit = e => {
-        placed.push(...routeSegs(e));
-        return e;
-    };
-
-    const edges = [];
-    // Spanning edges first (they own the band tracks the elbows then avoid).
-    spanEdges.forEach((e, i) => {
-        const upper = e.from.y <= e.to.y ? e.from : e.to;
-        const band = sectionByBranch.get(upper.branch).bottom;
-        edges.push(commit({
-            ...e, kind: 'channel', sx: sxOf.get(e), ex: exOf.get(e),
-            chY: band + BRANCH_GAP * (i + 1) / (spanEdges.length + 1)
-        }));
+    const bandOf = e => sectionByBranch.get((e.from.y <= e.to.y ? e.from : e.to).branch).bottom;
+    const laneY = (e, lane) => bandOf(e) + BRANCH_GAP * (lane + 1) / (spanEdges.length + 1);
+    const gaps = new Map();
+    const lines = raw.map(e => {
+        const lane = spanEdges.indexOf(e);
+        if (lane === -1) return {e, runs: [addRun(gaps, e.from.col, e.exitY, e.enterY)]};
+        const chY = laneY(e, lane);
+        return {e, lane, runs: [addRun(gaps, e.from.col, e.exitY, chY), addRun(gaps, e.to.col - 1, chY, e.enterY)]};
     });
-    // Adjacent edges: keep them 3-segment, trying a sweep of trunk positions across the
-    // gap to dodge conflicts; only when no clear trunk exists fall back to the 5-segment
-    // route. Sweeping first keeps the fallback (and any residual overlap) rare.
-    const TRUNKS = [0.5, 0.4, 0.6, 0.3, 0.7, 0.45, 0.55, 0.35, 0.65, 0.25, 0.75];
-    for (const [c, list] of adjByGap) {
-        list.sort((a, b) => a.enterY - b.enterY);
-        for (const e of list) {
-            const three = TRUNKS
-                .map(f => ({...e, kind: 'elbow3', mx: gapLeft(c) + GAP * f}))
-                .find(cand => !conflicts(routeSegs(cand)));
-            edges.push(commit(three
-                ?? {...e, kind: 'elbow5', sx: sxOf.get(e), ex: exOf.get(e), laneY: laneOf.get(e)}));
+    const channels = lines.filter(l => l.lane != null);
+    const edgeOf = ({e, lane, runs}) => runs.length === 1
+        ? {...e, kind: 'elbow3', mx: slotX(runs[0])}
+        : {...e, kind: 'channel', chY: laneY(e, lane), sx: slotX(runs[0]), ex: slotX(runs[1])};
+
+    // Untangling. The left-edge pass only keeps the rules; it doesn't look at crossings,
+    // and the band's lanes (a channel the classic way round, lanes as its tracks) need
+    // ordering too. Lane order and gap slots decide crossings together, so both are
+    // hill-climbed at once on the drawn lines themselves: a pair of lines costs one per
+    // crossing of their segments, and far more than any crossing count where two segments
+    // lie on top of each other or meet end to end, so no move ever breaks a rule. Moves:
+    // put a run on another slot of its gap, swap two runs' slots, swap two whole slots of
+    // a gap, swap two channels' lanes; whatever lowers the cost is kept, until nothing does.
+    const RULE_COST = 1e6;
+    const shapeOf = line => {
+        const pts = edgePoints(edgeOf(line));
+        const segs = [];
+        for (let k = 0; k + 1 < pts.length; k++) {
+            const [[x0, y0], [x1, y1]] = [pts[k], pts[k + 1]];
+            if (Math.abs(x1 - x0) + Math.abs(y1 - y0) < 0.5) continue;
+            segs.push(y0 === y1
+                ? {h: true, at: y0, lo: Math.min(x0, x1), hi: Math.max(x0, x1)}
+                : {h: false, at: x0, lo: Math.min(y0, y1), hi: Math.max(y0, y1)});
         }
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        return {segs, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys)};
+    };
+    const pairCost = (a, b) => {
+        const A = a.shape, B = b.shape;
+        if (A.x1 + RUN_MARGIN < B.x0 || B.x1 + RUN_MARGIN < A.x0
+            || A.y1 + RUN_MARGIN < B.y0 || B.y1 + RUN_MARGIN < A.y0) return 0;
+        const shared = a.e.fromId === b.e.fromId && a.e.exitY === b.e.exitY; // one stub out of one source
+        let c = 0;
+        for (const s of A.segs)
+            for (const t of B.segs) {
+                if (s.h !== t.h) {
+                    const h = s.h ? s : t, v = s.h ? t : s;
+                    c += v.at > h.lo + 0.5 && v.at < h.hi - 0.5 && h.at > v.lo + 0.5 && h.at < v.hi - 0.5;
+                } else if (!shared && Math.abs(s.at - t.at) < RUN_MARGIN
+                    && Math.min(s.hi, t.hi) + RUN_MARGIN > Math.max(s.lo, t.lo))
+                    c += RULE_COST;
+            }
+        return c;
+    };
+    // Whatever its slots and lane, a line stays between its source's and target's columns
+    // and between its exit and entry heights (plus the band, for a channel), so only lines
+    // whose such bounds meet can ever touch.
+    const boundsOf = ({e, lane}) => {
+        const ys = lane == null ? [e.exitY, e.enterY] : [e.exitY, e.enterY, bandOf(e), bandOf(e) + BRANCH_GAP];
+        return {x0: e.from.x + COL_W, x1: e.to.x, y0: Math.min(...ys), y1: Math.max(...ys)};
+    };
+    const meet = (A, B) => A.x0 <= B.x1 + RUN_MARGIN && B.x0 <= A.x1 + RUN_MARGIN
+        && A.y0 <= B.y1 + RUN_MARGIN && B.y0 <= A.y1 + RUN_MARGIN;
+    const untangle = () => {
+        // A line's state is its slots and lane. The same trial states come round on every
+        // pass, so pair costs are memoised per pair of states, and a line's shape is only
+        // worked out when a cost isn't known yet.
+        const reshape = l => {
+            l.shape = null;
+            const key = l.runs.map(r => r.slot).join() + '|' + l.lane;
+            l.state = l.states.get(key) ?? l.states.set(key, l.states.size).get(key);
+        };
+        const memoCost = (a, b) => {
+            if (a.id > b.id) [a, b] = [b, a];
+            const memo = a.memo.get(b) ?? a.memo.set(b, new Map()).get(b);
+            const key = a.state * 65536 + b.state;
+            let c = memo.get(key);
+            if (c === undefined) {
+                a.shape ??= shapeOf(a);
+                b.shape ??= shapeOf(b);
+                memo.set(key, c = pairCost(a, b));
+            }
+            return c;
+        };
+        lines.forEach((l, id) => Object.assign(l, {id, states: new Map(), memo: new Map(), bounds: boundsOf(l)}));
+        lines.forEach(l => {
+            l.near = lines.filter(o => o !== l && meet(l.bounds, o.bounds));
+            reshape(l);
+        });
+        const lineOf = new Map(lines.flatMap(l => l.runs.map(r => [r, l])));
+        // Every pair touching the set, each counted once.
+        const setCost = set => {
+            const done = new Set();
+            let c = 0;
+            for (const a of set) {
+                done.add(a);
+                for (const b of a.near) if (!done.has(b)) c += memoCost(a, b);
+            }
+            return c;
+        };
+        // `flip` undoes itself when called again.
+        const attempt = (set, flip) => {
+            const before = setCost(set);
+            flip();
+            set.forEach(reshape);
+            if (setCost(set) < before) return true;
+            flip();
+            set.forEach(reshape);
+            return false;
+        };
+        for (let pass = 0, better = true; better && pass < 8; pass++) {
+            better = false;
+            // A run goes to whichever slot of its gap costs least.
+            for (const g of gaps.values())
+                for (const r of g.runs) {
+                    const line = lineOf.get(r), from = r.slot;
+                    let best = setCost([line]), bestSlot = from;
+                    for (r.slot = 0; r.slot < g.count; r.slot++) {
+                        if (r.slot === from) continue;
+                        reshape(line);
+                        const c = setCost([line]);
+                        if (c < best) [best, bestSlot] = [c, r.slot];
+                    }
+                    r.slot = bestSlot;
+                    reshape(line);
+                    if (bestSlot !== from) better = true;
+                }
+            // Only runs that share heights can untangle each other by trading slots.
+            for (const g of gaps.values())
+                g.runs.forEach((r, i) => g.runs.slice(i + 1).forEach(o => {
+                    if (r.slot !== o.slot && r.hi + RUN_MARGIN > o.lo && o.hi + RUN_MARGIN > r.lo
+                        && attempt([...new Set([lineOf.get(r), lineOf.get(o)])],
+                            () => [r.slot, o.slot] = [o.slot, r.slot])) better = true;
+                }));
+            for (const g of gaps.values())
+                for (let a = 0; a < g.count; a++)
+                    for (let b = a + 1; b < g.count; b++) {
+                        const runs = g.runs.filter(r => r.slot === a || r.slot === b);
+                        const set = [...new Set(runs.map(r => lineOf.get(r)))];
+                        if (attempt(set, () => runs.forEach(r => r.slot = r.slot === a ? b : a))) better = true;
+                    }
+            for (let i = 0; i < channels.length; i++)
+                for (let k = i + 1; k < channels.length; k++) {
+                    const x = channels[i], y = channels[k];
+                    if (attempt([x, y], () => [x.lane, y.lane] = [y.lane, x.lane])) better = true;
+                }
+        }
+        // Moves can empty a slot; drop those.
+        for (const g of gaps.values()) {
+            const used = [...new Set(g.runs.map(r => r.slot))].sort((x, y) => x - y);
+            g.runs.forEach(r => r.slot = used.indexOf(r.slot));
+            g.count = used.length;
+        }
+    };
+
+    // An open panel pushes everything below it down by the same amount, which keeps every
+    // height's order, so the lanes and slots worked out for a bracket hold for every
+    // relayout of it (and lines don't hop between slots while a panel animates).
+    const allRuns = [...gaps.values()].flatMap(g => g.runs);
+    const cached = slotCache.get(nodes);
+    if (cached?.slots.length === allRuns.length) {
+        channels.forEach((l, i) => l.lane = cached.lanes[i]);
+        allRuns.forEach((r, i) => r.slot = cached.slots[i]);
+        gaps.forEach((g, gap) => g.count = cached.counts.get(gap));
+    } else {
+        gaps.forEach(assignSlots);
+        untangle();
+        slotCache.set(nodes, {
+            lanes: channels.map(l => l.lane),
+            slots: allRuns.map(r => r.slot),
+            counts: new Map([...gaps].map(([gap, g]) => [gap, g.count])),
+        });
     }
+    const edges = lines.map(edgeOf);
 
     const width = Math.max(0, ...[...pos.values()].map(p => p.x)) + COL_W;
     const height = Math.max(0, ...sections.map(s => s.bottom));
     return {pos, edges, sections, multiBranch, width, height};
 }
 
-// elbow3: source stub, one vertical trunk in the gap, target stub. elbow5/channel: turn
-// in the left half, cross a horizontal lane (a gap height, or the inter-branch band),
-// turn in the right half, enter — used only where a plain trunk would share a line.
-function edgePath(e) {
+// elbow3: source stub, one vertical run on its slot, target stub. channel: a run on a
+// slot of the gap after the source, across the inter-branch band, a run on a slot of the
+// gap before the target, enter.
+function edgePoints(e) {
     const fx = e.from.x + COL_W, tx = e.to.x;
-    if (e.kind === 'elbow3')
-        return `M${fx},${e.exitY} L${e.mx},${e.exitY} L${e.mx},${e.enterY} L${tx},${e.enterY}`;
-    const midY = e.kind === 'channel' ? e.chY : e.laneY;
-    return `M${fx},${e.exitY} L${e.sx},${e.exitY} L${e.sx},${midY} `
-        + `L${e.ex},${midY} L${e.ex},${e.enterY} L${tx},${e.enterY}`;
+    if (e.kind === 'elbow3') return [[fx, e.exitY], [e.mx, e.exitY], [e.mx, e.enterY], [tx, e.enterY]];
+    return [[fx, e.exitY], [e.sx, e.exitY], [e.sx, e.chY], [e.ex, e.chY], [e.ex, e.enterY], [tx, e.enterY]];
 }
+const edgePath = e => 'M' + edgePoints(e).map(p => p.join(',')).join(' L');
 
 // A TBD / not-yet-predictable slot: the score-box shape, dimmed, no toggle.
 function bracketPlaceholder(node) {
