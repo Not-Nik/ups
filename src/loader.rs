@@ -789,22 +789,57 @@ fn build_match(raw: &RawMatch, ids: &Ids) -> Option<NewMatch> {
     })
 }
 
+/// Keep the predictions on a stored match in step with the teams the feed now has for it.
+/// Swapped sides flip the predicted scores. Any other change drops the predictions: they
+/// were made for a different pairing.
+async fn sync_predictions(
+    conn: &mut SqliteConnection,
+    match_id: i64,
+    old: (i64, i64),
+    m: &NewMatch,
+) -> sqlx::Result<()> {
+    if old == (m.team_a, m.team_b) {
+        return Ok(());
+    }
+    let swapped = old == (m.team_b, m.team_a);
+    let sql = if swapped {
+        "UPDATE predictions SET ScoreA = ScoreB, ScoreB = ScoreA WHERE MatchID = ?"
+    } else {
+        "DELETE FROM predictions WHERE MatchID = ?"
+    };
+    let changed = sqlx::query(sql).bind(match_id).execute(&mut *conn).await?;
+    if changed.rows_affected() > 0 {
+        log::info!(
+            "Teams of match {} changed, {} {} predictions",
+            m.toornament_id,
+            if swapped { "flipped" } else { "dropped" },
+            changed.rows_affected()
+        );
+    }
+    Ok(())
+}
+
 /// Insert/update league + predictable bracket matches. An existing row is found by its
 /// stable ToornamentId first, falling back to the natural (TeamA, TeamB, GroupID,
 /// RoundID) key only for legacy rows without one. Keying on ToornamentId means a
 /// changed field updates the row in place instead of inserting a duplicate, so MatchID
-/// (and the predictions that reference it) is preserved.
+/// (and the predictions that reference it) is preserved, unless the teams changed.
 async fn upsert_matches(
     conn: &mut SqliteConnection,
     tournament_id: i64,
     matches: &[NewMatch],
 ) -> sqlx::Result<()> {
     for m in matches {
-        let mut match_id =
-            sqlx::query_scalar::<_, i64>("SELECT MatchID FROM matches WHERE ToornamentId = ?")
-                .bind(&m.toornament_id)
-                .fetch_optional(&mut *conn)
-                .await?;
+        let existing: Option<(i64, i64, i64)> = sqlx::query_as(
+            "SELECT MatchID, TeamA, TeamB FROM matches WHERE ToornamentId = ?",
+        )
+        .bind(&m.toornament_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        if let Some((id, team_a, team_b)) = existing {
+            sync_predictions(conn, id, (team_a, team_b), m).await?;
+        }
+        let mut match_id = existing.map(|(id, ..)| id);
 
         if match_id.is_none() {
             match_id = sqlx::query_scalar::<_, i64>(
@@ -1267,6 +1302,53 @@ mod tests {
 
         assert!(predictions.is_empty());
         assert_eq!(count(&mut conn, "predictions").await, 0);
+    }
+
+    // The feed still has the old match (A vs B, predicted 2-1), now between `team_a` and
+    // `team_b`. Returns its predicted scores afterwards.
+    async fn update_old_match(
+        conn: &mut SqliteConnection,
+        team_a: i64,
+        team_b: i64,
+    ) -> Vec<(i64, i64)> {
+        sqlx::query("INSERT INTO teams (TeamID, TournamentID, Name) VALUES (3, 1, 'C')")
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        let old_match = NewMatch {
+            team_a,
+            team_b,
+            score_a: None,
+            score_b: None,
+            group_id: 1,
+            round_id: 1,
+            number: 1,
+            toornament_id: "n-old".into(),
+        };
+        upsert_matches(conn, 1, &[old_match]).await.unwrap();
+
+        sqlx::query_as("SELECT ScoreA, ScoreB FROM predictions WHERE MatchID = 1")
+            .fetch_all(conn)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn match_with_the_same_teams_keeps_its_predictions() {
+        let mut conn = db_with_old_bracket().await;
+        assert_eq!(update_old_match(&mut conn, 1, 2).await, [(2, 1)]);
+    }
+
+    #[tokio::test]
+    async fn match_with_swapped_sides_flips_its_predictions() {
+        let mut conn = db_with_old_bracket().await;
+        assert_eq!(update_old_match(&mut conn, 2, 1).await, [(1, 2)]);
+    }
+
+    #[tokio::test]
+    async fn match_with_a_new_team_drops_its_predictions() {
+        let mut conn = db_with_old_bracket().await;
+        assert!(update_old_match(&mut conn, 1, 3).await.is_empty());
     }
 
     #[tokio::test]
