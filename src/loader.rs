@@ -342,13 +342,43 @@ async fn fetch_feed(client: &reqwest::Client, toornament_id: &str) -> Result<Fee
     })
 }
 
-/// Delete the matches under one group or round (`column` is GroupID or RoundID), with
-/// their predictions and the bracket nodes there. Nodes point at matches, so they go first.
+/// A prediction on a match the prune deleted, held until the new matches are written so
+/// it can move to the match that replaced it. The match is identified by where it sat
+/// (stage, group and round numbers survive a regenerated bracket, their ids don't) and
+/// who played it.
+#[derive(Debug, sqlx::FromRow)]
+struct HeldPrediction {
+    name: String,
+    stage: i64,
+    group: i64,
+    round: i64,
+    team_a: i64,
+    team_b: i64,
+    score_a: i64,
+    score_b: i64,
+}
+
+/// Delete the matches under one group or round, or a single match (`column` is GroupID,
+/// RoundID or MatchID), with the bracket nodes there and their predictions, which are
+/// added to `held`. Nodes point at matches, so they go first.
 async fn delete_matches_under(
     conn: &mut SqliteConnection,
     column: &str,
     id: i64,
+    held: &mut Vec<HeldPrediction>,
 ) -> sqlx::Result<()> {
+    let predictions: Vec<HeldPrediction> = sqlx::query_as(&format!(
+        "SELECT p.Name AS name, s.Number AS stage, g.Number AS \"group\", r.Number AS round, \
+         m.TeamA AS team_a, m.TeamB AS team_b, p.ScoreA AS score_a, p.ScoreB AS score_b \
+         FROM predictions p JOIN matches m ON m.MatchID = p.MatchID \
+         JOIN rounds r ON r.RoundID = m.RoundID JOIN groups g ON g.GroupID = m.GroupID \
+         JOIN stages s ON s.StageID = g.StageID WHERE m.{column} = ?"
+    ))
+    .bind(id)
+    .fetch_all(&mut *conn)
+    .await?;
+    held.extend(predictions);
+
     for sql in [
         "DELETE FROM bracket_nodes WHERE {column} = ?",
         "DELETE FROM predictions WHERE MatchID IN (SELECT MatchID FROM matches WHERE {column} = ?)",
@@ -367,16 +397,19 @@ async fn delete_matches_under(
 /// UNIQUE (StageID, Number) and fail the whole refresh; even without a clash, the old
 /// bracket would still be drawn. So this tournament's stages, groups, rounds and bracket
 /// nodes whose ToornamentId isn't in the feed go, and with them their matches and the
-/// predictions on those: toornament will never score them. Standings and league picks go
-/// with their group (ON DELETE CASCADE). Rows added by hand (no ToornamentId) stay. A feed
-/// without stages is more likely a hiccup than a wiped tournament, so it prunes nothing.
+/// predictions on those: toornament will never score them. Those predictions are returned
+/// so `restore_predictions` can move them to a new match with the same teams. Standings
+/// and league picks go with their group (ON DELETE CASCADE). Rows added by hand (no
+/// ToornamentId) stay. A feed without stages is more likely a hiccup than a wiped
+/// tournament, so it prunes nothing.
 async fn prune_tree(
     conn: &mut SqliteConnection,
     tournament_id: i64,
     feed: &Feed,
-) -> sqlx::Result<()> {
+) -> sqlx::Result<Vec<HeldPrediction>> {
+    let mut held = Vec::new();
     if feed.stages.is_empty() {
-        return Ok(());
+        return Ok(held);
     }
     let stages: HashSet<&str> = feed.stages.iter().map(|s| s.id.as_str()).collect();
     let groups: HashSet<&str> = feed.groups.iter().map(|g| g.id.as_str()).collect();
@@ -430,24 +463,29 @@ async fn prune_tree(
         .iter()
         .filter(|id| !nodes.contains(id.as_str()))
     {
-        for sql in [
-            "DELETE FROM bracket_nodes WHERE NodeId = ?",
-            "DELETE FROM predictions WHERE MatchID IN (SELECT MatchID FROM matches WHERE ToornamentId = ?)",
-            "DELETE FROM matches WHERE ToornamentId = ?",
-        ] {
-            sqlx::query(sql).bind(node).execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM bracket_nodes WHERE NodeId = ?")
+            .bind(node)
+            .execute(&mut *conn)
+            .await?;
+        let match_id: Option<i64> =
+            sqlx::query_scalar("SELECT MatchID FROM matches WHERE ToornamentId = ?")
+                .bind(node)
+                .fetch_optional(&mut *conn)
+                .await?;
+        if let Some(match_id) = match_id {
+            delete_matches_under(conn, "MatchID", match_id, &mut held).await?;
         }
     }
 
     for &round in &stale_rounds {
-        delete_matches_under(conn, "RoundID", round).await?;
+        delete_matches_under(conn, "RoundID", round, &mut held).await?;
         sqlx::query("DELETE FROM rounds WHERE RoundID = ?")
             .bind(round)
             .execute(&mut *conn)
             .await?;
     }
     for &group in &stale_groups {
-        delete_matches_under(conn, "GroupID", group).await?;
+        delete_matches_under(conn, "GroupID", group, &mut held).await?;
         sqlx::query("DELETE FROM groups WHERE GroupID = ?")
             .bind(group)
             .execute(&mut *conn)
@@ -465,6 +503,70 @@ async fn prune_tree(
             stale_stages.len(),
             stale_groups.len(),
             stale_rounds.len()
+        );
+    }
+    Ok(held)
+}
+
+/// Move the predictions `prune_tree` held onto the new match in the same stage, group and
+/// round with the same two teams, flipping the score if the teams swapped sides. One
+/// whose match has no such replacement is dropped, as is one for a user who already
+/// predicted the new match.
+async fn restore_predictions(
+    conn: &mut SqliteConnection,
+    tournament_id: i64,
+    held: &[HeldPrediction],
+) -> sqlx::Result<()> {
+    let mut restored = 0;
+    for p in held {
+        // Rounds aren't compared: a regenerated bracket can add a play-in round in front,
+        // pushing the same match from round 1 to round 2. Within one group a pair only
+        // meets once, except a grand final reset, so the same round wins a tie.
+        let found: Option<(i64, i64)> = sqlx::query_as(
+            "SELECT m.MatchID, m.TeamA FROM matches m \
+             JOIN rounds r ON r.RoundID = m.RoundID JOIN groups g ON g.GroupID = m.GroupID \
+             JOIN stages s ON s.StageID = g.StageID \
+             WHERE m.TournamentID = ? AND s.Number = ? AND g.Number = ? \
+             AND ((m.TeamA = ? AND m.TeamB = ?) OR (m.TeamA = ? AND m.TeamB = ?)) \
+             ORDER BY r.Number = ? DESC, r.Number LIMIT 1",
+        )
+        .bind(tournament_id)
+        .bind(p.stage)
+        .bind(p.group)
+        .bind(p.team_a)
+        .bind(p.team_b)
+        .bind(p.team_b)
+        .bind(p.team_a)
+        .bind(p.round)
+        .fetch_optional(&mut *conn)
+        .await?;
+        let Some((match_id, team_a)) = found else {
+            continue;
+        };
+        let (score_a, score_b) = if team_a == p.team_a {
+            (p.score_a, p.score_b)
+        } else {
+            (p.score_b, p.score_a)
+        };
+
+        let inserted = sqlx::query(
+            "INSERT INTO predictions (Name, MatchID, ScoreA, ScoreB) SELECT ?, ?, ?, ? \
+             WHERE NOT EXISTS (SELECT 1 FROM predictions WHERE Name = ? AND MatchID = ?)",
+        )
+        .bind(&p.name)
+        .bind(match_id)
+        .bind(score_a)
+        .bind(score_b)
+        .bind(&p.name)
+        .bind(match_id)
+        .execute(&mut *conn)
+        .await?;
+        restored += inserted.rows_affected();
+    }
+    if !held.is_empty() {
+        log::info!(
+            "Moved {restored} of {} predictions to regenerated matches",
+            held.len()
         );
     }
     Ok(())
@@ -896,7 +998,7 @@ async fn load_tournament(
     let mut tx = conn.begin().await?;
     let mut ids = Ids::default();
 
-    prune_tree(&mut tx, tournament_id, &feed).await?;
+    let held = prune_tree(&mut tx, tournament_id, &feed).await?;
     upsert_tree(&mut tx, tournament_id, &feed, &mut ids).await?;
     upsert_teams(&mut tx, tournament_id, &feed, &mut ids).await?;
     replace_players(&mut tx, &feed, &ids).await?;
@@ -910,6 +1012,7 @@ async fn load_tournament(
 
     // Matches are written before the nodes so the MatchID links resolve.
     upsert_matches(&mut tx, tournament_id, &matches).await?;
+    restore_predictions(&mut tx, tournament_id, &held).await?;
     upsert_bracket_nodes(&mut tx, tournament_id, &feed.nodes, &ids).await?;
     replace_standings(&mut tx, &feed, &ids).await?;
 
@@ -1099,6 +1202,71 @@ mod tests {
             assert_eq!(count(&mut conn, table).await, 0, "{table}");
         }
         assert_eq!(count(&mut conn, "stages").await, 1);
+    }
+
+    // Regenerate the old bracket: new group, round and node ids, the same group number,
+    // and one match between `team_a` and `team_b`, pushed from round 1 to round 2 by a
+    // new play-in round. Returns the predictions on the new match.
+    async fn regenerate_with(
+        conn: &mut SqliteConnection,
+        team_a: i64,
+        team_b: i64,
+    ) -> Vec<(String, i64, i64)> {
+        let mut feed = feed(&[("g-new", 1)]);
+        feed.rounds.push(RawRound {
+            id: "r-new".into(),
+            number: 2,
+            name: "R1".into(),
+            status: None,
+            group: node_ref("g-new"),
+        });
+        let mut ids = Ids::default();
+
+        let held = prune_tree(conn, 1, &feed).await.unwrap();
+        upsert_tree(conn, 1, &feed, &mut ids).await.unwrap();
+        let new_match = NewMatch {
+            team_a,
+            team_b,
+            score_a: None,
+            score_b: None,
+            group_id: ids.groups["g-new"],
+            round_id: ids.rounds["r-new"],
+            number: 1,
+            toornament_id: "n-new".into(),
+        };
+        upsert_matches(conn, 1, &[new_match]).await.unwrap();
+        restore_predictions(conn, 1, &held).await.unwrap();
+
+        sqlx::query_as(
+            "SELECT p.Name, p.ScoreA, p.ScoreB FROM predictions p \
+             JOIN matches m ON m.MatchID = p.MatchID WHERE m.ToornamentId = 'n-new'",
+        )
+        .fetch_all(conn)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn regenerated_match_with_the_same_teams_keeps_its_prediction() {
+        let mut conn = db_with_old_bracket().await;
+        // The old match was A vs B, predicted 2-1; the new one has the sides swapped.
+        let predictions = regenerate_with(&mut conn, 2, 1).await;
+
+        assert_eq!(predictions, [("fan".to_string(), 1, 2)]);
+        assert_eq!(count(&mut conn, "predictions").await, 1);
+    }
+
+    #[tokio::test]
+    async fn regenerated_match_with_other_teams_drops_the_prediction() {
+        let mut conn = db_with_old_bracket().await;
+        sqlx::query("INSERT INTO teams (TeamID, TournamentID, Name) VALUES (3, 1, 'C')")
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        let predictions = regenerate_with(&mut conn, 1, 3).await;
+
+        assert!(predictions.is_empty());
+        assert_eq!(count(&mut conn, "predictions").await, 0);
     }
 
     #[tokio::test]
