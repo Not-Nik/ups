@@ -613,12 +613,27 @@ function renderTabs(days, brackets, matches) {
     // matches are drawn as brackets (and some carry "Day N" round names), so exclude
     // them here just like the day grid does.
     const dayUnfinished = day => matches.some(m =>
-        !BRACKET_STAGE_TYPES.has(m.stage_type) && (m.round_name ?? '') === day
+        !BRACKET_STAGE_TYPES.has(m.stage_type) && dayKey(m) === day
         && (m.score_a == null || m.score_b == null));
+    // A stage with days of its own (a wildcard round robin) is one category, named
+    // after the stage, its buttons carrying the round names.
+    const ownDays = new Map();
+    days.forEach(day => {
+        const [stage, round] = dayParts(day);
+        if (stage != null) pushTo(ownDays, stage, {day, round});
+    });
+    const ownDayGroups = [...ownDays].map(([stage, list]) => ({
+        name: stage,
+        label: stage,
+        entries: list.map(({day, round}) => ({
+            day, param: `${stage}:${round}`, text: round, unfinished: dayUnfinished(day),
+        })),
+    }));
     // League days grouped by their non-digit prefix (e.g. "Day"). When every day in a
     // group has a suffix, the prefix is its category and the buttons carry bare
     // suffixes; otherwise the group has no category and the buttons carry the full name.
-    const leagueGroups = [...groupBy(days, letters)].map(([prefix, group]) => {
+    const sharedDays = days.filter(day => dayParts(day)[0] == null);
+    const leagueGroups = [...groupBy(sharedDays, letters)].map(([prefix, group]) => {
         const items = group.map(([day]) => ({day, suffix: day.slice(prefix.length).trim()}));
         const labelled = prefix && items.every(i => i.suffix);
         return {
@@ -653,7 +668,7 @@ function renderTabs(days, brackets, matches) {
     // Categories (labelled groups) get a top-line button each; groups without a label
     // (a lone tab like "Seedingwoche") have no category, so their tabs sit in the top
     // line next to the category buttons.
-    const groups = [...leagueGroups, ...bracketGroups]
+    const groups = [...leagueGroups, ...ownDayGroups, ...bracketGroups]
         .sort((a, b) => a.name.localeCompare(b.name));
     const categories = groups.filter(g => g.label);
     const loose = groups.filter(g => !g.label).flatMap(g => g.entries);
@@ -720,7 +735,7 @@ const activeDay = () => state.activeTab;
 const sectionsForDay = day => {
     const set = new Set();
     state.matches.forEach(m => {
-        if ((m.round_name ?? '') === day) set.add(sectionKey(m));
+        if (dayKey(m) === day) set.add(sectionKey(m));
     });
     return [...set].sort(sectionOrder);
 };

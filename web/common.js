@@ -50,22 +50,41 @@ const SECTION_SEP = '$'; // never appears in a stage/group/round name
 const sectionKey = m => [m.stage_name ?? '', m.group_name ?? '', m.round_name ?? ''].join(SECTION_SEP);
 const sectionParts = key => key.split(SECTION_SEP);
 const sectionTitle = key => sectionParts(key).filter(Boolean).join(' / ');
-const dayOf = key => sectionParts(key).at(-1) ?? key;
 const letters = s => s.replace(/\d+/g, '').trim();
 
-// Order sections: newest day first (round number desc), then league rank
-// (Erste < Zweite < Dritte), then group alphabetically.
+// Wildcard stages keep their days to themselves: "Day 1" of a wildcard round robin is
+// its own tab, under a category named after the stage, not part of the leagues' "Day 1".
+const hasOwnDays = stage => /wildcard/i.test(stage ?? '');
+// The day (tab) of a section: its round, or "<stage>$<round>" for a stage with its own days.
+const stageDay = (stage, round) => hasOwnDays(stage) ? stage + SECTION_SEP + round : round;
+const dayOf = key => {
+    const [stage, , round] = sectionParts(key);
+    return stageDay(stage, round ?? key);
+};
+const dayKey = m => stageDay(m.stage_name, m.round_name ?? '');
+// Split a day back into its stage (null for a shared day) and round.
+const dayParts = day => {
+    const i = day.indexOf(SECTION_SEP);
+    return i < 0 ? [null, day] : [day.slice(0, i), day.slice(i + 1)];
+};
+
+// Order sections: newest day first (round number desc), the sections of one day
+// together, then league rank (Erste < Zweite < Dritte), then group alphabetically.
 function sectionOrder(a, b) {
     const [stageA, groupA, roundA] = sectionParts(a);
     const [stageB, groupB, roundB] = sectionParts(b);
     const na = firstInt(roundA), nb = firstInt(roundB);
     const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
     return ((!isNaN(na) && !isNaN(nb)) ? nb - na : roundB.localeCompare(roundA))
+        || dayOf(a).localeCompare(dayOf(b))
         || ligaRank(stageA) - ligaRank(stageB)
         || groupA.localeCompare(groupB);
 }
 
-function compareDays(a, b) {
+function compareDays(dayA, dayB) {
+    const [stageA, a] = dayParts(dayA), [stageB, b] = dayParts(dayB);
+    const stageCmp = (stageA ?? '').localeCompare(stageB ?? '');
+    if (stageCmp) return stageCmp;
     const lettersCmp = letters(a).localeCompare(letters(b));
     if (lettersCmp) return lettersCmp;
     const na = firstInt(a), nb = firstInt(b);

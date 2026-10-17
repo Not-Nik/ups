@@ -93,7 +93,7 @@ Back walks through it. `localStorage` is only for the token and the theme.
 - `?table=<stage>[:<group>]` — which standings table is open; the group is appended only where the
   stage holds several (`standingsParam` in standings.js). Unknown or missing falls back to the first.
 - `?tab=<tab>` — which day/bracket tab of the matches view is open. `renderTabs` assigns each tab its `param`: a league day is its own
-  name (`tab=Day+5`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
+  name (`tab=Day+5`), a day of a wildcard stage is `<stage>:<round>` (`tab=Wildcard+Liga+3:Day+1`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
   internal day key (`bracketDayKey`) joins its parts on NUL and never goes in the URL. `tabParam(day)`
   just looks the param up; params are only compared against the rendered tabs, so they must be stable,
@@ -187,8 +187,13 @@ turns toornament's "Round N" into "Day N" for league/swiss/pools matches and lea
 `sectionParts`/`sectionTitle`/`dayOf` split it back. Bracket tabs use their own key, `bracketDayKey(stage, group)`
 in bracket.js, which starts with NUL so it can never collide with a round name.
 
-The tab bar is two lines: one button per category (a league day prefix or a bracket
-stage) on top, and below it the tabs of the category that holds the open tab — groups
+Wildcard stages (`hasOwnDays` in common.js: the stage name contains "wildcard", hardcoded) keep their days to
+themselves. Their day key is `<stage>$<round>` (`dayKey(m)` for a match, `dayOf` for a section key, `dayParts`
+splits it), so a wildcard round robin's "Day 1" is its own tab, under a category named after the stage, instead of
+sharing the leagues' "Day 1". Compare a match against a tab with `dayKey(m)`, never `round_name`.
+
+The tab bar is two lines: one button per category (a league day prefix, a wildcard
+stage or a bracket stage) on top, and below it the tabs of the category that holds the open tab — groups
 without a label (a lone day like "Seedingwoche") sit in the top line as plain tabs,
 and a category holding a single bracket tab shows no lower line at all, since its
 button already carries the selection.
@@ -197,10 +202,10 @@ app.js own the switching, and `refreshTabStates` re-applies `.active`/`.invalid-
 across both lines after any re-render.
 Sorting:
 
-- **Sections** (`sectionOrder` in common.js): round number desc (newest day first), then
-  `Erste < Zweite < Dritte` on the stage name, then alphabetical on the group name.
-- **Days** (`compareDays`): alphabetical on the non-digit prefix, then numeric ascending. So `Day 1`, `Day 2`, `Day 10`
-  sort naturally; different prefixes group together.
+- **Sections** (`sectionOrder` in common.js): round number desc (newest day first), then by day key (so a day's
+  sections sit together), then `Erste < Zweite < Dritte` on the stage name, then alphabetical on the group name.
+- **Days** (`compareDays`): shared days before wildcard ones (by stage name), then alphabetical on the non-digit
+  prefix, then numeric ascending. So `Day 1`, `Day 2`, `Day 10` sort naturally; different prefixes group together.
 - **Default tab** (when the URL names none, or names one this tournament doesn't have): the lowest-ranked
   day still containing matches without final scores, else the last tab.
 
