@@ -39,6 +39,12 @@ const byNewestTournament = (a, b) => b.tournament_id - a.tournament_id;
 // straight into a tournament without knowing how app.js reads it.
 const TOURNAMENT_PARAM = 'tournament';
 const tournamentHref = id => `/tournament.html?${TOURNAMENT_PARAM}=${encodeURIComponent(id)}`;
+// A team's lineup: the tournament's Players view, searched for the team's name.
+const teamPlayersHref = (tournamentId, team) =>
+    `${tournamentHref(tournamentId)}&view=players&search=${encodeURIComponent(team)}`;
+// A team name linking to its lineup. tournament.html opens it in place (openTeamPlayers).
+const teamLinkHTML = (tournamentId, team) =>
+    `<a class="team-link" href="${escapeAttr(teamPlayersHref(tournamentId, team))}" data-team="${escapeAttr(team)}">${escapeHtml(team)}</a>`;
 
 // ============== Section/day ordering ==============
 // A match has stage_name / group_name / round_name (from the API). The round is

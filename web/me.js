@@ -5,7 +5,7 @@ const SIDES = ['a', 'b'];
 
 function predictionRowHTML(pred, match) {
     const teams = match
-        ? SIDES.map(k => escapeHtml(match[`team_${k}`])).join(' vs ')
+        ? SIDES.map(k => teamLinkHTML(match.tournament_id, match[`team_${k}`])).join(' vs ')
         : `Match #${pred.id}`;
     let outcome = '';
     if (match && match.score_a != null && match.score_b != null) {
@@ -42,7 +42,7 @@ function leagueHTML(picks) {
             <span class="league-pick d-flex align-items-center gap-2 small fw-semibold">
                 <span class="pick-place">${p.position}.</span>
                 ${p.logo ? `<img src="${escapeAttr(proxied(p.logo))}" class="team-logo" alt="">` : ''}
-                <span class="text-truncate">${escapeHtml(p.team)}</span>
+                <span class="text-truncate">${teamLinkHTML(p.tournament_id, p.team)}</span>
             </span>
             ${now}
         </li>`;

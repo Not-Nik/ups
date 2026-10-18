@@ -119,14 +119,16 @@ function syncUrl(replace = false) {
     set('view', state.activeView);
     set('tab', state.activeTab && tabParam(state.activeTab));
     set('table', activeStandingsTable());
+    set('search', state.activeView === 'players' ? $('players-search').value || null : null);
     const query = params.toString();
     history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
 }
 
 // Adopt whatever the URL says on back/forward. The tournament is fixed for the page's
 // lifetime (switching one is a page load from the landing grid), so only the view, the
-// tab and the standings table move.
+// tab, the standings table and the players search move.
 function applyLocation() {
+    setRosterSearch('players', urlParams().get('search') ?? '');
     activateView(wantedView(), null);
     activateWantedTab();
     activateWantedStandingsTable();
@@ -163,6 +165,12 @@ function activateView(view, record = 'push') {
     });
     VIEW_LOADERS[view]?.(state.activeTournament);
     if (record) syncUrl(record === 'replace');
+}
+
+// Where every team link leads: the Players view, searched for the team.
+function openTeamPlayers(team) {
+    setRosterSearch('players', team);
+    activateView('players');
 }
 
 // ============== Tournament ==============
@@ -328,7 +336,7 @@ async function togglePredictions(match, panel, btn) {
 const teamRowHTML = ({name, logo, score, color, side}) => `
   <div class="team-row${side === 1 ? ' mt-1' : ''}">
     ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
-    <span class="team-name fw-semibold small ${color}">${escapeHtml(name)}</span>
+    <span class="team-name fw-semibold small ${color}">${teamLinkHTML(state.activeTournament, name)}</span>
     <input type="text" class="form-control score-input" data-side="${side}" inputmode="numeric" placeholder="0">
     ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${score}</span>` : ''}
   </div>`;
@@ -1119,6 +1127,17 @@ function bindEvents() {
 
     // Back/forward move between views instead of leaving the page.
     window.addEventListener('popstate', applyLocation);
+
+    // Team links open the Players view in place; a modified or middle click still
+    // follows the href, into a new tab.
+    document.addEventListener('click', e => {
+        const link = e.target.closest('a.team-link');
+        if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        openTeamPlayers(link.dataset.team);
+    });
+    // The players search is part of the location; typing replaces rather than pushes.
+    $('players-search').addEventListener('input', () => syncUrl(true));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -1141,6 +1160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('tournament-name').textContent = tournament.name;
     document.title = `${tournament.name} – PULOW`;
     // The matches' render settles the tab and replaces the URL with the full view.
+    setRosterSearch('players', urlParams().get('search') ?? '');
     activateView(wantedView(), null);
     await loadTournament(tournament.tournament_id);
 });

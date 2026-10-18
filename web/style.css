@@ -100,6 +100,24 @@
     color: var(--bs-body-color);
 }
 
+/* A team name linking to its lineup in the Players view: looks like the name it
+   replaces (winner colours included), underlined on hover. */
+.team-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.team-link:hover {
+    color: inherit;
+    text-decoration: underline;
+}
+
+/* A Teams-view tile is a team-link as a whole: it lights up like a tournament card. */
+a.roster-team:hover {
+    border-color: var(--accent);
+    text-decoration: none;
+}
+
 .beta-badge {
     font-size: .6rem;
     font-weight: 700;

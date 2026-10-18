@@ -478,7 +478,7 @@ function bracketPlaceholder(node) {
     const row = (second, name, logo, score, cls) => `
         <div class="team-row${second ? ' mt-1' : ''}">
             ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
-            <span class="team-name fw-semibold small ${cls}">${escapeHtml(name ?? 'TBD')}</span>
+            <span class="team-name fw-semibold small ${cls}">${name != null ? teamLinkHTML(state.activeTournament, name) : 'TBD'}</span>
             ${score != null ? `<span class="actual-score small ${cls || 'text-secondary'}">${score}</span>` : ''}
         </div>`;
     const card = makeEl('div', {className: 'card bracket-tbd'});

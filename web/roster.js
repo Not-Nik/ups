@@ -6,6 +6,16 @@
 // Case- and accent-insensitive: "muller" finds "Müller".
 const searchKey = s => (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
+// Per view, re-run its search once its list is bound (see setRosterSearch).
+const rosterSearches = {};
+
+// Fill a view's search box and filter its list. A list that hasn't loaded yet reads
+// the box when it binds.
+function setRosterSearch(view, text) {
+    $(`${view}-search`).value = text;
+    rosterSearches[view]?.();
+}
+
 // Wire a search box to a list of items, each {el, text} with `text` already a
 // searchKey. An item stays visible when it contains every whitespace-separated term.
 function bindSearch(view, items) {
@@ -26,6 +36,7 @@ function bindSearch(view, items) {
         setHidden($(view), shown === 0);
     };
     input.addEventListener('input', apply);
+    rosterSearches[view] = apply;
     apply();
 }
 
@@ -65,7 +76,12 @@ let teamsLoad = null;
 
 const loadTeams = id => teamsLoad ??= loadRoster('teams', `/api/teams/${id}`, (root, teams) =>
     teams.map(team => {
-        const card = makeEl('div', {className: 'card roster-team'});
+        // The tile links to the team's lineup, like every team-link (see openTeamPlayers).
+        const card = makeEl('a', {
+            className: 'card roster-team team-link',
+            href: teamPlayersHref(id, team.name),
+            dataset: {team: team.name},
+        });
         card.insertAdjacentHTML('beforeend', `
             <div class="card-body d-flex align-items-center gap-3">
                 ${logoHTML(team.logo, 'roster-team-logo')}

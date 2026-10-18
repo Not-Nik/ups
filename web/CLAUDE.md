@@ -98,10 +98,15 @@ Back walks through it. `localStorage` is only for the token and the theme.
   internal day key (`bracketDayKey`) joins its parts on NUL and never goes in the URL. `tabParam(day)`
   just looks the param up; params are only compared against the rendered tabs, so they must be stable,
   not reversible.
-- `syncUrl(replace)` writes all four from `state.activeTournament` / `state.activeView` /
-  `state.activeTab` / `activeStandingsTable()`, keeping any other params. A user's click **pushes** a history entry; settling on a
+- `?search=<text>` — the Players view's search box, only while that view is open. Typing replaces it; a team link
+  (`teamLinkHTML` / `teamPlayersHref` in common.js) pushes `view=players&search=<team name>`. Every team name on the
+  tournament page links there (match cards, bracket slots, standings rows, "Your top N" picks, Teams-view tiles), as
+  do the teams on me.html. On tournament.html a plain left click is caught and handled in place (`openTeamPlayers`);
+  a modified or middle click follows the href.
+- `syncUrl(replace)` writes all five from `state.activeTournament` / `state.activeView` /
+  `state.activeTab` / `activeStandingsTable()` / `#players-search`, keeping any other params. A user's click **pushes** a history entry; settling on a
   default **replaces**, so the URL is always complete without cluttering history.
-- `applyLocation()` is the `popstate` handler: it re-picks the view, the tab and the standings table.
+- `applyLocation()` is the `popstate` handler: it re-picks the players search, the view, the tab and the standings table.
   First load picks the view in the init handler, `renderGrid` → `activateWantedTab()` picks the tab,
   and `renderStandings` → `activateWantedStandingsTable()` the table once the standings have loaded.
 - Unknown tab values are dropped silently — `activateWantedTab()` falls back to the default and rewrites
@@ -143,7 +148,9 @@ locked, only the saved picks are shown, without handles; a locked group without 
 The Teams view is a tile per team (`/api/teams/:id`); the Players view one `.data-table` row per lineup
 entry (`/api/players/:id`). Both live in roster.js and share `bindSearch`: a search box filtering the
 loaded list on the client, case- and accent-insensitive, keeping items that contain every typed word.
-Players match on name, BattleTag, team and short name. The search text is not kept in the URL.
+Players match on name, BattleTag, team and short name. The Teams search is not kept in the URL; the Players
+search is (`?search=`, filled from outside through `setRosterSearch`). A team tile is an `<a class="team-link">`
+to that team's players.
 The players table is a `sortableTable` (`PLAYER_COLUMNS`): sorted by player name at first, a click on
 Team groups the lineups again (team name, then lineup position), BattleTag sorts too.
 
@@ -165,7 +172,7 @@ they're wider than the standings' columns, so on narrow screens the table scroll
 Every header is a `.sort-btn` (`LEADERBOARD_COLUMNS`): the first click sorts in the column's `asc`
 direction (rank and name ascending, counts descending), a second flips it; `aria-sort` on the `th`
 drives the arrow. Ties keep rank order, the Rank cell always shows the points rank, and the sort is not
-kept in the URL (like the roster search).
+kept in the URL (like the Teams search).
 
 The view has two sub-tabs (not kept in the URL): League predictions, open first, and Match predictions (the table
 above). A sub-tab without data shows a short status line. League predictions (`LEAGUE_COLUMNS`, same sortable table) are scored on the

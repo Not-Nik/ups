@@ -102,7 +102,7 @@ function pickRow(team, draggable) {
         ${draggable ? `<button type="button" class="pick-handle" aria-label="Move ${escapeAttr(team.team)}">&#8801;</button>` : ''}
         <span class="pick-place"></span>
         ${team.logo ? `<img src="${escapeAttr(proxied(team.logo))}" class="team-logo" alt="">` : ''}
-        <span class="text-truncate">${escapeHtml(team.team)}</span>`);
+        <span class="text-truncate">${teamLinkHTML(state.activeTournament, team.team)}</span>`);
     return row;
 }
 
@@ -325,7 +325,7 @@ function standingsTable(rows) {
             <td class="standings-team">
                 <span class="d-flex align-items-center gap-2">
                     ${r.logo ? `<img src="${escapeAttr(proxied(r.logo))}" class="team-logo" alt="">` : ''}
-                    <span class="text-truncate">${escapeHtml(r.team)}</span>
+                    <span class="text-truncate">${teamLinkHTML(state.activeTournament, r.team)}</span>
                 </span>
             </td>
             ${cols.map(c => `<td class="standings-num ${c.cls ?? ''}">${c.cell(r)}</td>`).join('')}
