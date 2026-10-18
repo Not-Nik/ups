@@ -203,7 +203,8 @@ across both lines after any re-render.
 Sorting:
 
 - **Sections** (`sectionOrder` in common.js): round number desc (newest day first), then by day key (so a day's
-  sections sit together), then `Erste < Zweite < Dritte` on the stage name, then alphabetical on the group name.
+  sections sit together), then league rank (`ligaRank`: `Erste < Zweite < Dritte < Vierte`, or the leading number
+  of `1. Liga`, `2. Liga`, ...), then stage name, then group name (numbers compared numerically).
 - **Days** (`compareDays`): shared days before wildcard ones (by stage name), then alphabetical on the non-digit
   prefix, then numeric ascending. So `Day 1`, `Day 2`, `Day 10` sort naturally; different prefixes group together.
 - **Default tab** (when the URL names none, or names one this tournament doesn't have): the lowest-ranked

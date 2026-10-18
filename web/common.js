@@ -68,17 +68,21 @@ const dayParts = day => {
     return i < 0 ? [null, day] : [day.slice(0, i), day.slice(i + 1)];
 };
 
+// A league's rank from its stage name, spelled out ("Erste Liga") or numbered ("1. Liga").
+const LIGA_WORDS = {Erste: 1, Zweite: 2, Dritte: 3, Vierte: 4};
+const ligaRank = stage => LIGA_WORDS[stage.split(' ')[0]] ?? (/^\d+\./.test(stage) ? firstInt(stage) : 99);
+
 // Order sections: newest day first (round number desc), the sections of one day
-// together, then league rank (Erste < Zweite < Dritte), then group alphabetically.
+// together, then by league (Erste < Zweite < Dritte, or 1. < 2. < 3.), then group.
 function sectionOrder(a, b) {
     const [stageA, groupA, roundA] = sectionParts(a);
     const [stageB, groupB, roundB] = sectionParts(b);
     const na = firstInt(roundA), nb = firstInt(roundB);
-    const ligaRank = s => ({Erste: 0, Zweite: 1, Dritte: 2}[s.split(' ')[0]] ?? 99);
     return ((!isNaN(na) && !isNaN(nb)) ? nb - na : roundB.localeCompare(roundA))
         || dayOf(a).localeCompare(dayOf(b))
         || ligaRank(stageA) - ligaRank(stageB)
-        || groupA.localeCompare(groupB);
+        || stageA.localeCompare(stageB)
+        || groupA.localeCompare(groupB, undefined, {numeric: true});
 }
 
 function compareDays(dayA, dayB) {
