@@ -722,6 +722,120 @@ async fn upsert_teams(
     Ok(())
 }
 
+/// This tournament's teams toornament no longer has, as (TeamID, Name): their id isn't
+/// among the ones the feed named (`ids.teams`, filled by upsert_teams). Teams added by
+/// hand have no id and are never dropped. A feed without participants is more likely a
+/// hiccup than an emptied tournament, so it drops nothing.
+async fn dropped_teams(
+    conn: &mut SqliteConnection,
+    tournament_id: i64,
+    feed: &Feed,
+    ids: &Ids,
+) -> sqlx::Result<Vec<(i64, String)>> {
+    if feed.participants.is_empty() {
+        return Ok(Vec::new());
+    }
+    let teams: Vec<(i64, String, String)> = sqlx::query_as(
+        "SELECT TeamID, Name, ToornamentId FROM teams \
+         WHERE TournamentID = ? AND ToornamentId IS NOT NULL",
+    )
+    .bind(tournament_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(teams
+        .into_iter()
+        .filter(|(_, _, toornament_id)| !ids.teams.contains_key(toornament_id))
+        .map(|(team, name, _)| (team, name))
+        .collect())
+}
+
+/// Hand what refers to a dropped team over to the team that replaced it: the one team
+/// toornament still has under the same name, as when a team signs up again. Runs before
+/// the matches are written, so a match toornament moved to the new team already has it
+/// and keeps its predictions (see sync_predictions); users' league picks move along. Where
+/// the new team already has a standings row or a user's pick in a group, that one stays
+/// and the old team's goes.
+async fn merge_replaced_teams(
+    conn: &mut SqliteConnection,
+    tournament_id: i64,
+    feed: &Feed,
+    ids: &Ids,
+) -> sqlx::Result<()> {
+    let current: HashSet<i64> = ids.teams.values().copied().collect();
+    for (old, name) in dropped_teams(conn, tournament_id, feed, ids).await? {
+        let same_name: Vec<i64> = sqlx::query_scalar(
+            "SELECT TeamID FROM teams WHERE TournamentID = ? AND Name = ? AND TeamID != ?",
+        )
+        .bind(tournament_id)
+        .bind(&name)
+        .bind(old)
+        .fetch_all(&mut *conn)
+        .await?;
+        let replacements: Vec<i64> = same_name
+            .into_iter()
+            .filter(|team| current.contains(team))
+            .collect();
+        // None, or several to choose from: no telling which team it became.
+        let [new] = replacements[..] else {
+            continue;
+        };
+
+        for sql in [
+            "UPDATE matches SET TeamA = ?1 WHERE TeamA = ?2",
+            "UPDATE matches SET TeamB = ?1 WHERE TeamB = ?2",
+            "UPDATE bracket_nodes SET TeamA = ?1 WHERE TeamA = ?2",
+            "UPDATE bracket_nodes SET TeamB = ?1 WHERE TeamB = ?2",
+            "UPDATE OR IGNORE standings SET TeamID = ?1 WHERE TeamID = ?2",
+            "DELETE FROM standings WHERE TeamID = ?2",
+            "UPDATE OR IGNORE standing_predictions SET TeamID = ?1 WHERE TeamID = ?2",
+            "DELETE FROM standing_predictions WHERE TeamID = ?2",
+        ] {
+            sqlx::query(sql).bind(new).bind(old).execute(&mut *conn).await?;
+        }
+        log::info!("{name} signed up again on toornament, moved team {old} onto team {new}");
+    }
+    Ok(())
+}
+
+/// Delete the teams toornament dropped, with their lineups. Runs last, once this refresh
+/// has rewritten what refers to teams. A dropped team still in a match, a bracket slot, a
+/// standings row or a league pick stays, since those rows need it, and is logged.
+async fn delete_dropped_teams(
+    conn: &mut SqliteConnection,
+    tournament_id: i64,
+    feed: &Feed,
+    ids: &Ids,
+) -> sqlx::Result<()> {
+    let mut deleted = 0;
+    for (team, name) in dropped_teams(conn, tournament_id, feed, ids).await? {
+        let used: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM matches WHERE TeamA = ?1 OR TeamB = ?1) \
+             OR EXISTS (SELECT 1 FROM bracket_nodes WHERE TeamA = ?1 OR TeamB = ?1) \
+             OR EXISTS (SELECT 1 FROM standings WHERE TeamID = ?1) \
+             OR EXISTS (SELECT 1 FROM standing_predictions WHERE TeamID = ?1)",
+        )
+        .bind(team)
+        .fetch_one(&mut *conn)
+        .await?;
+        if used {
+            log::warn!("{name} (team {team}) is gone from toornament but still in use, kept");
+            continue;
+        }
+        // Players go explicitly: the cascade needs foreign keys on, which tests may not set.
+        for sql in [
+            "DELETE FROM players WHERE TeamID = ?",
+            "DELETE FROM teams WHERE TeamID = ?",
+        ] {
+            sqlx::query(sql).bind(team).execute(&mut *conn).await?;
+        }
+        deleted += 1;
+    }
+    if deleted > 0 {
+        log::info!("Deleted {deleted} teams toornament no longer has");
+    }
+    Ok(())
+}
+
 /// Replace the lineup of every team the participants endpoint returned. Lineup entries
 /// have no id of their own and names aren't unique, so the whole lineup is rewritten.
 async fn replace_players(conn: &mut SqliteConnection, feed: &Feed, ids: &Ids) -> sqlx::Result<()> {
@@ -1036,6 +1150,7 @@ async fn load_tournament(
     let held = prune_tree(&mut tx, tournament_id, &feed).await?;
     upsert_tree(&mut tx, tournament_id, &feed, &mut ids).await?;
     upsert_teams(&mut tx, tournament_id, &feed, &mut ids).await?;
+    merge_replaced_teams(&mut tx, tournament_id, &feed, &ids).await?;
     replace_players(&mut tx, &feed, &ids).await?;
 
     let mut matches: Vec<NewMatch> = feed
@@ -1050,6 +1165,7 @@ async fn load_tournament(
     restore_predictions(&mut tx, tournament_id, &held).await?;
     upsert_bracket_nodes(&mut tx, tournament_id, &feed.nodes, &ids).await?;
     replace_standings(&mut tx, &feed, &ids).await?;
+    delete_dropped_teams(&mut tx, tournament_id, &feed, &ids).await?;
 
     tx.commit().await?;
     Ok(())
@@ -1389,5 +1505,132 @@ mod tests {
         ] {
             assert_eq!(count(&mut conn, table).await, 1, "{table}");
         }
+    }
+
+    // Tournament 1's teams: "Mia" signed up twice (11 is gone from toornament, 12 is
+    // current), 10 is gone with no replacement, 13 is current, 14 was added by hand.
+    // Old Mia played 13 in match 1 (predicted 2-1), has a player, and is fan's 1st pick.
+    async fn db_with_teams() -> SqliteConnection {
+        let mut conn = SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        sqlx::raw_sql(include_str!("init.sql"))
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        sqlx::raw_sql(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO users (Name) VALUES ('fan');
+             INSERT INTO tournaments (TournamentID, Name, ToornamentId) VALUES (1, 'T', 't');
+             INSERT INTO teams (TeamID, TournamentID, Name, ToornamentId) VALUES
+                 (10, 1, 'Gone', 'p-gone'), (11, 1, 'Mia', 'p-mia-old'),
+                 (12, 1, 'Mia', 'p-mia-new'), (13, 1, 'Rival', 'p-rival');
+             INSERT INTO teams (TeamID, TournamentID, Name) VALUES (14, 1, 'Hand');
+             INSERT INTO players (TeamID, Position, Name) VALUES (11, 1, 'Moh');
+             INSERT INTO stages (StageID, TournamentID, Number, Name, Type, ToornamentId)
+                 VALUES (1, 1, 1, '1. Liga', 'league', 's');
+             INSERT INTO groups (GroupID, StageID, Number, Name, ToornamentId) VALUES (1, 1, 1, 'D1', 'g');
+             INSERT INTO rounds (RoundID, GroupID, Number, Name, ToornamentId) VALUES (1, 1, 1, 'Day 1', 'r');
+             INSERT INTO matches (MatchID, TournamentID, GroupID, RoundID, TeamA, TeamB, ToornamentId)
+                 VALUES (1, 1, 1, 1, 11, 13, 'm1');
+             INSERT INTO predictions VALUES ('fan', 1, 2, 1);
+             INSERT INTO standing_predictions VALUES ('fan', 1, 1, 11);",
+        )
+        .execute(&mut conn)
+        .await
+        .unwrap();
+        conn
+    }
+
+    fn participant(id: &str, name: &str) -> Participant {
+        Participant {
+            id: id.into(),
+            name: name.into(),
+            custom_field_values: None,
+            lineup: None,
+        }
+    }
+
+    // What upsert_teams leaves behind for a feed listing the new Mia and Rival.
+    fn feed_with_current_teams() -> (Feed, Ids) {
+        let mut feed = feed(&[]);
+        feed.participants = vec![participant("p-mia-new", "Mia"), participant("p-rival", "Rival")];
+        let mut ids = Ids::default();
+        ids.teams.insert("p-mia-new".into(), 12);
+        ids.teams.insert("p-rival".into(), 13);
+        (feed, ids)
+    }
+
+    async fn team_ids(conn: &mut SqliteConnection) -> Vec<i64> {
+        sqlx::query_scalar("SELECT TeamID FROM teams ORDER BY TeamID")
+            .fetch_all(conn)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn team_signed_up_again_takes_over_matches_and_picks() {
+        let mut conn = db_with_teams().await;
+        let (feed, ids) = feed_with_current_teams();
+
+        merge_replaced_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        // Toornament's match 1 is now played by the new Mia.
+        let m1 = NewMatch {
+            team_a: 12,
+            team_b: 13,
+            score_a: None,
+            score_b: None,
+            group_id: 1,
+            round_id: 1,
+            number: 1,
+            toornament_id: "m1".into(),
+        };
+        upsert_matches(&mut conn, 1, &[m1]).await.unwrap();
+        delete_dropped_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+
+        let prediction: Vec<(i64, i64)> =
+            sqlx::query_as("SELECT ScoreA, ScoreB FROM predictions WHERE MatchID = 1")
+                .fetch_all(&mut conn)
+                .await
+                .unwrap();
+        assert_eq!(prediction, [(2, 1)]);
+        let pick: i64 = sqlx::query_scalar("SELECT TeamID FROM standing_predictions")
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(pick, 12);
+        // Old Mia and Gone are deleted, Old Mia's player with it; the hand-made team stays.
+        assert_eq!(team_ids(&mut conn).await, [12, 13, 14]);
+        assert_eq!(count(&mut conn, "players").await, 0);
+    }
+
+    #[tokio::test]
+    async fn dropped_team_still_in_use_stays() {
+        let mut conn = db_with_teams().await;
+        let (feed, ids) = feed_with_current_teams();
+        // Gone played a match, and nothing replaced it.
+        sqlx::query(
+            "INSERT INTO matches (MatchID, TournamentID, GroupID, RoundID, TeamA, TeamB) \
+             VALUES (2, 1, 1, 1, 10, 13)",
+        )
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+        merge_replaced_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        delete_dropped_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+
+        assert_eq!(team_ids(&mut conn).await, [10, 12, 13, 14]);
+    }
+
+    #[tokio::test]
+    async fn feed_without_participants_drops_no_team() {
+        let mut conn = db_with_teams().await;
+        let (mut feed, ids) = feed_with_current_teams();
+        feed.participants.clear();
+
+        merge_replaced_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        delete_dropped_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+
+        assert_eq!(team_ids(&mut conn).await, [10, 11, 12, 13, 14]);
+        assert_eq!(count(&mut conn, "standing_predictions").await, 1);
     }
 }
