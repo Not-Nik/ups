@@ -16,7 +16,7 @@ const leaderboardStatus = (cls, text) => makeEl('p', {
 // Points per prediction: the right winner earns WINNER_POINTS, an exact score
 // EXACT_POINTS in total (not on top of the winner's).
 const WINNER_POINTS = 1;
-const EXACT_POINTS = 3;
+const EXACT_POINTS = 2;
 
 // [{name, predicted, correct, exact, points, rank}], best first. Ties (same points
 // and exact) share a rank; the name breaks them for display order.
@@ -136,12 +136,16 @@ async function renderLeaderboard(id) {
         const leagueRows = rankLeaguePredictions(standingRows, standingPicks);
         // League predictions come first. The sub-tab isn't kept in the URL.
         const panels = [
-            {label: 'League predictions', node: leagueRows.length
-                ? leaderboardTable(leagueRows, LEAGUE_COLUMNS)
-                : leaderboardStatus('text-secondary', 'No predictions on started leagues yet.')},
-            {label: 'Match predictions', node: rows.length
-                ? leaderboardTable(rows, LEADERBOARD_COLUMNS)
-                : leaderboardStatus('text-secondary', 'No predictions on finished matches yet.')},
+            {
+                label: 'League predictions', node: leagueRows.length
+                    ? leaderboardTable(leagueRows, LEAGUE_COLUMNS)
+                    : leaderboardStatus('text-secondary', 'No predictions on started leagues yet.')
+            },
+            {
+                label: 'Match predictions', node: rows.length
+                    ? leaderboardTable(rows, LEADERBOARD_COLUMNS)
+                    : leaderboardStatus('text-secondary', 'No predictions on finished matches yet.')
+            },
         ];
         const bar = makeEl('div', {className: 'd-flex flex-wrap mb-3'});
         const buttons = panels.map(panel => {
@@ -163,16 +167,25 @@ async function renderLeaderboard(id) {
 // top-down, the counts biggest first.
 const LEADERBOARD_COLUMNS = [
     {key: 'rank', head: 'Rank', cls: 'standings-rank', asc: true},
-    {key: 'name', head: 'Name', cls: 'standings-team text-truncate', asc: true,
-        compare: (a, b) => a.name.localeCompare(b.name), cell: r => escapeHtml(r.name)},
+    {
+        key: 'name', head: 'Name', cls: 'standings-team text-truncate', asc: true,
+        compare: (a, b) => a.name.localeCompare(b.name), cell: r => escapeHtml(r.name)
+    },
     {key: 'predicted', head: 'Predicted', cls: 'standings-num', title: 'Predictions on finished matches'},
     {key: 'correct', head: 'Winners', cls: 'standings-num', title: 'Correct winners, exact scores included'},
     {key: 'exact', head: 'Exact', cls: 'standings-num', title: 'Exact scores'},
-    {key: 'accuracy', head: '%', cls: 'standings-num', title: 'Accuracy: share of predictions with the correct winner',
+    {
+        key: 'accuracy',
+        head: '%',
+        cls: 'standings-num',
+        title: 'Accuracy: share of predictions with the correct winner',
         compare: (a, b) => a.correct / a.predicted - b.correct / b.predicted,
-        cell: r => `${Math.round(100 * r.correct / r.predicted)}%`},
-    {key: 'points', head: 'Points', cls: 'standings-num fw-semibold',
-        title: `${WINNER_POINTS} per correct winner, ${EXACT_POINTS} per exact score`},
+        cell: r => `${Math.round(100 * r.correct / r.predicted)}%`
+    },
+    {
+        key: 'points', head: 'Points', cls: 'standings-num fw-semibold',
+        title: `${WINNER_POINTS} per correct winner, ${EXACT_POINTS} per exact score`
+    },
 ];
 
 const RANK_NAME_COLUMNS = LEADERBOARD_COLUMNS.slice(0, 2);
@@ -181,11 +194,15 @@ const RANK_NAME_COLUMNS = LEADERBOARD_COLUMNS.slice(0, 2);
 const LEAGUE_COLUMNS = [
     ...RANK_NAME_COLUMNS,
     {key: 'leagues', head: 'Leagues', cls: 'standings-num', title: 'Leagues with a prediction that has started'},
-    {key: 'top', head: 'In top', cls: 'standings-num',
-        title: 'Predicted teams currently inside the predicted range (the top 4 of their league, or as many as it asks for)'},
+    {
+        key: 'top', head: 'In top', cls: 'standings-num',
+        title: 'Predicted teams currently inside the predicted range (the top 4 of their league, or as many as it asks for)'
+    },
     {key: 'exact', head: 'Exact', cls: 'standings-num', title: 'Teams predicted on exactly their current place'},
-    {key: 'legacy', head: 'Points', cls: 'standings-num fw-semibold',
-        title: `Up to ${STAGE_POINTS} per stage (shared by its groups), less for every place off`},
+    {
+        key: 'legacy', head: 'Points', cls: 'standings-num fw-semibold',
+        title: `Up to ${STAGE_POINTS} per stage (shared by its groups), less for every place off`
+    },
 ];
 
 // A sortableTable (app.js) of leaderboard rows. They arrive in rank order, and the sort
