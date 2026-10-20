@@ -51,59 +51,71 @@ function rankLeaderboard(matches, predictions) {
 
 // A league prediction scores once the group has started (`open` is false on its
 // standings rows); until then it can still change and is left out.
-// Per predicted team, with `diff` = |predicted place - current place|:
-//   legacy points, as in last season's script: a team earns (teams in the group - diff);
-//   a group's sum is divided by (teams in the group * predicted teams) and scaled to
-//   STAGE_POINTS, shared equally by the stage's groups (40 for one group, 20 each for
-//   two), then rounded to halves.
+// Per predicted team, with `diff` = |predicted place - current place| and
+//   max = teams in the group - 1: a team earns (max - diff) — never negative, since no
+//   pick can be more than max places off, and max for an exact one. A group's sum is
+//   divided by (max * predicted teams), the most this user could score there, and
+//   scaled to STAGE_POINTS, shared equally by the stage's groups (40 for one group,
+//   20 each for two). A perfect league is worth exactly STAGE_POINTS and every place a
+//   pick is off costs it its full share. The total over a user's groups is rounded to
+//   quarters, the exact number shown on hover.
 //   exact: diff is 0; top: the team currently sits inside the predicted range, the
 //   top `pick_count` of its group (4, or what the admin panel sets for the stage).
 const STAGE_POINTS = 40;
-const roundHalf = x => Math.round(x * 2) / 2;
+const roundQuarter = x => Math.round(x * 4) / 4;
+// The rounded score keeps its two decimals; the exact one, cut after the last
+// significant digit, sits in a bubble over it on hover.
+function pointsCell(points, exact) {
+    const value = escapeAttr(String(Number(exact.toFixed(6))));
+    return `<span class="leaderboard-exact" data-exact="${value}">${points.toFixed(2)}</span>`;
+}
 
-// [{name, leagues, legacy, exact, top, rank}], best first: most legacy points, then
-// exact, then teams inside the predicted range. Ties share a rank.
+// [{name, leagues, points, pointsExact, exact, top, rank}], best first: most points,
+// then exact, then teams inside the predicted range. Ties share a rank.
 function rankLeaguePredictions(standingRows, predictions) {
     const current = new Map();
-    const teamCount = new Map();
+    const teamSizes = new Map();
     const stageGroups = new Map();
     const groupWeight = new Map();
     const pickCount = new Map();
     standingRows.forEach(r => {
         pickCount.set(r.group_id, r.pick_count);
-        teamCount.set(r.group_id, (teamCount.get(r.group_id) ?? 0) + 1);
+        teamSizes.set(r.group_id, (teamSizes.get(r.group_id) ?? 0) + 1);
         if (!stageGroups.has(r.stage_number)) stageGroups.set(r.stage_number, new Set());
         stageGroups.get(r.stage_number).add(r.group_id);
         if (!r.open) current.set(`${r.group_id}:${r.team_id}`, r.position);
     });
     stageGroups.forEach(ids => ids.forEach(g => groupWeight.set(g, STAGE_POINTS / ids.size)));
+    const maxPickPoints = groupId => teamSizes.get(groupId) - 1;
 
     const byName = new Map();
-    // name -> group_id -> {sum, count} for the legacy points
+    // name -> group_id -> {sum, count} of the scored picks
     const perGroup = new Map();
     predictions.forEach(p => {
         const now = current.get(`${p.group_id}:${p.team_id}`);
         if (now === undefined) return;
         if (!byName.has(p.name)) {
-            byName.set(p.name, {name: p.name, leagues: 0, legacy: 0, exact: 0, top: 0});
+            byName.set(p.name, {name: p.name, leagues: 0, points: 0, pointsExact: 0, exact: 0, top: 0});
             perGroup.set(p.name, new Map());
         }
         const e = byName.get(p.name);
         const g = perGroup.get(p.name);
         if (!g.has(p.group_id)) g.set(p.group_id, {sum: 0, count: 0});
         const diff = Math.abs(p.position - now);
-        g.get(p.group_id).sum += teamCount.get(p.group_id) - diff;
+        g.get(p.group_id).sum += maxPickPoints(p.group_id) - diff;
         g.get(p.group_id).count++;
         if (diff === 0) e.exact++;
         if (now <= pickCount.get(p.group_id)) e.top++;
     });
     byName.forEach((e, name) => {
         perGroup.get(name).forEach(({sum, count}, groupId) => {
-            e.legacy += roundHalf(sum / (teamCount.get(groupId) * count) * groupWeight.get(groupId));
+            const max = maxPickPoints(groupId);
+            if (max > 0) e.pointsExact += sum / (max * count) * groupWeight.get(groupId);
             e.leagues++;
         });
+        e.points = roundQuarter(e.pointsExact);
     });
-    const key = e => [-e.legacy, -e.exact, -e.top];
+    const key = e => [-e.points, -e.exact, -e.top];
     const cmp = (a, b) => key(a).map((v, i) => v - key(b)[i]).find(d => d) ?? 0;
     const rows = [...byName.values()].sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
     rows.forEach((r, i) => {
@@ -200,8 +212,9 @@ const LEAGUE_COLUMNS = [
     },
     {key: 'exact', head: 'Exact', cls: 'standings-num', title: 'Teams predicted on exactly their current place'},
     {
-        key: 'legacy', head: 'Points', cls: 'standings-num fw-semibold',
-        title: `Up to ${STAGE_POINTS} per stage (shared by its groups), less for every place off`
+        key: 'points', head: 'Points', cls: 'standings-num fw-semibold',
+        title: `Up to ${STAGE_POINTS} per league (shared by its groups), less for every place a pick is off. Rounded to quarters, the exact number on hover`,
+        cell: r => pointsCell(r.points, r.pointsExact)
     },
 ];
 

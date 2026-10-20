@@ -292,6 +292,62 @@ a.roster-team:hover {
     width: 6.5rem;
 }
 
+/* League scores are rounded to quarters; hovering one shows the exact number in a
+   bubble over it, its tail pointing down at the score. Both stay inside the table, so
+   the card's horizontal scroll never clips them. */
+.leaderboard-exact {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+
+.leaderboard-exact::after {
+    content: attr(data-exact);
+    position: absolute;
+    right: -.5rem;
+    bottom: calc(100% + .5rem);
+    padding: .15rem .5rem .45rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .4rem;
+    background: var(--bs-card-bg);
+    box-shadow: 0 .15rem .4rem rgba(0, 0, 0, .25);
+    color: var(--bs-body-color);
+    font-size: .8rem;
+    font-weight: 400;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .12s ease, visibility .12s;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* Centred on the bubble's bottom edge and painted above it, so its background hides
+   that edge and its two borders read as one outline with the bubble's. */
+.leaderboard-exact::before {
+    content: "";
+    position: absolute;
+    right: .45rem;
+    bottom: calc(100% + .25rem);
+    width: .5rem;
+    height: .5rem;
+    border-right: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
+    background: var(--bs-card-bg);
+    transform: rotate(45deg);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .12s ease, visibility .12s;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.leaderboard-exact:hover::after,
+.leaderboard-exact:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
 /* Sortable headers: a bare button that looks like the header text, with an arrow on
    the sorted column. */
 .sort-btn {
