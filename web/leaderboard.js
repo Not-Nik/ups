@@ -50,8 +50,9 @@ function rankLeaderboard(matches, predictions) {
     return rows;
 }
 
-// A league prediction scores once the group has started (`open` is false on its
-// standings rows); until then it can still change and is left out.
+// A league prediction is scored against its group's standings as they stand now, so a
+// league still ahead of its first match already ranks everyone by how well its picks fit
+// the seeding the table starts from.
 // Per predicted team, with `diff` = |predicted place - current place| and
 //   max = teams in the group - 1: a team earns (max - diff) — never negative, since no
 //   pick can be more than max places off, and max for an exact one. A group's sum is
@@ -95,7 +96,7 @@ function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWei
     standingRows.forEach(r => {
         pickCount.set(r.group_id, r.pick_count);
         teamSizes.set(r.group_id, (teamSizes.get(r.group_id) ?? 0) + 1);
-        if (!r.open) current.set(`${r.group_id}:${r.team_id}`, r.position);
+        current.set(`${r.group_id}:${r.team_id}`, r.position);
     });
     const maxPickPoints = groupId => teamSizes.get(groupId) - 1;
     // The picks a user was expected to make: the stage's pick count, cut down to the
@@ -232,7 +233,7 @@ const subgroupTable = (rows, columns, empty) => rows.length
     ? leaderboardTable(rows, columns)
     : leaderboardStatus('text-secondary', empty);
 
-// Everyone on the tournament's started leagues, then everyone on one stage or group.
+// Everyone on the tournament's leagues, then everyone on one stage or group.
 // Every table scores with the weights of the whole tournament, so a group's own table
 // tops out at the share it adds to the total. The Leagues column counts the groups a
 // score spans, which a group's table doesn't need.
@@ -244,13 +245,13 @@ function leagueLeaderboard(standingRows, standingPicks) {
             tabs: [{
                 label: ALL_TAB,
                 build: () => subgroupTable(rankLeaguePredictions(standingRows, standingPicks, weights), LEAGUE_COLUMNS,
-                    'No predictions on started leagues yet.'),
+                    'No league predictions yet.'),
             }],
         },
         ...stageCategories(standingRows, groupSubgroupKey, (label, items) => {
             const groups = new Set(items.map(r => r.group_id));
             const picks = standingPicks.filter(p => groups.has(p.group_id));
-            if (!picks.length || items.every(r => r.open)) return null;
+            if (!picks.length) return null;
             const max = [...groups].reduce((sum, g) => sum + weights.get(g), 0);
             return {
                 label,
@@ -349,7 +350,7 @@ const RANK_NAME_COLUMNS = LEADERBOARD_COLUMNS.slice(0, 2);
 // League predictions; Points is the main score, higher is better.
 const LEAGUE_COLUMNS = [
     ...RANK_NAME_COLUMNS,
-    {key: 'leagues', head: 'Leagues', cls: 'standings-num', title: 'Leagues with a prediction that has started'},
+    {key: 'leagues', head: 'Leagues', cls: 'standings-num', title: 'Leagues with a scored prediction'},
     {
         key: 'top', head: 'In top', cls: 'standings-num',
         title: 'Predicted teams currently inside the predicted range (the top 4 of their league, or as many as it asks for)'

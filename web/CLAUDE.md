@@ -186,12 +186,13 @@ group's table tops out at that share (20 in a two-group league) and the tables a
 from the standings rows (`groupSubgroupKey`), match groups from each match's stage and group
 (`matchSubgroupKey` — a section key without its round, or with its round where a stage has no groups, like a seeding
 week), both ordered by `sectionOrder` on the stage/group pair; `tabOf` returns null to leave a group out, so a group
-nobody predicted and a league that hasn't started get no tab. A panel or tab without rows shows a short status line,
+nobody predicted gets no tab. A panel or tab without rows shows a short status line,
 and each tab's table is built the first time it opens, so a leaderboard with a tab per group builds nothing nobody
 looks at. League predictions (`LEAGUE_COLUMNS`,
-league tabs `LEAGUE_GROUP_COLUMNS` — the same without the Leagues column) are scored on the
-client from `/api/standings/:id` and `/api/standings/predictions/:id`. Only groups that have started
-(`open` false on the standings rows) count; each predicted team is compared with its current `position`
+league tabs `leagueGroupColumns(max)` — the same without the Leagues column) are scored on the
+client from `/api/standings/:id` and `/api/standings/predictions/:id`. Every group with standings rows is scored,
+started or not — toornament already lists its teams, so a league before its first match ranks its predictors against
+that seeding (`open` on a standings row is *not* a gate here); each predicted team is compared with its current `position`
 (`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), In top (predicted teams
 currently inside the predicted range, the top `pick_count` of their group), Exact (`diff` 0), Points (per team
 `(teams in group - 1) - diff`, so 0 for a pick as far off as it can be; a group's sum
