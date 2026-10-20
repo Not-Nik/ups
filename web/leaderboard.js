@@ -55,11 +55,12 @@ function rankLeaderboard(matches, predictions) {
 // Per predicted team, with `diff` = |predicted place - current place| and
 //   max = teams in the group - 1: a team earns (max - diff) — never negative, since no
 //   pick can be more than max places off, and max for an exact one. A group's sum is
-//   divided by (max * predicted teams), the most this user could score there, and
-//   scaled to STAGE_POINTS, shared equally by the stage's groups (40 for one group,
-//   20 each for two). A perfect league is worth exactly STAGE_POINTS and every place a
-//   pick is off costs it its full share. The total over a user's groups is rounded to
-//   quarters, the exact number shown on hover.
+//   divided by (max * the picks the user could have made there), the most this user
+//   could score, and scaled to STAGE_POINTS, shared equally by the stage's groups (40
+//   for one group, 20 each for two). A perfect league is worth exactly STAGE_POINTS and
+//   every place a pick is off costs it its full share; leaving a pick out costs the
+//   whole share a correct one would have added. The total over a user's groups is
+//   rounded to quarters, the exact number shown on hover.
 //   exact: diff is 0; top: the team currently sits inside the predicted range, the
 //   top `pick_count` of its group (4, or what the admin panel sets for the stage).
 const STAGE_POINTS = 40;
@@ -97,9 +98,12 @@ function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWei
         if (!r.open) current.set(`${r.group_id}:${r.team_id}`, r.position);
     });
     const maxPickPoints = groupId => teamSizes.get(groupId) - 1;
+    // The picks a user was expected to make: the stage's pick count, cut down to the
+    // group's size, since nobody can predict more teams than it holds.
+    const pickSlots = groupId => Math.min(pickCount.get(groupId), teamSizes.get(groupId));
 
     const byName = new Map();
-    // name -> group_id -> {sum, count} of the scored picks
+    // name -> group_id -> summed points of its scored picks
     const perGroup = new Map();
     predictions.forEach(p => {
         const now = current.get(`${p.group_id}:${p.team_id}`);
@@ -110,17 +114,15 @@ function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWei
         }
         const e = byName.get(p.name);
         const g = perGroup.get(p.name);
-        if (!g.has(p.group_id)) g.set(p.group_id, {sum: 0, count: 0});
         const diff = Math.abs(p.position - now);
-        g.get(p.group_id).sum += maxPickPoints(p.group_id) - diff;
-        g.get(p.group_id).count++;
+        g.set(p.group_id, (g.get(p.group_id) ?? 0) + maxPickPoints(p.group_id) - diff);
         if (diff === 0) e.exact++;
         if (now <= pickCount.get(p.group_id)) e.top++;
     });
     byName.forEach((e, name) => {
-        perGroup.get(name).forEach(({sum, count}, groupId) => {
+        perGroup.get(name).forEach((sum, groupId) => {
             const max = maxPickPoints(groupId);
-            if (max > 0) e.pointsExact += sum / (max * count) * groupWeight.get(groupId);
+            if (max > 0) e.pointsExact += sum / (max * pickSlots(groupId)) * groupWeight.get(groupId);
             e.leagues++;
         });
         e.points = roundQuarter(e.pointsExact);

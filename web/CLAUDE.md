@@ -195,7 +195,9 @@ client from `/api/standings/:id` and `/api/standings/predictions/:id`. Only grou
 (`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), In top (predicted teams
 currently inside the predicted range, the top `pick_count` of their group), Exact (`diff` 0), Points (per team
 `(teams in group - 1) - diff`, so 0 for a pick as far off as it can be; a group's sum
-÷ ((teams in group - 1) × predicted teams) × `STAGE_POINTS` (40) ÷ groups in its stage; the total is rounded to quarters by
+÷ ((teams in group - 1) × the group's pick slots, `min(pick_count, teams in group)`) × `STAGE_POINTS` (40) ÷ groups in its
+stage — the slot count, not the number of picks stored, so leaving a place empty costs what a correct pick there
+would have added; the total is rounded to quarters by
 `roundQuarter`, shown with two decimals and its exact value in a hover bubble over the score (`.leaderboard-exact` in style.css, fed
 by `pointsCell`), so a perfect league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then In top; ties share a rank. Points, the main score, is higher-is-better like every other count.
 
