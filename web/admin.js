@@ -125,8 +125,9 @@ async function submitTournament(btn) {
 }
 
 // ============== League predictions ==============
-// One number input per stage that has standings: how many places of its groups users
-// predict. Save posts the stages whose value changed.
+// One row per stage that has standings: how many places of its groups users predict, and
+// whether its groups keep taking picks after one of their matches has been scored. Save
+// posts every control whose value changed.
 
 const MAX_PICK_COUNT = 32; // same limit as the server
 
@@ -143,7 +144,10 @@ async function loadPickCounts() {
     }
     box.replaceChildren(...stages.map(stage => {
         const id = `picks-stage-${stage.stage_id}`;
-        const row = makeEl('div', {className: 'd-flex align-items-center justify-content-between gap-3 mb-2'});
+        const row = makeEl('div', {
+            className: 'd-flex align-items-center justify-content-between gap-3 mb-2 admin-pick-row',
+            dataset: {stage: stage.stage_id},
+        });
         const input = makeEl('input', {
             id,
             type: 'number',
@@ -151,23 +155,54 @@ async function loadPickCounts() {
             max: MAX_PICK_COUNT,
             className: 'form-control admin-pick-count',
             value: stage.pick_count,
-            dataset: {stage: stage.stage_id, saved: stage.pick_count},
+            dataset: {saved: String(stage.pick_count)},
         });
-        row.append(makeEl('label', {htmlFor: id, className: 'text-truncate', textContent: stage.name}), input);
+        const switchBox = makeEl('div', {
+            className: 'form-check form-switch m-0 flex-shrink-0',
+        });
+        const toggle = makeEl('input', {
+            id: `picks-open-${stage.stage_id}`,
+            type: 'checkbox',
+            role: 'switch',
+            className: 'form-check-input admin-force-open',
+            checked: stage.force_open,
+            title: 'Keep taking predictions after a match of this league has been scored',
+            dataset: {saved: String(stage.force_open)},
+        });
+        switchBox.append(
+            toggle,
+            makeEl('label', {
+                htmlFor: toggle.id, className: 'form-check-label small text-secondary',
+                textContent: 'Open',
+            }),
+        );
+        row.append(
+            makeEl('label', {htmlFor: id, className: 'text-truncate', textContent: stage.name}),
+            switchBox,
+            input,
+        );
         return row;
     }));
 }
 
 async function submitPickCounts(btn) {
     const changed = [];
-    for (const input of $('picks-stages').querySelectorAll('input')) {
+    for (const row of $('picks-stages').querySelectorAll('.admin-pick-row')) {
+        const stage_id = Number(row.dataset.stage);
+        const input = row.querySelector('.admin-pick-count');
         const pick_count = parseInt(input.value, 10);
         if (isNaN(pick_count) || pick_count < 1 || pick_count > MAX_PICK_COUNT) {
             shake(input);
             input.focus();
             return;
         }
-        if (String(pick_count) !== input.dataset.saved) changed.push({input, pick_count});
+        const toggle = row.querySelector('.admin-force-open');
+        if (input.dataset.saved !== String(pick_count)) {
+            changed.push({input, saved: pick_count, url: '/api/stage/picks', body: {stage_id, pick_count}});
+        }
+        if (toggle.dataset.saved !== String(toggle.checked)) {
+            changed.push({input: toggle, saved: toggle.checked, url: '/api/stage/open', body: {stage_id, force_open: toggle.checked}});
+        }
     }
     if (!changed.length) {
         toast('Nothing changed.');
@@ -175,12 +210,9 @@ async function submitPickCounts(btn) {
     }
     btn.disabled = true;
     try {
-        for (const {input, pick_count} of changed) {
-            await api('/api/stage/picks', {method: 'POST', body: {
-                stage_id: Number(input.dataset.stage),
-                pick_count,
-            }});
-            input.dataset.saved = pick_count;
+        for (const {input, saved, url, body} of changed) {
+            await api(url, {method: 'POST', body});
+            input.dataset.saved = String(saved);
         }
         toast('Saved.', true);
     } catch (e) {

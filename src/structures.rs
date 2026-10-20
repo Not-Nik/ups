@@ -153,7 +153,8 @@ pub struct Standing {
     pub score_difference: Option<i64>,
     #[sqlx(rename = "Dropped")]
     pub dropped: bool,
-    /// Whether the group still takes standing predictions: none of its matches has a score.
+    /// Whether the group still takes standing predictions: none of its matches has a score,
+    /// or its stage is forced open.
     #[sqlx(rename = "Open")]
     pub open: bool,
     /// How many places of the group users predict, set per stage.
@@ -173,12 +174,22 @@ pub struct Stage {
     pub stage_type: String,
     #[sqlx(rename = "PickCount")]
     pub pick_count: u64,
+    /// Whether the stage keeps taking standing predictions after one of its matches has
+    /// been scored.
+    #[sqlx(rename = "ForceOpen")]
+    pub force_open: bool,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct StagePickCount {
     pub stage_id: u64,
     pub pick_count: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StageForceOpen {
+    pub stage_id: u64,
+    pub force_open: bool,
 }
 
 #[derive(Serialize, Debug, FromRow)]
@@ -281,7 +292,7 @@ pub struct UserStandingPrediction {
     /// The team's place in the group's standings now; None while it has none.
     #[sqlx(rename = "CurrentPosition")]
     pub current_position: Option<u64>,
-    /// Same rule as Standing::open.
+    /// Same rule as Standing::open: the group still takes picks.
     #[sqlx(rename = "Open")]
     pub open: bool,
 }

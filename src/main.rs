@@ -157,6 +157,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::body::json())
         .and_then(endpoints::stage_pick_count);
 
+    let stage_force_open = warp::path!("api" / "stage" / "open")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(conn.clone())
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and_then(endpoints::stage_force_open);
+
     let matches = warp::path!("api" / "matches" / u32)
         .and(rate_limit.clone())
         .and(warp::get())
@@ -294,6 +302,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(refresh_interval)
         .or(stages)
         .or(stage_pick_count)
+        .or(stage_force_open)
         .or(matches)
         .or(match_)
         .or(add_match)

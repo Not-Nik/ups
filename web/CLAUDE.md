@@ -19,7 +19,8 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
   the Standings view while it's open; then match predictions with ✓/✗ on finished matches
 - `privacy.html` / `privacy.js` — privacy policy
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches, set each league stage's pick count
-  and each tournament's refresh interval (login-gated, admin-only)
+  and whether its groups stay predictable after their first result, and each tournament's refresh interval
+  (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
 - `roster.js` — the searchable Teams and Players views
@@ -43,16 +44,17 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
 | GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
 | GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
-| GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way. Every row carries its group's `group_id`, `open` (no match of the group has a score yet, so it still takes predictions) and `pick_count` (how many places users predict, from its stage) |
-| GET    | `/api/stages/:id`      | -    | The stages of one tournament that have standings (league/swiss/pools) as `{stage_id, number, name, stage_type, pick_count}`, sorted by `number`. Empty until the tournament's first refresh |
+| GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way. Every row carries its group's `group_id`, `open` (no match of the group has a score yet, or its stage is forced open, so it still takes predictions) and `pick_count` (how many places users predict, from its stage) |
+| GET    | `/api/stages/:id`      | -    | The stages of one tournament that have standings (league/swiss/pools) as `{stage_id, number, name, stage_type, pick_count, force_open}`, sorted by `number`. Empty until the tournament's first refresh |
 | POST   | `/api/stage/picks`     | admin| `{stage_id, pick_count}` — sets how many places of the stage's groups users predict, 1 to 32 (4 by default). `BadRequest` outside that range or for an unknown stage. Predictions already stored are left alone |
+| POST   | `/api/stage/open`      | admin| `{stage_id, force_open}` — while on, the stage's groups keep taking standing picks even after one of their matches has a score (off by default, so a result locks the group like before). Only ever opens: turning it off hands the decision back to the score rule. `BadRequest` for an unknown stage |
 | GET    | `/api/teams/:id`       | -    | Every team of one tournament as `{id, name, short_name, logo, toornament_id}`, sorted by name. Names aren't unique, so `id` is the key to tell two teams apart; `toornament_id` is `null` for teams added by hand. Same refresh and `X-Refreshing` as `/api/matches/:id` |
 | GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team_id, team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by player name, then team name and lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions as `{matches, standings}`: `matches` in the `/api/predictions/:id` shape, `standings` as `{group_id, position, team_id, team, short_name, logo, tournament_id, tournament, stage_name, group_name, current_position, open}` across every tournament, sorted by group then `position`. `current_position` is the team's place in the group's standings now (`null` without a standings row); `open` is the same as on a standings row |
 | GET    | `/api/standings/predictions/:id` | - | All users' top-N predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1 to the stage's `pick_count`). The server only stores them; any scoring happens on the client |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
-| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to `pick_count` distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score. `BadRequest` (and nothing stored) for an unknown group, duplicates, more teams than the stage's `pick_count` or a team from another tournament |
+| POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to `pick_count` distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score, unless their stage is forced open. `BadRequest` (and nothing stored) for an unknown group, duplicates, more teams than the stage's `pick_count` or a team from another tournament |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
@@ -63,7 +65,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 A standings row carries `stage_name`, `stage_number`, `stage_type`, `group_id` (what a `/api/submit` standings entry takes), `group_name`, `group_number`, `position`, `rank`
 (ties share a rank, `position` breaks them), `team_id` (the `id` from `/api/teams/:id`), `team`, `short_name`, `logo`, `points`, `played`, `wins`, `draws`,
 `losses`, `forfeits`, `score_for`, `score_against`, `score_difference`, `dropped` and `open` (true while none of the
-group's matches has a score — the same rule `/api/submit` uses to accept or skip a standings entry). Swiss groups have no map scores:
+group's matches has a score, or its stage is forced open — the same rule `/api/submit` uses to accept or skip a standings entry). Swiss groups have no map scores:
 the three score fields are `null` there, and `points` is toornament's tiebreaker-weighted value (925, 818, …), so show
 W/L for swiss rather than points.
 
@@ -143,7 +145,9 @@ the slide transforms, so a row mid-slide can't flip the order back. Dragging use
 the handle has `touch-action: none` and the rest of the row still scrolls the page. A dashed line under the Nth
 row marks the cut (`.pick-cut`, set by `numberPicks`), only where a row exists below it (in a group of N or fewer, every team is saved). "Submit Prediction" (worded like the matches' "Submit Predictions", "Submitted" once stored) posts the first N as a `standings` entry through `submitWithName`
 (app.js), the same name prompt / taken-name retry / password prompt as match predictions. Once the group is
-locked, only the saved picks are shown, without handles; a locked group without picks shows nothing.
+locked, only the saved picks are shown, without handles; a locked group without picks shows nothing. An admin can
+force a whole stage open (`force_open`, a switch in the admin panel), which keeps its groups predictable after their
+first result; the standings view shows no hint of it — an open group simply reads as open.
 
 The Teams view is a tile per team (`/api/teams/:id`); the Players view one `.data-table` row per lineup
 entry (`/api/players/:id`). Both live in roster.js and share `bindSearch`: a search box filtering the

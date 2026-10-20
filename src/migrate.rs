@@ -23,7 +23,10 @@ const BASELINE: i64 = 7;
 /// Every migration after BASELINE, oldest first, compiled into the binary so it always
 /// carries the schema it was built for. Add new scripts at the end:
 /// `(8, include_str!("../migration/008_name.sql")),`
-const MIGRATIONS: &[(i64, &str)] = &[(8, include_str!("../migration/008_refresh_interval.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (8, include_str!("../migration/008_refresh_interval.sql")),
+    (9, include_str!("../migration/009_force_open.sql")),
+];
 
 pub async fn migrate(conn: &mut SqliteConnection, db_path: &str) -> Result<()> {
     let version = get_version(conn).await?;

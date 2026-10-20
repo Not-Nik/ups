@@ -56,7 +56,7 @@ pub async fn get_user_predictions(
         "SELECT p.GroupID, p.Position, p.TeamID, t.Name AS Team, t.ShortName, t.Logo,
                 tr.TournamentID, tr.Name AS Tournament, s.Name AS StageName,
                 g.Name AS GroupName, st.Position AS CurrentPosition,
-                NOT EXISTS (SELECT 1 FROM matches m
+                s.ForceOpen OR NOT EXISTS (SELECT 1 FROM matches m
                             WHERE m.GroupID = g.GroupID
                               AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)) AS Open
          FROM standing_predictions p
@@ -131,14 +131,15 @@ pub async fn get_standing_predictions(
     Ok(predictions)
 }
 
-/// Whether a group still takes standing predictions (none of its matches has a score)
-/// and how many places its stage lets users predict. `None` when the group doesn't exist.
+/// Whether a group still takes standing predictions (none of its matches has a score, or
+/// its stage is forced open) and how many places its stage lets users predict. `None` when
+/// the group doesn't exist.
 pub async fn get_group_picking(
     conn: &mut MutexGuard<'_, SqliteConnection>,
     group_id: u64,
 ) -> sqlx::Result<Option<(bool, i64)>> {
     sqlx::query_as(
-        "SELECT NOT EXISTS (SELECT 1 FROM matches m
+        "SELECT s.ForceOpen OR NOT EXISTS (SELECT 1 FROM matches m
                             WHERE m.GroupID = g.GroupID
                               AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)),
                 s.PickCount
@@ -203,4 +204,44 @@ pub async fn set_standing_prediction(
     }
 
     tx.commit().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::Mutex;
+
+    /// One league stage per rule: a decided match locks its group, unless the stage is
+    /// forced open.
+    const SCORED_GROUPS: &str = "INSERT INTO tournaments (TournamentID, Name) VALUES (1, 'T');
+        INSERT INTO stages (StageID, TournamentID, Number, Name, Type, ForceOpen)
+            VALUES (1, 1, 1, 'Locked', 'league', 0), (2, 1, 2, 'Forced', 'league', 1);
+        INSERT INTO groups (GroupID, StageID, Number, Name) VALUES (1, 1, 1, 'A'), (2, 2, 1, 'B');
+        INSERT INTO teams (TeamID, TournamentID, Name) VALUES (1, 1, 'X'), (2, 1, 'Y');
+        INSERT INTO matches (MatchID, TournamentID, GroupID, TeamA, TeamB, ScoreA, ScoreB)
+            VALUES (1, 1, 1, 1, 2, 3, 0), (2, 1, 2, 1, 2, 3, 0);";
+
+    async fn scored_groups() -> Mutex<SqliteConnection> {
+        let mut conn = SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        sqlx::raw_sql(include_str!("init.sql"))
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        sqlx::raw_sql(SCORED_GROUPS)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        Mutex::new(conn)
+    }
+
+    #[tokio::test]
+    async fn only_a_forced_stage_takes_picks_after_a_result() {
+        let db = scored_groups().await;
+        let mut conn = db.lock().await;
+
+        let locked = get_group_picking(&mut conn, 1).await.unwrap();
+        let forced = get_group_picking(&mut conn, 2).await.unwrap();
+
+        assert_eq!((locked.unwrap().0, forced.unwrap().0), (false, true));
+    }
 }

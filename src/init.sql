@@ -1,6 +1,6 @@
 -- The number of the last script in migration/ this schema includes. The server reads it
 -- on startup and applies the newer ones; raise it whenever a migration is added.
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;
 
 CREATE TABLE users
 (
@@ -43,6 +43,7 @@ CREATE TABLE stages
     Status       TEXT,             -- pending | running | completed
     ToornamentId TEXT,
     PickCount    INTEGER NOT NULL DEFAULT 4, -- places users predict per group, see standing_predictions
+    ForceOpen    INTEGER NOT NULL DEFAULT 0, -- keep taking standing picks after a match has a score
     UNIQUE (TournamentID, ToornamentId),
     UNIQUE (TournamentID, Number)
 );

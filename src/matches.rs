@@ -317,7 +317,7 @@ pub async fn get_standings(
                 t.Name AS Team, t.ShortName, t.Logo, st.Points, st.Played, st.Wins, st.Draws,
                 st.Losses, st.Forfeits, st.ScoreFor, st.ScoreAgainst,
                 st.ScoreFor - st.ScoreAgainst AS ScoreDifference, st.Dropped,
-                NOT EXISTS (SELECT 1 FROM matches m
+                s.ForceOpen OR NOT EXISTS (SELECT 1 FROM matches m
                             WHERE m.GroupID = g.GroupID
                               AND (m.ScoreA IS NOT NULL OR m.ScoreB IS NOT NULL)) AS Open,
                 s.PickCount
@@ -346,7 +346,7 @@ pub async fn get_stages(
     tournament_id: u32,
 ) -> sqlx::Result<Vec<Stage>> {
     let mut qb = QueryBuilder::new(
-        "SELECT StageID, Number, Name, Type, PickCount FROM stages WHERE TournamentID = ",
+        "SELECT StageID, Number, Name, Type, PickCount, ForceOpen FROM stages WHERE TournamentID = ",
     );
     qb.push_bind(tournament_id);
     qb.push(" AND Type IN (");
@@ -370,6 +370,19 @@ pub async fn set_stage_pick_count(
 ) -> sqlx::Result<bool> {
     let result = sqlx::query("UPDATE stages SET PickCount = ? WHERE StageID = ?")
         .bind(pick_count as i64)
+        .bind(stage_id as i64)
+        .execute(conn.deref_mut())
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn set_stage_force_open(
+    conn: &mut MutexGuard<'_, SqliteConnection>,
+    stage_id: u64,
+    force_open: bool,
+) -> sqlx::Result<bool> {
+    let result = sqlx::query("UPDATE stages SET ForceOpen = ? WHERE StageID = ?")
+        .bind(force_open)
         .bind(stage_id as i64)
         .execute(conn.deref_mut())
         .await?;

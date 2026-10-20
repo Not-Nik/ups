@@ -14,7 +14,7 @@ use crate::matches::{
     add_group, add_round, add_stage, add_team, add_tournament, get_bracket_nodes, get_brackets,
     get_group_id, get_matches, get_matches_filter, get_players, get_round_id, get_stage_id,
     get_stages, get_standings, get_team_id, get_teams, get_tournaments, set_refresh_interval,
-    set_stage_pick_count,
+    set_stage_force_open, set_stage_pick_count,
 };
 use crate::predictions::{
     count_group_tournament_teams, get_group_picking, get_predictions, get_standing_predictions,
@@ -128,6 +128,27 @@ pub async fn stage_pick_count(
     }
 
     if !set_stage_pick_count(&mut conn_lock, update.stage_id, update.pick_count)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?
+    {
+        Err(warp::reject::custom(BadRequest))?
+    }
+
+    Ok(warp::reply())
+}
+
+/// Keeps a stage's groups taking standing predictions even after one of their matches has
+/// been scored. Locking them again is left to the auto rule once this is turned off.
+pub async fn stage_force_open(
+    conn: Arc<Mutex<SqliteConnection>>,
+    auth: String,
+    update: StageForceOpen,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    verify_admin(&mut conn_lock, auth.clone()).await?;
+
+    if !set_stage_force_open(&mut conn_lock, update.stage_id, update.force_open)
         .await
         .map_err(|_| warp::reject::custom(InternalError))?
     {
