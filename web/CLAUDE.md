@@ -156,7 +156,7 @@ Team groups the lineups again (team name, then lineup position), BattleTag sorts
 
 The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of its own: it fetches
 `/api/matches/:id`, keeps the matches with a final score, and posts their ids to `POST /api/predictions`.
-An exact score earns `EXACT_POINTS` (3), any other correct winner `WINNER_POINTS` (1) — the winner
+An exact score earns `EXACT_POINTS` (2), any other correct winner `WINNER_POINTS` (1) — the winner
 check is `sameOutcome` in common.js, shared with me.js's ✓/✗: sign of the score difference, so a draw
 only counts on an actual draw. A prediction whose two numbers add up to 100 is a percentage
 prediction (`isPercentPrediction` in common.js, e.g. 60:40): shown with % signs (`predictionText`),
@@ -174,8 +174,22 @@ direction (rank and name ascending, counts descending), a second flips it; `aria
 drives the arrow. Ties keep rank order, the Rank cell always shows the points rank, and the sort is not
 kept in the URL (like the Teams search).
 
-The view has two sub-tabs (not kept in the URL): League predictions, open first, and Match predictions (the table
-above). A sub-tab without data shows a short status line. League predictions (`LEAGUE_COLUMNS`, same sortable table) are scored on the
+The view has two panels (not kept in the URL): League predictions, open first, and Match predictions (the table
+above). Each holds `leaderboardTabs`' two tab lines — a category per stage and, under it, a tab per group of that
+stage plus an `All` ahead of them holding the stage's groups together, exactly like the matches and standings bars
+(`d-flex flex-wrap` lines of `.category-btn` inside a `d-flex flex-column mb-3` wrapper; the second line stays hidden
+while the open stage has a single group, and clicking a stage opens its first group tab). The first category is the
+panel-wide `All`, everyone with no group tabs below it; every other tab re-ranks on its own subset, so each is a race
+of its own, scored with `groupWeights(all standing rows)` — each group's share of its stage's `STAGE_POINTS` — so a
+group's table tops out at that share (20 in a two-group league) and the tables add up to the combined total.
+`stageCategories(items, keyOf, tabOf)` does the grouping: league groups come
+from the standings rows (`groupSubgroupKey`), match groups from each match's stage and group
+(`matchSubgroupKey` — a section key without its round, or with its round where a stage has no groups, like a seeding
+week), both ordered by `sectionOrder` on the stage/group pair; `tabOf` returns null to leave a group out, so a group
+nobody predicted and a league that hasn't started get no tab. A panel or tab without rows shows a short status line,
+and each tab's table is built the first time it opens, so a leaderboard with a tab per group builds nothing nobody
+looks at. League predictions (`LEAGUE_COLUMNS`,
+league tabs `LEAGUE_GROUP_COLUMNS` — the same without the Leagues column) are scored on the
 client from `/api/standings/:id` and `/api/standings/predictions/:id`. Only groups that have started
 (`open` false on the standings rows) count; each predicted team is compared with its current `position`
 (`diff` = predicted minus current place, absolute). Columns: Leagues (scored groups), In top (predicted teams

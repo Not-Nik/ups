@@ -2,7 +2,8 @@
 // The Leaderboard view: everyone who predicted a finished match of the tournament,
 // ranked by points, then by exact scores. Computed on the client from the tournament's
 // matches and all predictions on the finished ones. Loaded once, the first time the
-// view opens.
+// view opens, into two panels — league predictions and match predictions — each with a
+// stage and group tab line of its own (see "Stages and groups of a leaderboard").
 
 let leaderboardLoad = null;
 
@@ -70,22 +71,31 @@ function pointsCell(points, exact) {
     return `<span class="leaderboard-exact" data-exact="${value}">${points.toFixed(2)}</span>`;
 }
 
+// Every group's share of its stage's points: STAGE_POINTS for a stage on its own, half
+// of it where the stage holds two groups, and so on. Computed over a whole tournament,
+// so a single group's table still shows only what that group adds up to.
+function groupWeights(standingRows) {
+    const stages = new Map();
+    standingRows.forEach(r => {
+        if (!stages.has(r.stage_number)) stages.set(r.stage_number, new Set());
+        stages.get(r.stage_number).add(r.group_id);
+    });
+    const weights = new Map();
+    stages.forEach(ids => ids.forEach(g => weights.set(g, STAGE_POINTS / ids.size)));
+    return weights;
+}
+
 // [{name, leagues, points, pointsExact, exact, top, rank}], best first: most points,
 // then exact, then teams inside the predicted range. Ties share a rank.
-function rankLeaguePredictions(standingRows, predictions) {
+function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWeights(standingRows)) {
     const current = new Map();
     const teamSizes = new Map();
-    const stageGroups = new Map();
-    const groupWeight = new Map();
     const pickCount = new Map();
     standingRows.forEach(r => {
         pickCount.set(r.group_id, r.pick_count);
         teamSizes.set(r.group_id, (teamSizes.get(r.group_id) ?? 0) + 1);
-        if (!stageGroups.has(r.stage_number)) stageGroups.set(r.stage_number, new Set());
-        stageGroups.get(r.stage_number).add(r.group_id);
         if (!r.open) current.set(`${r.group_id}:${r.team_id}`, r.position);
     });
-    stageGroups.forEach(ids => ids.forEach(g => groupWeight.set(g, STAGE_POINTS / ids.size)));
     const maxPickPoints = groupId => teamSizes.get(groupId) - 1;
 
     const byName = new Map();
@@ -131,6 +141,148 @@ function showLeaderboardPanel(panels, buttons, active) {
     });
 }
 
+// ============== Stages and groups of a leaderboard ==============
+// Both tables open on everyone combined, then a category per stage with a tab per group
+// of it below and an "All" ahead of those, holding the stage's groups together — the
+// same two lines the matches and standings views use. Every tab ranks on its own subset,
+// so each one is a race of its own (a group's table tops out at STAGE_POINTS by itself).
+// Neither line is kept in the URL.
+
+const ALL_TAB = 'All';
+
+const tabButton = (label, onClick) => {
+    const btn = makeEl('button', {className: 'tab-btn btn category-btn', textContent: label});
+    btn.addEventListener('click', onClick);
+    return btn;
+};
+
+// Two lines of tabs above one table each: a button per category, and under it the tabs
+// of the open category. A category with a single tab shows no second line, and a tab's
+// `build` only runs the first time it opens, so a leaderboard with a tab per group
+// builds no table nobody looks at.
+function leaderboardTabs(categories) {
+    const panel = makeEl('div');
+    const nodeOf = tab => tab.node ??= tab.build();
+    const hasGroups = category => category.tabs.length > 1;
+    if (categories.length < 2 && !hasGroups(categories[0])) return nodeOf(categories[0].tabs[0]);
+
+    const cats = makeEl('div', {className: 'd-flex flex-wrap'});
+    const subs = makeEl('div', {className: 'd-flex flex-wrap'});
+    categories.forEach(category => {
+        category.button = tabButton(category.label, () => select(category.tabs[0]));
+        category.tabs.forEach(tab => {
+            tab.button = tabButton(tab.label, () => select(tab));
+        });
+        cats.append(category.button);
+    });
+    const select = active => {
+        const category = categories.find(c => c.tabs.includes(active));
+        const shown = nodeOf(active);
+        if (shown.parentElement !== panel) panel.append(shown);
+        categories.forEach(c => {
+            c.button.classList.toggle('active', c === category);
+            c.tabs.forEach(t => {
+                t.button.classList.toggle('active', t === active);
+                if (t.node) setHidden(t.node, t !== active);
+            });
+        });
+        subs.replaceChildren(...category.tabs.map(t => t.button));
+        setHidden(subs, !hasGroups(category));
+    };
+    const bars = makeEl('div', {className: 'd-flex flex-column mb-3'});
+    bars.append(cats, subs);
+    panel.append(bars);
+    select(categories[0].tabs[0]);
+    return panel;
+}
+
+// A tab covers one stage/group pair: a section key without the round, so a whole league
+// group or bracket is one tab. A match with no group (a seeding week) is named by its
+// round instead, which is what the matches view shows for it.
+const matchSubgroupKey = m => [m.stage_name ?? '', m.group_name ?? '', m.group_name ? '' : m.round_name ?? '']
+    .join(SECTION_SEP);
+const groupSubgroupKey = r => [r.stage_name ?? '', r.group_name ?? '', ''].join(SECTION_SEP);
+// A key's stage and group with its round blanked, so ordering falls through to the
+// league (Erste < Zweite < …) and the group name.
+const stageGroupOf = key => {
+    const [stage, group] = sectionParts(key);
+    return [stage, group, ''].join(SECTION_SEP);
+};
+
+// One category per stage of `items`, its tabs the stage's groups, both in the order the
+// matches view uses, with "All" in front of them once a stage has more than one.
+// `tabOf(label, items)` builds a tab, or returns null to leave that group out; a stage
+// whose groups all drop out gets no category.
+function stageCategories(items, keyOf, tabOf) {
+    const pairs = [...groupBy(items, keyOf)].map(([key, listed]) => {
+        const [stage, ...rest] = sectionParts(key);
+        return {key, stage, label: rest.find(Boolean) ?? stage, items: listed.map(([item]) => item)};
+    }).sort((a, b) => sectionOrder(stageGroupOf(a.key), stageGroupOf(b.key)));
+    return [...groupBy(pairs, p => p.stage)].map(([stage, listed]) => {
+        const groups = listed.map(([pair]) => pair);
+        const tabs = groups.map(g => tabOf(g.label, g.items)).filter(Boolean);
+        if (tabs.length > 1) tabs.unshift(tabOf(ALL_TAB, groups.flatMap(g => g.items)));
+        return {label: stage, tabs: tabs.filter(Boolean)};
+    }).filter(category => category.tabs.length);
+}
+
+const subgroupTable = (rows, columns, empty) => rows.length
+    ? leaderboardTable(rows, columns)
+    : leaderboardStatus('text-secondary', empty);
+
+// Everyone on the tournament's started leagues, then everyone on one stage or group.
+// Every table scores with the weights of the whole tournament, so a group's own table
+// tops out at the share it adds to the total. The Leagues column counts the groups a
+// score spans, which a group's table doesn't need.
+function leagueLeaderboard(standingRows, standingPicks) {
+    const weights = groupWeights(standingRows);
+    return leaderboardTabs([
+        {
+            label: ALL_TAB,
+            tabs: [{
+                label: ALL_TAB,
+                build: () => subgroupTable(rankLeaguePredictions(standingRows, standingPicks, weights), LEAGUE_COLUMNS,
+                    'No predictions on started leagues yet.'),
+            }],
+        },
+        ...stageCategories(standingRows, groupSubgroupKey, (label, items) => {
+            const groups = new Set(items.map(r => r.group_id));
+            const picks = standingPicks.filter(p => groups.has(p.group_id));
+            if (!picks.length || items.every(r => r.open)) return null;
+            const max = [...groups].reduce((sum, g) => sum + weights.get(g), 0);
+            return {
+                label,
+                build: () => subgroupTable(rankLeaguePredictions(items, picks, weights), leagueGroupColumns(max),
+                    'No predictions on this league yet.'),
+            };
+        }),
+    ]);
+}
+
+// Everyone on the tournament's finished matches, then everyone on one group of matches.
+function matchLeaderboard(matches, predictions) {
+    return leaderboardTabs([
+        {
+            label: ALL_TAB,
+            tabs: [{
+                label: ALL_TAB,
+                build: () => subgroupTable(rankLeaderboard(matches, predictions), LEADERBOARD_COLUMNS,
+                    'No predictions on finished matches yet.'),
+            }],
+        },
+        ...stageCategories(matches, matchSubgroupKey, (label, items) => {
+            const ids = new Set(items.map(m => m.id));
+            const picks = predictions.filter(p => ids.has(p.id));
+            if (!picks.length) return null;
+            return {
+                label,
+                build: () => subgroupTable(rankLeaderboard(items, picks), LEADERBOARD_COLUMNS,
+                    'No predictions on these matches yet.'),
+            };
+        }),
+    ]);
+}
+
 async function renderLeaderboard(id) {
     const root = $('leaderboard');
     root.replaceChildren(leaderboardStatus('text-secondary', 'Loading…'));
@@ -144,26 +296,16 @@ async function renderLeaderboard(id) {
         const predictions = matches.length
             ? await api('/api/predictions', {method: 'POST', body: matches.map(m => m.id)})
             : [];
-        const rows = rankLeaderboard(matches, predictions);
-        const leagueRows = rankLeaguePredictions(standingRows, standingPicks);
-        // League predictions come first. The sub-tab isn't kept in the URL.
+        // League predictions come first.
         const panels = [
-            {
-                label: 'League predictions', node: leagueRows.length
-                    ? leaderboardTable(leagueRows, LEAGUE_COLUMNS)
-                    : leaderboardStatus('text-secondary', 'No predictions on started leagues yet.')
-            },
-            {
-                label: 'Match predictions', node: rows.length
-                    ? leaderboardTable(rows, LEADERBOARD_COLUMNS)
-                    : leaderboardStatus('text-secondary', 'No predictions on finished matches yet.')
-            },
+            {label: 'League predictions', node: leagueLeaderboard(standingRows, standingPicks)},
+            {label: 'Match predictions', node: matchLeaderboard(matches, predictions)},
         ];
         const bar = makeEl('div', {className: 'd-flex flex-wrap mb-3'});
         const buttons = panels.map(panel => {
             const btn = makeEl('button', {className: 'tab-btn btn category-btn', textContent: panel.label});
             btn.addEventListener('click', () => showLeaderboardPanel(panels, buttons, panel));
-            bar.appendChild(btn);
+            bar.append(btn);
             return btn;
         });
         root.replaceChildren(bar, ...panels.map(p => p.node));
@@ -217,6 +359,18 @@ const LEAGUE_COLUMNS = [
         cell: r => pointsCell(r.points, r.pointsExact)
     },
 ];
+
+// One group's (or one stage's) table: everyone on that subset alone, so the Leagues
+// column, which counts the groups a score spans, has nothing to say, and Points says
+// what its groups are worth in the total.
+const leagueGroupColumns = max => {
+    const cap = String(Number(max.toFixed(2)));
+    const whole = max === STAGE_POINTS ? '' : `, ${STAGE_POINTS} for the whole league`;
+    return LEAGUE_COLUMNS.filter(c => c.key !== 'leagues')
+        .map(c => c.key === 'points'
+            ? {...c, title: `Up to ${cap} here${whole}, less for every place a pick is off. Rounded to quarters, the exact number on hover`}
+            : c);
+};
 
 // A sortableTable (app.js) of leaderboard rows. They arrive in rank order, and the sort
 // is stable, so ties keep that order either way. The rank shown is always the points rank.
