@@ -790,7 +790,11 @@ async fn merge_replaced_teams(
             "UPDATE OR IGNORE standing_predictions SET TeamID = ?1 WHERE TeamID = ?2",
             "DELETE FROM standing_predictions WHERE TeamID = ?2",
         ] {
-            sqlx::query(sql).bind(new).bind(old).execute(&mut *conn).await?;
+            sqlx::query(sql)
+                .bind(new)
+                .bind(old)
+                .execute(&mut *conn)
+                .await?;
         }
         log::info!("{name} signed up again on toornament, moved team {old} onto team {new}");
     }
@@ -944,12 +948,11 @@ async fn upsert_matches(
     matches: &[NewMatch],
 ) -> sqlx::Result<()> {
     for m in matches {
-        let existing: Option<(i64, i64, i64)> = sqlx::query_as(
-            "SELECT MatchID, TeamA, TeamB FROM matches WHERE ToornamentId = ?",
-        )
-        .bind(&m.toornament_id)
-        .fetch_optional(&mut *conn)
-        .await?;
+        let existing: Option<(i64, i64, i64)> =
+            sqlx::query_as("SELECT MatchID, TeamA, TeamB FROM matches WHERE ToornamentId = ?")
+                .bind(&m.toornament_id)
+                .fetch_optional(&mut *conn)
+                .await?;
         if let Some((id, team_a, team_b)) = existing {
             sync_predictions(conn, id, (team_a, team_b), m).await?;
         }
@@ -1239,7 +1242,9 @@ impl Refresher {
             Ok(Some(secs)) => Duration::from_secs(secs.max(0) as u64),
             Ok(None) => DEFAULT_REFRESH_INTERVAL,
             Err(err) => {
-                log::error!("reading the refresh interval of tournament {tournament_id} failed: {err}");
+                log::error!(
+                    "reading the refresh interval of tournament {tournament_id} failed: {err}"
+                );
                 DEFAULT_REFRESH_INTERVAL
             }
         }
@@ -1552,7 +1557,10 @@ mod tests {
     // What upsert_teams leaves behind for a feed listing the new Mia and Rival.
     fn feed_with_current_teams() -> (Feed, Ids) {
         let mut feed = feed(&[]);
-        feed.participants = vec![participant("p-mia-new", "Mia"), participant("p-rival", "Rival")];
+        feed.participants = vec![
+            participant("p-mia-new", "Mia"),
+            participant("p-rival", "Rival"),
+        ];
         let mut ids = Ids::default();
         ids.teams.insert("p-mia-new".into(), 12);
         ids.teams.insert("p-rival".into(), 13);
@@ -1571,7 +1579,9 @@ mod tests {
         let mut conn = db_with_teams().await;
         let (feed, ids) = feed_with_current_teams();
 
-        merge_replaced_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        merge_replaced_teams(&mut conn, 1, &feed, &ids)
+            .await
+            .unwrap();
         // Toornament's match 1 is now played by the new Mia.
         let m1 = NewMatch {
             team_a: 12,
@@ -1584,7 +1594,9 @@ mod tests {
             toornament_id: "m1".into(),
         };
         upsert_matches(&mut conn, 1, &[m1]).await.unwrap();
-        delete_dropped_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        delete_dropped_teams(&mut conn, 1, &feed, &ids)
+            .await
+            .unwrap();
 
         let prediction: Vec<(i64, i64)> =
             sqlx::query_as("SELECT ScoreA, ScoreB FROM predictions WHERE MatchID = 1")
@@ -1615,8 +1627,12 @@ mod tests {
         .await
         .unwrap();
 
-        merge_replaced_teams(&mut conn, 1, &feed, &ids).await.unwrap();
-        delete_dropped_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        merge_replaced_teams(&mut conn, 1, &feed, &ids)
+            .await
+            .unwrap();
+        delete_dropped_teams(&mut conn, 1, &feed, &ids)
+            .await
+            .unwrap();
 
         assert_eq!(team_ids(&mut conn).await, [10, 12, 13, 14]);
     }
@@ -1627,8 +1643,12 @@ mod tests {
         let (mut feed, ids) = feed_with_current_teams();
         feed.participants.clear();
 
-        merge_replaced_teams(&mut conn, 1, &feed, &ids).await.unwrap();
-        delete_dropped_teams(&mut conn, 1, &feed, &ids).await.unwrap();
+        merge_replaced_teams(&mut conn, 1, &feed, &ids)
+            .await
+            .unwrap();
+        delete_dropped_teams(&mut conn, 1, &feed, &ids)
+            .await
+            .unwrap();
 
         assert_eq!(team_ids(&mut conn).await, [10, 11, 12, 13, 14]);
         assert_eq!(count(&mut conn, "standing_predictions").await, 1);
