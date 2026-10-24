@@ -19,7 +19,8 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
   the Standings view while it's open; then match predictions with ✓/✗ on finished matches
 - `privacy.html` / `privacy.js` — privacy policy
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches, set each league stage's pick count
-  and whether its groups stay predictable after their first result, and each tournament's refresh interval
+  and whether its groups stay predictable after their first result, each tournament's refresh interval,
+  and release a passwordless account so its name can be claimed again
   (login-gated, admin-only)
 - `app.js` — all tournament-page logic except the standings
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
@@ -57,6 +58,7 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to `pick_count` distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score, unless their stage is forced open. `BadRequest` (and nothing stored) for an unknown group, duplicates, more teams than the stage's `pick_count` or a team from another tournament |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
+| POST   | `/api/account/release` | admin| `{name}` — ends a passwordless account's seven-day claim window right away, so its name can be claimed again (a takeover drops the old owner's sessions and keeps the predictions; the claimer gets a fresh token from `/api/submit`). Returns `{name}` (the stored casing). `BadRequest` for unknown names and for accounts with a password, which are never claimable |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
 | POST   | `/api/tournament/:id/refresh` | admin| The interval as a bare JSON number (e.g. `21600`) — sets the shortest gap between two toornament refreshes of the tournament, in seconds, 60 to 604800 (a week). `BadRequest` outside that range or for an unknown tournament. Applies to the next request at once; the admin panel edits it in minutes |
 | POST   | `/api/match`           | admin| Full `Match` body: `tournament_id`, `team_a/b`, `logo_a/b`, `score_a/b?`, `stage_name`, `group_name`, `round_name`, plus optional `stage_type`, `stage_number`, `toornament_id` (+ dummy `id`) |

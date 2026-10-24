@@ -4,8 +4,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 use crate::account::{
-    create_account, delete_account, delete_session, exists_account, is_admin, login_account,
-    set_password, verify_session,
+    create_account, create_session, delete_account, delete_session, exists_account, is_admin,
+    login_account, release_account, set_password, take_over_account, touch_account, verify_session,
 };
 use crate::error::{AccessDenied, AccountExists, BadRequest, InternalError};
 use crate::image_cache::{Image, SharedImageCache};
@@ -448,17 +448,37 @@ pub async fn submit(
 
         (name, token.to_string())
     } else if let Some(name) = submission.name {
-        if exists_account(&mut conn_lock, &name).await.unwrap_or(false) == true {
-            Err(warp::reject::custom(AccountExists))?
-        }
-        let Some(token) = create_account(&mut conn_lock, &name)
+        // An unknown name creates the account below; a claimable one (expired and
+        // passwordless) is handed over instead: its old sessions went with the take-over,
+        // its predictions stay, so the claimer only needs a session of their own.
+        match take_over_account(&mut conn_lock, &name)
             .await
             .map_err(|_| warp::reject::custom(InternalError))?
-        else {
-            return Err(warp::reject::custom(BadRequest))?;
-        };
+        {
+            Some(stored) => {
+                let token = create_session(&mut conn_lock, &stored)
+                    .await
+                    .map_err(|_| warp::reject::custom(InternalError))?;
 
-        (name, token)
+                (stored, token)
+            }
+            None => {
+                if exists_account(&mut conn_lock, &name)
+                    .await
+                    .map_err(|_| warp::reject::custom(InternalError))?
+                {
+                    Err(warp::reject::custom(AccountExists))?;
+                }
+                let Some(token) = create_account(&mut conn_lock, &name)
+                    .await
+                    .map_err(|_| warp::reject::custom(InternalError))?
+                else {
+                    return Err(warp::reject::custom(BadRequest))?;
+                };
+
+                (name, token)
+            }
+        }
     } else {
         Err(warp::reject::custom(BadRequest))?
     };
@@ -474,6 +494,7 @@ pub async fn submit(
     .await
     .map_err(|_| warp::reject::custom(InternalError))?;
 
+    let mut wrote = false;
     for (pred, mat) in submission.predictions.iter().zip(matches) {
         if mat.score_a.is_some() || mat.score_b.is_some() {
             continue;
@@ -487,10 +508,19 @@ pub async fn submit(
         )
         .await
         .map_err(|_| warp::reject::custom(InternalError))?;
+        wrote = true;
     }
 
     for standing in open_standings {
         set_standing_prediction(&mut conn_lock, &name, standing.group_id, &standing.teams)
+            .await
+            .map_err(|_| warp::reject::custom(InternalError))?;
+        wrote = true;
+    }
+
+    // A prediction made with the account restarts its claim window.
+    if wrote {
+        touch_account(&mut conn_lock, &name)
             .await
             .map_err(|_| warp::reject::custom(InternalError))?;
     }
@@ -635,6 +665,25 @@ pub async fn password(
 const MIN_REFRESH_INTERVAL: u64 = 60;
 const MAX_REFRESH_INTERVAL: u64 = 7 * 24 * 60 * 60;
 
+pub async fn account_release(
+    auth: String,
+    login: Name,
+    conn: Arc<Mutex<SqliteConnection>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let mut conn_lock = conn.lock().await;
+
+    verify_admin(&mut conn_lock, auth).await?;
+
+    let Some(name) = release_account(&mut conn_lock, &login.name)
+        .await
+        .map_err(|_| warp::reject::custom(InternalError))?
+    else {
+        Err(warp::reject::custom(BadRequest))?
+    };
+
+    Ok(warp::reply::json(&User { name }))
+}
+
 pub async fn refresh_interval(
     tournament_id: u64,
     conn: Arc<Mutex<SqliteConnection>>,
@@ -747,3 +796,134 @@ fn proxy_reply(image: Image) -> warp::reply::Response {
 const PROXY_HOST: &str = "play.toornament.com";
 const PROXY_PATH: &str = "/media/file/";
 const PROXY_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::account::CLAIM_WINDOW_SECS;
+    use warp::reply::Reply as _;
+
+    async fn db() -> Arc<Mutex<SqliteConnection>> {
+        let mut conn = SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        sqlx::raw_sql(include_str!("init.sql"))
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        Arc::new(Mutex::new(conn))
+    }
+
+    /// Submits nothing for `name`. Whether the account behind the name is created, handed
+    /// over or refused is what the three outcomes here are about; what is predicted is not.
+    async fn submit_name(db: &Arc<Mutex<SqliteConnection>>, name: &str) -> bool {
+        let submission = Submission {
+            name: Some(name.into()),
+            predictions: Vec::new(),
+            standings: Vec::new(),
+        };
+        match submit(submission, None, db.clone()).await {
+            Ok(reply) => {
+                assert_eq!(reply.into_response().status(), warp::http::StatusCode::OK);
+                true
+            }
+            Err(rejection) => {
+                assert!(rejection.find::<AccountExists>().is_some(), "{rejection:?}");
+                false
+            }
+        }
+    }
+
+    async fn sign_up(db: &Arc<Mutex<SqliteConnection>>, name: &str) -> String {
+        let mut conn = db.lock().await;
+        create_account(&mut conn, &name.into())
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    /// Lets `name`'s claim window run out.
+    async fn expire(db: &Arc<Mutex<SqliteConnection>>, name: &str) {
+        let mut conn = db.lock().await;
+        sqlx::query("UPDATE users SET LastActivity = datetime('now', '-' || ? || ' seconds') WHERE Name = ?")
+            .bind(CLAIM_WINDOW_SECS + 1)
+            .bind(name)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+    }
+
+    async fn predict(db: &Arc<Mutex<SqliteConnection>>, name: &str) {
+        let mut conn = db.lock().await;
+        sqlx::query("INSERT INTO predictions (Name, MatchID, ScoreA, ScoreB) VALUES (?, 1, 3, 1)")
+            .bind(name)
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+    }
+
+    async fn rows(db: &Arc<Mutex<SqliteConnection>>, table: &str, name: &str) -> i64 {
+        let mut conn = db.lock().await;
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table} WHERE Name = ?"))
+            .bind(name)
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap()
+    }
+
+    async fn token_of(db: &Arc<Mutex<SqliteConnection>>, name: &str) -> String {
+        let mut conn = db.lock().await;
+        sqlx::query_scalar("SELECT Token FROM sessions WHERE Name = ?")
+            .bind(name)
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap()
+    }
+
+    async fn signed_in(db: &Arc<Mutex<SqliteConnection>>, token: &str) -> bool {
+        let mut conn = db.lock().await;
+        verify_session(&mut conn, token).await.unwrap().is_some()
+    }
+
+    #[tokio::test]
+    async fn an_expired_passwordless_account_is_handed_to_whoever_submits_its_name() {
+        let db = db().await;
+        let old = sign_up(&db, "Alice").await;
+        predict(&db, "Alice").await;
+        expire(&db, "Alice").await;
+
+        assert!(submit_name(&db, "alice").await);
+
+        // The old owner is signed out, the new one holds the only session, and the
+        // predictions came with the name.
+        assert!(!signed_in(&db, &old).await);
+        assert_eq!(rows(&db, "sessions", "Alice").await, 1);
+        let fresh = token_of(&db, "Alice").await;
+        assert_ne!(fresh, old);
+        assert!(signed_in(&db, &fresh).await);
+        assert_eq!(rows(&db, "predictions", "Alice").await, 1);
+        // The name keeps its new owner: the take-over restarted its claim window.
+        assert!(!submit_name(&db, "alice").await);
+        assert_eq!(rows(&db, "users", "Alice").await, 1);
+    }
+
+    #[tokio::test]
+    async fn an_account_that_is_still_in_use_cannot_be_claimed() {
+        let db = db().await;
+        let token = sign_up(&db, "alice").await;
+
+        assert!(!submit_name(&db, "alice").await);
+
+        // Being refused a name must not disturb whoever owns it.
+        assert!(signed_in(&db, &token).await);
+        assert_eq!(rows(&db, "sessions", "alice").await, 1);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_name_gets_its_account_and_a_second_submission_does_not() {
+        let db = db().await;
+
+        assert!(submit_name(&db, "bob").await);
+        assert_eq!(rows(&db, "sessions", "bob").await, 1);
+        assert!(!submit_name(&db, "bob").await);
+        assert_eq!(rows(&db, "users", "bob").await, 1);
+    }
+}

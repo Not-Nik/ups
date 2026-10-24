@@ -256,6 +256,29 @@ async function submitRefreshInterval(btn) {
     }
 }
 
+// ============== Release account ==============
+// Ends a passwordless account's seven-day claim window right away, so its name can be
+// claimed again. The server answers BadRequest for unknown names and for accounts with
+// a password.
+
+async function submitRelease(btn) {
+    const name = $('release-name').value.trim();
+    if (!name) {
+        shake($('release-name'));
+        return;
+    }
+    btn.disabled = true;
+    try {
+        const me = await api('/api/account/release', {method: 'POST', body: {name}});
+        toast(`${me.name ?? name} is now claimable.`, true);
+        $('release-name').value = '';
+    } catch (e) {
+        report(e, 'Account could not be released');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // ============== Pickers ==============
 // <option> can't render images, so every pick is a custom listbox: a button
 // showing the current value, and a panel of rows. Team rows carry logos;
@@ -522,5 +545,9 @@ $('picks-tournament').addEventListener('change', loadPickCounts);
 $('picks-submit').addEventListener('click', () => submitPickCounts($('picks-submit')));
 $('refresh-tournament').addEventListener('change', showRefreshInterval);
 $('refresh-submit').addEventListener('click', () => submitRefreshInterval($('refresh-submit')));
+$('release-submit').addEventListener('click', () => submitRelease($('release-submit')));
+$('release-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitRelease($('release-submit'));
+});
 
 render();

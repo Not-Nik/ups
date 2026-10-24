@@ -26,6 +26,7 @@ const BASELINE: i64 = 7;
 const MIGRATIONS: &[(i64, &str)] = &[
     (8, include_str!("../migration/008_refresh_interval.sql")),
     (9, include_str!("../migration/009_force_open.sql")),
+    (10, include_str!("../migration/010_claim_window.sql")),
 ];
 
 pub async fn migrate(conn: &mut SqliteConnection, db_path: &str) -> Result<()> {
@@ -175,6 +176,83 @@ mod tests {
         let latest = BASELINE + MIGRATIONS.len() as i64;
         let init = include_str!("init.sql");
         assert!(init.contains(&format!("PRAGMA user_version = {latest};")));
+    }
+
+    #[tokio::test]
+    async fn claim_window_migration_leaves_users_as_init_sql_declares_it() {
+        // Nothing else runs a script against a database at the version before it, and a
+        // migrated database has to end up with the schema init.sql describes.
+        let mut migrated = SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        sqlx::raw_sql(
+            "CREATE TABLE users (
+                 Name     TEXT PRIMARY KEY,
+                 Password TEXT,
+                 Admin    INTEGER NOT NULL DEFAULT 0
+             );
+             CREATE TABLE sessions (
+                 Name  TEXT NOT NULL REFERENCES users (Name) ON DELETE CASCADE,
+                 Token TEXT PRIMARY KEY
+             );
+             INSERT INTO users (Name, Admin) VALUES ('alice', 0), ('root', 1);
+             INSERT INTO sessions VALUES ('alice', 'token');
+             PRAGMA user_version = 9;",
+        )
+        .execute(&mut migrated)
+        .await
+        .unwrap();
+
+        apply(&mut migrated, pending(9, MIGRATIONS).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(get_version(&mut migrated).await.unwrap(), 10);
+        // The rebuild kept the rows and the table pointing at them.
+        assert_eq!(count(&mut migrated, "users").await, 2);
+        assert_eq!(count(&mut migrated, "sessions").await, 1);
+        assert_eq!(
+            columns(&mut migrated, "users").await,
+            "Name TEXT 0 pk1;Password TEXT 0 pk0;Admin INTEGER 1 pk0;LastActivity TEXT 1 pk0"
+        );
+
+        let mut fresh = SqliteConnection::connect("sqlite::memory:").await.unwrap();
+        sqlx::raw_sql(include_str!("init.sql"))
+            .execute(&mut fresh)
+            .await
+            .unwrap();
+        assert_eq!(
+            columns(&mut migrated, "users").await,
+            columns(&mut fresh, "users").await,
+            "a migrated database must not drift from a new one"
+        );
+        // The defaults are compared by what an insert without them gets: renaming a table
+        // rewrites its CREATE TABLE text, so how a default is written differs.
+        assert_eq!(inserted(&mut migrated).await, inserted(&mut fresh).await);
+    }
+
+    /// What an account created by the server, which only ever names it, gets filled in
+    /// with: its claim window has to be running, or it would be claimable right away.
+    async fn inserted(conn: &mut SqliteConnection) -> String {
+        sqlx::raw_sql("INSERT INTO users (Name) VALUES ('seeded')")
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+        sqlx::query_scalar(
+            "SELECT Admin || ' ' || (LastActivity >= datetime('now', '-1 minute')) \
+             FROM users WHERE Name = 'seeded'",
+        )
+        .fetch_one(conn)
+        .await
+        .unwrap()
+    }
+
+    async fn columns(conn: &mut SqliteConnection, table: &str) -> String {
+        sqlx::query_scalar(&format!(
+            "SELECT group_concat(Name || ' ' || Type || ' ' || \"notnull\" || ' pk' || pk, \
+             ';' ORDER BY cid) FROM pragma_table_info('{table}')"
+        ))
+        .fetch_one(conn)
+        .await
+        .unwrap()
     }
 
     #[tokio::test]

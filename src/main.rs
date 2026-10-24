@@ -284,6 +284,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(conn.clone())
         .and_then(endpoints::password);
 
+    let account_release = warp::path!("api" / "account" / "release")
+        .and(rate_limit.clone())
+        .and(warp::post())
+        .and(warp::header("Authorization"))
+        .and(warp::body::json())
+        .and(conn.clone())
+        .and_then(endpoints::account_release);
+
     let image_cache = image_cache::ImageCache::shared();
     let images = warp::any().map(move || image_cache.clone());
 
@@ -322,6 +330,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(logout)
         .or(delete)
         .or(password)
+        .or(account_release)
         .or(proxy)
         .or(warp::fs::dir("web"))
         .boxed();

@@ -327,6 +327,11 @@ pub struct Password {
     pub password: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct Name {
+    pub name: String,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ProxyQuery {
     pub url: String,

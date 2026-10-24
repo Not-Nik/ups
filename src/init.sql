@@ -1,12 +1,13 @@
 -- The number of the last script in migration/ this schema includes. The server reads it
 -- on startup and applies the newer ones; raise it whenever a migration is added.
-PRAGMA user_version = 9;
+PRAGMA user_version = 10;
 
 CREATE TABLE users
 (
-    Name     TEXT PRIMARY KEY,
-    Password TEXT,
-    Admin    INTEGER NOT NULL DEFAULT 0
+    Name         TEXT PRIMARY KEY,
+    Password     TEXT,
+    Admin        INTEGER NOT NULL DEFAULT 0,
+    LastActivity TEXT NOT NULL DEFAULT (datetime('now')) -- UTC of the last prediction; a passwordless account is claimable once this is seven days old
 );
 
 CREATE TABLE sessions
