@@ -4,8 +4,8 @@
 certs/fullchain.pem
 certs/privkey.pem
 
-web/.superpowers/
-web/docs
+/.superpowers/
+/docs
 
 .env
 db.sqlite3

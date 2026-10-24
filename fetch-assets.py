@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Fetch the hero icons and map images referenced by the web manifests.
 
-The images themselves are gitignored (see heroes/.gitignore and maps/.gitignore) —
-run this after a clone to populate them:
+The images themselves are gitignored (see web/heroes/.gitignore and web/maps/.gitignore)
+— run this after a clone to populate them:
 
     python3 fetch-assets.py            # fetch anything missing
     python3 fetch-assets.py --force    # re-download everything
 
 Source: the community OverFast API (hero `portrait`, map `screenshot`). The set of
-assets to fetch is driven by heroes/heroes.json and maps/maps.json, so adding an
+assets to fetch is driven by web/heroes/heroes.json and web/maps/maps.json, so adding
 entry there and re-running is all that's needed to pull a new icon.
 """
 import argparse
@@ -18,6 +18,8 @@ import sys
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Lives at the repo root, next to web/, but also works from inside web/ — the assets are always under it.
+WEB = HERE if os.path.isdir(os.path.join(HERE, "heroes")) else os.path.join(HERE, "web")
 OVERFAST = "https://overfast-api.tekrop.fr"
 
 
@@ -63,11 +65,11 @@ def main():
     args = parser.parse_args()
 
     failed = 0
-    failed += sync("heroes", os.path.join(HERE, "heroes", "heroes.json"),
-                   os.path.join(HERE, "heroes"), "png",
+    failed += sync("heroes", os.path.join(WEB, "heroes", "heroes.json"),
+                   os.path.join(WEB, "heroes"), "png",
                    f"{OVERFAST}/heroes", "portrait", args.force)
-    failed += sync("maps", os.path.join(HERE, "maps", "maps.json"),
-                   os.path.join(HERE, "maps"), "jpg",
+    failed += sync("maps", os.path.join(WEB, "maps", "maps.json"),
+                   os.path.join(WEB, "maps"), "jpg",
                    f"{OVERFAST}/maps", "screenshot", args.force)
     sys.exit(1 if failed else 0)
 
