@@ -21,14 +21,7 @@
 
     <!-- Discord embed accent border color -->
     <meta name="theme-color" content="#F3900E"/>
-    <script>
-        {
-            const t = localStorage.getItem('ups_theme');
-            document.documentElement.dataset.bsTheme = t === 'system'
-                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-                : (t || 'dark');
-        }
-    </script>
+    <script src="theme-head.js"></script>
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="icon" type="image/png" href="favicon-32.png" sizes="32x32">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
