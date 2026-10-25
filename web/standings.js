@@ -91,7 +91,8 @@ const DEFAULT_PICK_COUNT = 4;
 async function loadStandingPicks() {
     const picks = new Map();
     if (!getToken()) return picks;
-    const data = await tryFetch(() => api('/api/predictions/me'));
+    // A failed load costs the saved picks and nothing else — the tables still render.
+    const data = await tryFetch(loadMyPredictions);
     // Sorted by group, then position.
     data?.standings.forEach(p => {
         if (!picks.has(p.group_id)) picks.set(p.group_id, []);
@@ -256,23 +257,16 @@ function standingsPrediction(rows, saved) {
     return box;
 }
 
-const standingsStatus = (cls, text) => makeEl('p', {
-    className: `${cls} text-center py-5`,
-    textContent: text,
-});
-
 async function renderStandings(id) {
     const root = $('standings');
-    root.replaceChildren(standingsStatus('text-secondary', 'Loading…'));
+    renderStatus(root, {text: 'Loading…'});
     try {
-        const [{data: rows, res}, picks] = await Promise.all([
-            api(`/api/standings/${id}`, {response: true}),
+        const [rows, picks] = await Promise.all([
+            loadStandingsRows(id),
             loadStandingPicks(),
         ]);
-        // Same background toornament refresh as /api/matches (see loadTournament).
-        if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
         if (!rows.length) {
-            root.replaceChildren(standingsStatus('text-secondary', 'No standings for this tournament.'));
+            renderStatus(root, {text: 'No standings for this tournament.'});
             return;
         }
         root.replaceChildren();
@@ -299,7 +293,7 @@ async function renderStandings(id) {
     } catch {
         // Let the next open try again.
         standingsLoad = null;
-        root.replaceChildren(standingsStatus('text-danger', 'Failed to load standings. Please refresh.'));
+        renderStatus(root, {cls: 'text-danger', text: 'Failed to load standings. Please refresh.'});
     }
 }
 
