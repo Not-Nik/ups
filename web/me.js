@@ -16,11 +16,11 @@ function leagueHTML(picks) {
         let now = '';
         if (!p.open && p.current_position != null) {
             const hit = p.current_position === p.position;
-            now = `<span class="pred-score small ${hit ? 'text-success' : 'text-secondary'}">now ${p.current_position}.</span>`;
+            now = `<span class="pred-score small ${hit ? 'text-success' : 'text-secondary'}">now ${escapeHtml(p.current_position)}.</span>`;
         }
         return `<li class="prediction-item">
             <span class="league-pick d-flex align-items-center gap-2 small fw-semibold">
-                <span class="pick-place">${p.position}.</span>
+                <span class="pick-place">${escapeHtml(p.position)}.</span>
                 ${p.logo ? `<img src="${escapeAttr(proxied(p.logo))}" class="team-logo" alt="">` : ''}
                 <span class="text-truncate">${teamLinkHTML(p.tournament_id, p.team)}</span>
             </span>
