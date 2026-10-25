@@ -9,6 +9,7 @@ const MODAL_MODES = {
         title: 'Who are you?',
         subtitle: 'Enter a name to save your prediction.',
         showCookie: true,
+        cancel: 'close',
     },
     login: {
         title: 'Log in',
@@ -16,6 +17,7 @@ const MODAL_MODES = {
         submitLabel: 'Log in',
         showPassword: true,
         showCreate: true,
+        cancel: 'close',
     },
     password: {
         title: 'Set a password?',
@@ -24,6 +26,7 @@ const MODAL_MODES = {
         showPassword: true,
         actions: 'password',
         focusId: 'password-input',
+        cancel: 'skip',
     },
     changePassword: {
         title: 'Change password',
@@ -32,12 +35,64 @@ const MODAL_MODES = {
         showPassword: true,
         actions: 'password',
         focusId: 'password-input',
+        cancel: 'skip',
     },
 };
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+const focusables = root => [...root.querySelectorAll(FOCUSABLE)].filter(isVisible);
+
+// aria-hidden set on the rest of the page while the dialog is open, so it only ever
+// comes off again where this put it on. Elements already carrying it (or announcing
+// themselves, like the toast) are left alone.
+let hiddenForDialog = [];
+
+const hidePage = dialog => {
+    showPage();
+    hiddenForDialog = [...document.body.children].filter(el => el !== dialog
+        && !el.hasAttribute('aria-hidden')
+        && !el.hasAttribute('aria-live')
+        && el.getAttribute('role') !== 'alert');
+    hiddenForDialog.forEach(el => el.setAttribute('aria-hidden', 'true'));
+};
+
+const showPage = () => {
+    hiddenForDialog.forEach(el => el.removeAttribute('aria-hidden'));
+    hiddenForDialog = [];
+};
+
+// Keeps the keyboard on the dialog while it is open, and Escape is its cancel button.
+let dialogTrap = null;
+
+function trapKeys(e, dialog, onEscape) {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        onEscape();
+        return;
+    }
+    if (e.key !== 'Tab') return;
+    const items = focusables(dialog);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (!dialog.contains(active) || (e.shiftKey && (active === first || !items.includes(active)))) {
+        e.preventDefault();
+        last.focus();
+    } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+    }
+}
+
+// Rows hidden with d-none have no layout box, so their controls stay out of the trap.
+const isVisible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
 
 const nameModal = {
     _resolve: null,
     mode: null,
+    _cfg: null,
+    _restore: null,
 
     open(mode, opts = {}) {
         const cfg = {...MODAL_MODES[mode], ...opts};
@@ -46,6 +101,9 @@ const nameModal = {
         const modal = $('name-modal');
         const nameInput = $('name-input');
         const passwordInput = $('password-input');
+        // Re-opening the dialog for the next step of one flow keeps the focus of
+        // whatever opened it first.
+        const reopen = !modal.classList.contains('d-none');
 
         $('modal-title').textContent = cfg.title;
         $('modal-subtitle').textContent = cfg.subtitle;
@@ -76,6 +134,11 @@ const nameModal = {
 
         show(modal);
         if (cfg.shake) shakeEl(nameInput);
+
+        if (!reopen) this._restore = document.activeElement;
+        hidePage(modal);
+        dialogTrap?.();
+        dialogTrap = addDialogTrap(modal, () => this._cancel());
         (cfg.focusId ? $(cfg.focusId) : nameInput).focus();
 
         return new Promise(resolve => {
@@ -103,16 +166,42 @@ const nameModal = {
     },
 
     resolve(result) {
-        this._resolve?.(result);
+        this._settle(result);
+    },
+
+    // Only the pending prompt is ever resolved, so a second close/resolve after the
+    // modal answered (or a cancelled one) is harmless.
+    _settle(result) {
+        const resolve = this._resolve;
         this._resolve = null;
+        resolve?.(result);
+    },
+
+    // Escape, and the Cancel/Skip button of whichever action row is showing.
+    _cancel() {
+        if (this._cfg?.cancel === 'skip') this.resolve(null);
+        else this.close(null);
     },
 
     close(result) {
         this.mode = null;
+        this._cfg = null;
         hide($('name-modal'));
+        dialogTrap?.();
+        dialogTrap = null;
+        showPage();
+        if (this._restore?.isConnected) this._restore.focus();
+        this._restore = null;
         this.resolve(result);
     },
 };
+
+// Binds the trap for one open dialog; returns the function that unbinds it.
+function addDialogTrap(dialog, onEscape) {
+    const onKey = e => trapKeys(e, dialog, onEscape);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+}
 
 async function loadCurrentUser() {
     if (!getToken()) return;
