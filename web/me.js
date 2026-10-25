@@ -55,7 +55,7 @@ async function init() {
     }
 
     $('profile-name').textContent = name;
-    $('profile-initial').textContent = (name[0] || '?').toUpperCase();
+    $('profile-initial').textContent = (Array.from(name)[0] ?? '?').toUpperCase();
     show($('profile-icon'));
 
     let predictions, standings;
