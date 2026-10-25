@@ -188,15 +188,11 @@ function clearMatchData() {
 }
 
 async function fetchTournaments() {
-    const res = await fetch('/api/tournaments');
-    if (!res.ok) throw new Error('request failed');
-    return res.json();
+    return getJson('/api/tournaments');
 }
 
 async function fetchMatches(tournamentId) {
-    const res = await fetch(`/api/matches/${tournamentId}`);
-    if (!res.ok) throw new Error('request failed');
-    return res.json();
+    return getJson(`/api/matches/${tournamentId}`);
 }
 
 async function fetchMatch(tournamentId, id) {
