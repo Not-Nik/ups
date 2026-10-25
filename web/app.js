@@ -185,12 +185,9 @@ async function loadTournament(id) {
         renderGrid(matches, brackets);
         await loadPastPredictions();
         applyFinalScoreStates();
-        // Asking for the matches makes the server pull fresh results from toornament
-        // (at most once every few minutes). That runs in the background, so what we
-        // just rendered predates it — X-Refreshing says so, and a reload picks it up.
-        if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
-    } catch {
-        $('grid').innerHTML = '<p class="text-secondary text-center py-5">Failed to load matches. Please refresh.</p>';
+    } catch (err) {
+        console.error(err);
+        renderStatus($('grid'), {text: 'Failed to load matches. Please refresh.'});
     }
 }
 
