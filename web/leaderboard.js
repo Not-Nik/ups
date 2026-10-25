@@ -291,11 +291,13 @@ function matchLeaderboard(matches, predictions) {
 
 async function renderLeaderboard(id) {
     const root = $('leaderboard');
-    root.replaceChildren(leaderboardStatus('text-secondary', 'Loading…'));
+    renderStatus(root, {text: 'Loading…'});
     try {
+        // The matches and standings of the page, from the same loads the other views
+        // already ran, so opening this one never asks the server for them again.
         const [allMatches, standingRows, standingPicks] = await Promise.all([
-            api(`/api/matches/${id}`),
-            api(`/api/standings/${id}`),
+            loadMatches(id),
+            loadStandingsRows(id),
             api(`/api/standings/predictions/${id}`),
         ]);
         const matches = allMatches.filter(m => m.score_a != null && m.score_b != null);
