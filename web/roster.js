@@ -77,11 +77,9 @@ const loadTeams = id => loadRoster('teams', `teams:${id}`, () => api(`/api/teams
         root.appendChild(card);
         return {el: card, text: searchKey(`${team.name} ${team.short_name ?? ''}`)};
     })
-).then(ok => ok || (teamsLoad = null));
+);
 
 // ============== Players ==============
-let playersLoad = null;
-
 const compareText = (a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'});
 
 // Players arrive sorted by name (`order` keeps that). Sorting by team puts each
@@ -110,4 +108,4 @@ const loadPlayers = id => loadRoster('players', `players:${id}`, () => api(`/api
         el: trs.get(p),
         text: searchKey(`${p.name} ${p.battle_tag ?? ''} ${p.team} ${p.short_name ?? ''}`),
     }));
-}).then(ok => ok || (playersLoad = null));
+});
