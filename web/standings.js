@@ -83,6 +83,10 @@ function renderStandingsTabs() {
 // handle, or moved with the arrow keys; the first `pick_count` are saved through
 // /api/submit. Once the group is locked only the saved picks are shown.
 
+// The server's default pick_count for a stage, for a row arriving without one;
+// leaderboard.js scores a group's pick slots with the same fallback.
+const DEFAULT_PICK_COUNT = 4;
+
 // Map of group_id -> the user's picked team ids, 1st place first. Empty when logged out.
 async function loadStandingPicks() {
     const picks = new Map();
@@ -196,7 +200,11 @@ function makePickable(list, onChange) {
 // The prediction block for one group's table, or null when there's nothing to show
 // (a locked group the user didn't predict).
 function standingsPrediction(rows, saved) {
-    const {group_id, open, pick_count: count} = rows[0];
+    const {group_id, open} = rows[0];
+    // A row without a usable pick_count still gets the server's default, so a group is
+    // never numbered to zero places and an empty prediction submitted.
+    const pickCount = Number(rows[0].pick_count);
+    const count = pickCount > 0 ? pickCount : DEFAULT_PICK_COUNT;
     const teams = new Map(rows.map(r => [r.team_id, r]));
     const picked = saved.filter(id => teams.has(id));
     if (!open && !picked.length) return null;
