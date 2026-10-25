@@ -316,10 +316,17 @@ async function renderLeaderboard(id) {
         });
         root.replaceChildren(bar, ...panels.map(p => p.node));
         showLeaderboardPanel(panels, buttons, panels[0]);
-    } catch {
+    } catch (e) {
         // Let the next open try again.
         leaderboardLoad = null;
-        root.replaceChildren(leaderboardStatus('text-danger', 'Failed to load leaderboard. Please refresh.'));
+        // api() already toasted a rate limit; the panel must not add a refresh hint that
+        // a reload can't honour, since waiting is what fixes that one.
+        renderStatus(root, {
+            cls: 'text-danger',
+            text: e.rateLimited
+                ? 'Too many requests — please wait a moment and try again.'
+                : 'Failed to load leaderboard. Please refresh.',
+        });
     }
 }
 
