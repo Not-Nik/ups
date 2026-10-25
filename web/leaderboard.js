@@ -344,7 +344,7 @@ const LEADERBOARD_COLUMNS = [
         cls: 'standings-num',
         title: 'Accuracy: share of predictions with the correct winner',
         compare: (a, b) => a.correct / a.predicted - b.correct / b.predicted,
-        cell: r => `${Math.round(100 * r.correct / r.predicted)}%`
+        cell: r => escapeHtml(`${Math.round(100 * r.correct / r.predicted)}%`)
     },
     {
         key: 'points', head: 'Points', cls: 'standings-num fw-semibold',
