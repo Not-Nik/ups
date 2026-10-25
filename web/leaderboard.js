@@ -234,7 +234,7 @@ function stageCategories(items, keyOf, tabOf) {
 
 const subgroupTable = (rows, columns, empty) => rows.length
     ? leaderboardTable(rows, columns)
-    : leaderboardStatus('text-secondary', empty);
+    : statusLine({text: empty});
 
 // Everyone on the tournament's leagues, then everyone on one stage or group.
 // Every table scores with the weights of the whole tournament, so a group's own table
