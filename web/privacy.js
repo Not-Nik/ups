@@ -14,7 +14,9 @@ clearStorageBtn.addEventListener('click', () => {
 
 clearStorageConf.addEventListener('click', async () => {
     if (getToken()) await tryFetch(() => api('/api/logout', {method: 'POST'}));
-    localStorage.clear();
+    // Only this app's own keys — the theme preference stays.
+    localStorage.removeItem('ups_token');
+    localStorage.removeItem('ups_incidents_seen');
     clearServerBtn.disabled = true;
     clearStorageConf.style.display = 'none';
     clearServerConf.style.display = 'none';
