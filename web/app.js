@@ -204,10 +204,7 @@ const isValidScore = v => /^\d+$/.test(v.trim());
 
 const findInvalidInputs = () =>
     [...document.querySelectorAll('.card .score-input:not(:disabled)')]
-        .filter(input => {
-            const v = input.value.trim();
-            return v && !/^\d+$/.test(v);
-        });
+        .filter(input => input.value.trim() && !isValidScore(input.value));
 
 const predictionFor = (predicted, actual) =>
     predicted > actual ? {cls: 'prediction-high', sign: '>'}
