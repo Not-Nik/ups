@@ -9,6 +9,12 @@ const SIDES = ['a', 'b'];
 const noop = () => {
 };
 
+// Hero and map keys name a file under /heroes or /maps, and only the manifests' own
+// keys ever should. The per-match slots are read back from localStorage, so a key that
+// is not a plain slug is dropped rather than becoming an image path.
+const ASSET_KEY = /^[A-Za-z0-9_-]+$/;
+const assetKey = v => (typeof v === 'string' && ASSET_KEY.test(v) ? v : null);
+
 // ============== Shared cross-tab state ==============
 // Persisted in localStorage; the `storage` event lets the control tab and the
 // overlay tab drive each other live (works across tabs of the same browser).
@@ -45,7 +51,7 @@ const saveSwap = (id, swap) => localStorage.setItem(swapKey(id), swap ? '1' : '0
 // Per-side hero bans live on each map slot (see loadMaps): a two-element array
 // [aKey, bKey] of banned hero keys, null where a side hasn't banned.
 const normaliseBans = b => Array.isArray(b) && b.length === 2
-    ? b.map(v => typeof v === 'string' && v ? v : null)
+    ? b.map(v => assetKey(v))
     : [null, null];
 
 // Maps: an ordered list of slots, one per game in the series. Each slot is
@@ -63,7 +69,7 @@ function loadMaps(id) {
         const parsed = JSON.parse(localStorage.getItem(mapsKey(id)));
         if (Array.isArray(parsed)) {
             return parsed.map(s => ({
-                map: s && typeof s.map === 'string' ? s.map : null,
+                map: assetKey(s && s.map),
                 winner: s && (s.winner === 'a' || s.winner === 'b') ? s.winner : null,
                 bans: normaliseBans(s && s.bans),
             }));
@@ -125,14 +131,26 @@ function matchPointTeams([aWins, bWins], bo) {
 const derivedScore = id => countWins(loadMaps(id));
 
 // Local hero icons + name manifest live under /heroes (downloaded at build time).
-const heroIcon = key => `/heroes/${key}.png`;
-let heroListPromise = null;
-const fetchHeroes = () => (heroListPromise ??= fetch('/heroes/heroes.json').then(r => r.json()));
+// The url is '' for a key that is not a plain slug (see assetKey), so a caller falls
+// back to showing no image instead of requesting something arbitrary.
+const heroIcon = key => (assetKey(key) ? `/heroes/${key}.png` : '');
 
 // Local map art + name/mode manifest live under /maps (populated like /heroes).
-const mapImage = key => `/maps/${key}.jpg`;
-let mapListPromise = null;
-const fetchMaps = () => (mapListPromise ??= fetch('/maps/maps.json').then(r => r.json()));
+const mapImage = key => (assetKey(key) ? `/maps/${key}.jpg` : '');
+
+// ============== JSON loads ==============
+// Straight to fetch rather than through api(): these are our own files and endpoints,
+// need no token, and must never toast (the overlay is a broadcast surface). A !ok
+// response throws, and cachedLoad drops a failure, so one dropped request cannot
+// leave the hero and map pickers empty until the next reload.
+async function getJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status} ${url}`);
+    return res.json();
+}
+
+const fetchHeroes = () => cachedLoad('heroes', () => getJson('/heroes/heroes.json'));
+const fetchMaps = () => cachedLoad('maps', () => getJson('/maps/maps.json'));
 
 // The "Powered by" badge position is a global overlay setting (not per-match):
 // bottom-left, bottom-right, or hidden. The control room cycles through these.
