@@ -96,7 +96,10 @@ const nameModal = {
 
     open(mode, opts = {}) {
         const cfg = {...MODAL_MODES[mode], ...opts};
+        // A prompt a second modal replaces must not leave its caller waiting forever.
+        this._settle(null);
         this.mode = mode;
+        this._cfg = cfg;
 
         const modal = $('name-modal');
         const nameInput = $('name-input');
