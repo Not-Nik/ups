@@ -222,6 +222,12 @@ function showToast(msg, duration = 4000) {
 $('toast')?.addEventListener('click', () => hide($('toast')));
 
 // ============== API ==============
+// Asking for matches or standings makes the server pull fresh results from toornament
+// (at most once every few minutes). That runs in the background, so what a caller
+// renders predates it and a reload picks it up — a response answering X-Refreshing says
+// so, and api() toasts this line for it, so no caller has to repeat the check.
+globalThis.REFRESH_MSG = "Hang tight, we're fetching the latest results just for you";
+
 // JSON fetch with auto-auth. Returns parsed body ({} when the response has none),
 // or {data, res} when `response` is set and the caller needs the headers.
 // Throws on !res.ok with `code` populated from a { err } body and `rateLimited`
@@ -243,6 +249,10 @@ async function api(url, {method = 'GET', body, response = false} = {}) {
         if (rateLimited) showToast('Too many requests — please wait a moment and try again.');
         throw Object.assign(new Error('Request failed'), {code, rateLimited});
     }
+    if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
+    // Whose predictions /api/predictions/me answers, and what they are, both change
+    // here, so a cached copy must not outlive a submission or a login.
+    if (method === 'POST' && (url === '/api/submit' || url === '/api/login')) invalidateLoad('me:predictions');
     return response ? {data, res} : data;
 }
 
@@ -254,6 +264,33 @@ const tryFetch = async fn => {
         return undefined;
     }
 };
+
+// ============== Cached data ==============
+// Several views of one page want the same endpoint (the leaderboard ranks the matches
+// the matches view already rendered), so each key is asked for once, whether the calls
+// land together or one after the other. A rejected load is dropped, so the next caller
+// tries again, and invalidateLoad drops a settled one.
+const dataCache = new Map();
+
+const cachedLoad = (key, load) => {
+    const hit = dataCache.get(key);
+    if (hit) return hit;
+    const promise = Promise.resolve().then(load).catch(err => {
+        if (dataCache.get(key) === promise) dataCache.delete(key);
+        throw err;
+    });
+    dataCache.set(key, promise);
+    return promise;
+};
+
+const invalidateLoad = key => dataCache.delete(key);
+const clearLoads = () => dataCache.clear();
+
+const loadMatches = id => cachedLoad(`matches:${id}`, () => api(`/api/matches/${id}`));
+// The standings rows of one tournament. loadStandings (standings.js) is that view's
+// loader, which re-renders, so this one is named for what it returns.
+const loadStandingsRows = id => cachedLoad(`standings:${id}`, () => api(`/api/standings/${id}`));
+const loadMyPredictions = () => cachedLoad('me:predictions', () => api('/api/predictions/me'));
 
 // ============== Theme ==============
 const THEME_CYCLE = ['dark', 'light', 'system'];
