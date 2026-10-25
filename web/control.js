@@ -369,7 +369,7 @@ async function initControl() {
             // No match set yet (e.g. the overlay was opened bare); still let the
             // operator pick one, which the empty overlay will then switch to.
             const note = crEmpty('No match selected yet.');
-            const pick = actionBtn('Choose match', () => openMatchPicker(null, null));
+            const pick = actionBtn('Choose match', () => openMatchPicker(null, null, pick));
             return panel.replaceChildren(note, pick);
         }
 
@@ -411,7 +411,7 @@ async function initControl() {
                 type: 'button',
                 title: `Ban hero for ${match[`team_${k}`]}`,
             });
-            banBtn.addEventListener('click', () => openPicker(id, idx));
+            banBtn.addEventListener('click', () => openPicker(id, idx, banBtn));
 
             teamsRow.append(nameEl, controls, banBtn);
             scoreEls.push(scoreEl);
@@ -443,6 +443,7 @@ async function initControl() {
         // Title, best-of dropdown and "Add map" share one header line. Best-of lives
         // here (not the control grid) since it drives the maps' match-point detection.
         const mapsHead = makeEl('div', {className: 'cr-maps-head'});
+        const addMapBtn = actionBtn('Add map', () => openMapPicker(id, null, addMapBtn));
         mapsHead.append(
             makeEl('h2', {className: 'cr-maps-title', textContent: 'Maps'}),
             boSelect,
@@ -463,8 +464,9 @@ async function initControl() {
             );
         };
         controlRow('View', ...sceneBtns);
+        const changeMatchBtn = actionBtn('Change match', () => openMatchPicker(tid, id, changeMatchBtn));
         controlRow('Match',
-            actionBtn('Change match', () => openMatchPicker(tid, id)),
+            changeMatchBtn,
             actionBtn('Swap teams', () => saveSwap(id, !loadSwap(id))),
             actionBtn('Cycle logo', () => saveLogo(nextLogo(loadLogo()))),
         );
@@ -533,7 +535,7 @@ async function initControl() {
                 } else {
                     pick.append(makeEl('span', {textContent: 'Pick map'}));
                 }
-                pick.addEventListener('click', () => openMapPicker(id, i));
+                pick.addEventListener('click', () => openMapPicker(id, i, pick));
 
                 row.append(pick);
                 return row;
