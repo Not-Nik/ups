@@ -77,9 +77,6 @@ function sortableTable(rows, columns, {sortKey = columns[0].key, tableClass = ''
 }
 
 // ============== State ==============
-const SIDES = ['a', 'b'];
-const OTHER_SIDE = {a: 'b', b: 'a'};
-
 const state = {
     activeTournament: null,
     activeView: null, // one of VIEWS: which header tab (and main panel) is open
@@ -197,8 +194,6 @@ async function loadTournament(id) {
     }
 }
 
-const REFRESH_MSG = "Hang tight, we're fetching the latest results just for you";
-
 // ============== Predictions ==============
 const isValidScore = v => /^\d+$/.test(v.trim());
 
@@ -228,11 +223,11 @@ function updateCardState(card, index) {
 }
 
 // ============== Cards ==============
-const predictionRowHTML = p => `
-  <div class="d-flex justify-content-between align-items-baseline gap-3 py-1">
-    <span class="small text-truncate">${escapeHtml(p.name)}</span>
-    <span class="small fw-semibold text-secondary text-nowrap flex-shrink-0">${predictionText(p, ' : ')}</span>
-  </div>`;
+// The logged-in user's name, from /api/me, so their row in a prediction panel can
+// be marked "You". Fetched once by loadPastPredictions.
+let myName = '';
+
+const youRowHTML = p => predictionRowHTML(p, ' : ', ' : ', {you: myName});
 
 // A percentage prediction, with the row itself as the bar. Its background is split at
 // team A's share (`--share`), team A on the left, and the bigger share is tinted in the
@@ -309,7 +304,7 @@ const renderPanelPredictions = (panel, match, predictions) => {
     if (!predictions.length) return setPanelStatus(panel, 'text-secondary', 'No predictions yet.');
     const scores = predictions.filter(p => !isPercentPrediction(p));
     const chances = predictions.filter(isPercentPrediction);
-    let html = predictionRowsHTML(scores, match, predictionRowHTML);
+    let html = predictionRowsHTML(scores, match, youRowHTML);
     if (chances.length) {
         html += `<div class="chance-heading text-secondary small${scores.length ? ' chance-heading-after' : ''}">Win chance</div>`
             + predictionRowsHTML(chances, match, percentRowHTML);
@@ -898,7 +893,11 @@ function applyPastPrediction(p) {
 
 async function loadPastPredictions() {
     if (!getToken()) return;
-    const predictions = await tryFetch(() => api('/api/predictions/me'));
+    const [me, predictions] = await Promise.all([
+        tryFetch(() => api('/api/me')),
+        tryFetch(loadMyPredictions),
+    ]);
+    if (me) myName = me.name;
     predictions?.matches.forEach(applyPastPrediction);
 }
 
