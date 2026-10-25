@@ -116,12 +116,8 @@ const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 const proxied = url => `/api/proxy?url=${encodeURIComponent(url)}`;
 
 // ============== Match sides ==============
-// Assigned on globalThis rather than declared, here and for OTHER_SIDE, REFRESH_MSG and
-// predictionRowHTML below: overlay-common.js declares its own SIDES, and one name
-// declared by two scripts of a page is a SyntaxError that kills both, while a copy of an
-// assigned global only shadows it.
-globalThis.SIDES = ['a', 'b'];
-globalThis.OTHER_SIDE = {a: 'b', b: 'a'};
+const SIDES = ['a', 'b'];
+const OTHER_SIDE = {a: 'b', b: 'a'};
 
 // ============== Prediction rows ==============
 // One prediction as a row, shared by a match card's prediction panel (app.js) and the
@@ -135,7 +131,7 @@ globalThis.OTHER_SIDE = {a: 'b', b: 'a'};
 //             with no match it asks for the id-only row of a prediction whose match is gone.
 //   {you}     the logged-in user's name, marked "You" on their row.
 //   {own}     the row is the viewer's own (me.html has no name to compare).
-globalThis.predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, you = '', own = null, heading = null} = {}) => {
+const predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, you = '', own = null, heading = null} = {}) => {
     const isYou = !!you && p.name === you;
     const finished = match && match.score_a != null && match.score_b != null;
     const score = `${predictionText(p, sep)}${finished && (own ?? isYou)
@@ -237,7 +233,7 @@ $('toast')?.addEventListener('click', () => hide($('toast')));
 // (at most once every few minutes). That runs in the background, so what a caller
 // renders predates it and a reload picks it up — a response answering X-Refreshing says
 // so, and api() toasts this line for it, so no caller has to repeat the check.
-globalThis.REFRESH_MSG = "Hang tight, we're fetching the latest results just for you";
+const REFRESH_MSG = "Hang tight, we're fetching the latest results just for you";
 
 // JSON fetch with auto-auth. Returns the parsed body ({} when the response has none).
 // Throws on !res.ok with `code` populated from a { err } body and `rateLimited`

@@ -5,7 +5,6 @@
 // utilities they both depend on. Plain script (no modules): the top-level
 // bindings here are visible to whichever page script loads after it.
 
-const SIDES = ['a', 'b'];
 const noop = () => {
 };
 
