@@ -168,7 +168,7 @@ async function loadPickCounts() {
         const id = `picks-stage-${stage.stage_id}`;
         const row = makeEl('div', {
             className: 'd-flex align-items-center justify-content-between gap-3 mb-2 admin-pick-row',
-            dataset: {stage: stage.stage_id},
+            dataset: {stage: stage.stage_id, name: stage.name},
         });
         const input = makeEl('input', {
             id,
