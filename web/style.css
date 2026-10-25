@@ -24,6 +24,8 @@
     --form-disabled-bg: #333;
     --form-disabled-border: #333;
     --form-disabled-color: #555;
+    /* Chance-bar fill, --bs-secondary-color at 16%; plain rgba (not color-mix) for html2canvas. */
+    --chance-muted: rgba(136, 136, 136, .16);
     /* Edit overlay lightens the box in dark mode. */
     --edit-scrim: rgba(255, 255, 255, 0.2);
     --edit-icon: rgba(0, 0, 0, 0.7);
@@ -44,6 +46,7 @@
     --form-disabled-bg: #dde5ff;
     --form-disabled-border: #dde5ff;
     --form-disabled-color: #8899cc;
+    --chance-muted: rgba(102, 112, 160, .16);
     /* Edit overlay darkens the box in light mode. */
     --edit-scrim: rgba(0, 0, 0, 0.15);
     --edit-icon: rgba(255, 255, 255, 0.85);
@@ -948,21 +951,22 @@ th[aria-sort="descending"] .sort-btn::after {
     border-top: 1px solid var(--bs-border-color);
 }
 
-/* The row is the bar: its background is split at team A's share (--share, inline). */
+/* The row is the bar: its background is split at team A's share (--share, inline),
+   the divider a stripe of the card's own colour laid over the split. */
 .chance-row {
+    /* Plain rgba, not color-mix(): html2canvas 1.4.1 parses neither color-mix() nor
+       calc() inside a gradient, and throws on what it cannot read. */
     --chance-a: var(--chance-muted);
     --chance-b: var(--chance-muted);
-    --chance-muted: color-mix(in srgb, var(--bs-secondary-color) 16%, transparent);
-    --chance-fav: color-mix(in srgb, var(--accent) 30%, transparent);
+    --chance-fav: rgba(192, 40, 122, .3); /* --accent at 30%, the same in both themes */
     display: flex;
     align-items: baseline;
     padding: .2rem 0;
     margin: 3px 0;
     border-radius: 4px;
-    background: linear-gradient(to right,
-        var(--chance-a) calc(var(--share) - 1px),
-        transparent calc(var(--share) - 1px), transparent calc(var(--share) + 1px),
-        var(--chance-b) calc(var(--share) + 1px));
+    background:
+        linear-gradient(var(--bs-card-bg), var(--bs-card-bg)) var(--share) 0 / 2px 100% no-repeat,
+        linear-gradient(to right, var(--chance-a) var(--share), var(--chance-b) var(--share));
 }
 
 /* Name and team A's chance. At least as wide as team A's part of the bar, so the
