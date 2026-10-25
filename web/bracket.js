@@ -434,12 +434,13 @@ function untangle(L) {
     const memoCost = (a, b) => {
         if (a.id > b.id) [a, b] = [b, a];
         const memo = a.memo.get(b) ?? a.memo.set(b, new Map()).get(b);
-        const key = a.state * 65536 + b.state;
-        let c = memo.get(key);
+        // One entry per pair of line states (a state is one line's run slots and lane).
+        const byA = memo.get(a.state) ?? memo.set(a.state, new Map()).get(a.state);
+        let c = byA.get(b.state);
         if (c === undefined) {
             a.shape ??= shapeOf(L, a);
             b.shape ??= shapeOf(L, b);
-            memo.set(key, c = pairCost(a, b));
+            byA.set(b.state, c = pairCost(a, b));
         }
         return c;
     };
