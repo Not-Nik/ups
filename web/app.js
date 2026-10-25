@@ -839,7 +839,7 @@ async function postSubmission(body, name = null) {
     return !!data.token;
 }
 
-const failSubmission = () => alert('Submission failed. Please try again.');
+const failSubmission = () => showToast('Submission failed. Please try again.');
 
 // Submit, asking a logged-out user for a name first (and again while it's taken).
 // Resolves true once stored; false when cancelled or failed, after telling the user.
