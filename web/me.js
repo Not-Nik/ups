@@ -65,7 +65,7 @@ async function init() {
         $('profile-sub').textContent = 'Failed to load predictions.';
         return;
     }
-    predictions.reverse()
+    predictions = [...predictions].reverse();
 
     if (!predictions.length && !standings.length) {
         $('profile-sub').textContent = 'No predictions yet';
