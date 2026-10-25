@@ -112,6 +112,52 @@ const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 // instead, so they are same-origin (no third-party request, and a canvas can read them).
 const proxied = url => `/api/proxy?url=${encodeURIComponent(url)}`;
 
+// ============== Match sides ==============
+// Assigned on globalThis rather than declared, here and for REFRESH_MSG and
+// predictionRowHTML below: each of those four still has a top-level copy in a page
+// script, and one name declared by two scripts of a page is a SyntaxError that kills
+// both. A page script's own copy shadows (or redeclares) these until it is deleted.
+globalThis.SIDES = ['a', 'b'];
+globalThis.OTHER_SIDE = {a: 'b', b: 'a'};
+
+// ============== Prediction rows ==============
+// One prediction as a row, shared by a match card's prediction panel (app.js) and the
+// prediction list on me.html. `sep` joins the two predicted scores, `current` joins the
+// prediction to the final score. The final score and its mark are only shown for the
+// viewer's own prediction (`own`, or the row whose name is `you`), since everyone
+// else's row ends at what they predicted.
+//   {match} the prediction's match — the row then carries its section title and its
+//           teams instead of a name (me.html); pass an already-known title in {heading}.
+//   {you}   the logged-in user's name, marked "You" on their row.
+//   {own}   the row is the viewer's own (me.html has no name to compare).
+globalThis.predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, you = '', own = null, heading = null} = {}) => {
+    const isYou = !!you && p.name === you;
+    const finished = match && match.score_a != null && match.score_b != null;
+    const score = `${predictionText(p, sep)}${finished && (own ?? isYou)
+        ? `<span class="ms-2 small ${sameOutcome(p, match) ? 'text-success' : 'text-danger'}">` +
+          `${escapeHtml(current)}${sameOutcome(p, match) ? '&#10003;' : '&#10007;'} ${match.score_a}:${match.score_b}</span>`
+        : ''}`;
+    if (!match && !heading) {
+        return `
+  <div class="d-flex justify-content-between align-items-baseline gap-3 py-1">
+    <span class="small text-truncate">${escapeHtml(p.name)}${isYou ? '<span class="leaderboard-you">You</span>' : ''}</span>
+    <span class="small fw-semibold text-secondary text-nowrap flex-shrink-0">${score}</span>
+  </div>`;
+    }
+    const title = heading ?? (match.stage_name || match.group_name || match.round_name
+        ? escapeHtml(sectionTitle(sectionKey(match))) : null);
+    const teams = match
+        ? SIDES.map(k => teamLinkHTML(match.tournament_id, match[`team_${k}`])).join(' vs ')
+        : `Match #${p.id}`;
+    return `<li class="prediction-item">
+        <div>
+            ${title ? `<div class="text-secondary small">${title}</div>` : ''}
+            <div class="fw-semibold small">${teams}</div>
+        </div>
+        <span class="pred-score small">${score}</span>
+    </li>`;
+};
+
 // ============== DOM helpers ==============
 const show = el => el.classList.remove('d-none');
 const hide = el => el.classList.add('d-none');
