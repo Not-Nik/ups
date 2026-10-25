@@ -3,12 +3,6 @@
 // predict and how often each tournament is refreshed from toornament. The endpoints require a valid token belonging to an admin account;
 // the server answers 404 otherwise.
 
-const shake = el => {
-    el.classList.remove('shake');
-    void el.offsetWidth;
-    el.classList.add('shake');
-};
-
 function toast(msg, ok = false) {
     showToast(msg);
     $('toast').classList.toggle('toast-success', ok);
@@ -87,7 +81,7 @@ async function submitLogin(btn) {
     const name = $('login-name').value.trim();
     const password = $('login-password').value;
     if (!name || !password) {
-        shake(!name ? $('login-name') : $('login-password'));
+        shakeEl(!name ? $('login-name') : $('login-password'));
         return;
     }
     btn.disabled = true;
@@ -132,7 +126,7 @@ async function loadTournamentOptions() {
 async function submitTournament(btn) {
     const name = $('tournament-name').value.trim();
     if (!name) {
-        shake($('tournament-name'));
+        shakeEl($('tournament-name'));
         return;
     }
     btn.disabled = true;
@@ -300,7 +294,7 @@ async function submitRefreshInterval(btn) {
 async function submitRelease(btn) {
     const name = $('release-name').value.trim();
     if (!name) {
-        shake($('release-name'));
+        shakeEl($('release-name'));
         return;
     }
     btn.disabled = true;
@@ -528,7 +522,7 @@ function matchBody() {
         const p = pickers[key];
         if (!p.value) {
             const el = p.customEl ?? p.btn;
-            shake(el);
+            shakeEl(el);
             el.focus();
             return null;
         }
