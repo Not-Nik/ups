@@ -113,17 +113,14 @@ async function initControl() {
         syncBans();
     };
 
-    // key -> name, fetched once for the picker thumbnails and slot labels.
-    let mapNamePromise = null;
-    const mapNames = () => (mapNamePromise ??= fetchMaps()
-        .then(list => new Map(list.map(m => [m.key, m.name])))
-        .catch(() => new Map()));
+    // key -> name, for the picker thumbnails and slot labels. cachedLoad drops a failed
+    // load, so the next sync retries instead of keeping an empty map for the session.
+    const mapNames = () => cachedLoad('map-names', () => fetchMaps()
+        .then(list => new Map(list.map(m => [m.key, m.name]))));
 
     // key -> display name, fetched once and reused for both ban buttons and picker.
-    let heroMapPromise = null;
-    const heroMap = () => (heroMapPromise ??= fetchHeroes()
-        .then(list => new Map(list.map(h => [h.key, h.name])))
-        .catch(() => new Map()));
+    const heroMap = () => cachedLoad('hero-names', () => fetchHeroes()
+        .then(list => new Map(list.map(h => [h.key, h.name]))));
 
     const fillBanBtn = (btn, key, name) => {
         btn.replaceChildren();
