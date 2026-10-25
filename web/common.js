@@ -101,6 +101,9 @@ function compareDays(dayA, dayB) {
     return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.localeCompare(b);
 }
 
+// Append a value to the array stored at map[key], creating it on first use.
+const pushTo = (map, key, value) => (map.get(key) ?? map.set(key, []).get(key)).push(value);
+
 const escapeHtml = str => {
     const d = document.createElement('div');
     d.textContent = str;

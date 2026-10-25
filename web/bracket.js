@@ -26,9 +26,6 @@ const BRANCH_LABEL = {wb: 'Winners Bracket', lb: 'Losers Bracket'};
 const BRANCH_RANK = {wb: 0, lb: 1};
 const branchRank = b => BRANCH_RANK[b] ?? 9; // sort key: winners above losers, unknown last
 
-// Append a value to the array stored at map[key], creating it on first use.
-const pushTo = (map, key, value) => (map.get(key) ?? map.set(key, []).get(key)).push(value);
-
 // A unique, never-displayed day key so activateTab can toggle a whole bracket as a
 // unit; and the short label shown on its tab button.
 const bracketDayKey = (stage, group) => `\u0000bracket\u0000${stage}\u0000${group}`;
