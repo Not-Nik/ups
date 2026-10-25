@@ -223,8 +223,8 @@ function updateCardState(card, index) {
 }
 
 // ============== Cards ==============
-// The logged-in user's name, from /api/me, so their row in a prediction panel can
-// be marked "You". Fetched once by loadPastPredictions.
+// The logged-in user's name, so their row in a prediction panel can be marked "You".
+// Loaded once by loadPastPredictions, through the same cached loader as the header.
 let myName = '';
 
 const youRowHTML = p => predictionRowHTML(p, ' : ', ' : ', {you: myName});
@@ -915,7 +915,7 @@ function applyPastPrediction(p) {
 async function loadPastPredictions() {
     if (!getToken()) return;
     const [me, predictions] = await Promise.all([
-        tryFetch(() => api('/api/me')),
+        tryFetch(loadMe),
         tryFetch(loadMyPredictions),
     ]);
     if (me) myName = me.name;

@@ -64,7 +64,7 @@ function render() {
     setHidden($('who'), !loggedIn);
     setHidden($('logout'), !loggedIn);
     if (loggedIn) {
-        loadCurrentUser();
+        loadAccountName();
         loadTournamentOptions().then(() => {
             loadTournamentData();
             loadPickCounts();
@@ -72,8 +72,10 @@ function render() {
     }
 }
 
-async function loadCurrentUser() {
-    const me = await tryFetch(() => api('/api/me'));
+// The account line of the panel; auth.js's loadCurrentUser shows the same name in the
+// header of the main pages.
+async function loadAccountName() {
+    const me = await tryFetch(loadMe);
     if (me?.name) $('who').textContent = me.name;
 }
 

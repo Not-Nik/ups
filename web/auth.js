@@ -208,9 +208,9 @@ function addDialogTrap(dialog, onEscape) {
 
 async function loadCurrentUser() {
     if (!getToken()) return;
-    const data = await tryFetch(() => api('/api/me'));
-    if (!data) return;
-    $('user-name').textContent = data.name;
+    const me = await tryFetch(loadMe);
+    if (!me?.name) return;
+    $('user-name').textContent = me.name;
     show($('user-menu'));
     hide($('login-btn'));
 }

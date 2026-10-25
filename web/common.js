@@ -256,9 +256,13 @@ async function api(url, {method = 'GET', body, response = false} = {}) {
         throw Object.assign(new Error('Request failed'), {code, rateLimited});
     }
     if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
-    // Whose predictions /api/predictions/me answers, and what they are, both change
-    // here, so a cached copy must not outlive a submission or a login.
-    if (method === 'POST' && (url === '/api/submit' || url === '/api/login')) invalidateLoad('me:predictions');
+    // Whose predictions /api/predictions/me answers, and what they are, and the name
+    // /api/me answers, all change here, so a cached copy must not outlive a submission
+    // or a login.
+    if (method === 'POST' && (url === '/api/submit' || url === '/api/login')) {
+        invalidateLoad('me:predictions');
+        invalidateLoad('me');
+    }
     return response ? {data, res} : data;
 }
 
@@ -297,6 +301,9 @@ const loadMatches = id => cachedLoad(`matches:${id}`, () => api(`/api/matches/${
 // loader, which re-renders, so this one is named for what it returns.
 const loadStandingsRows = id => cachedLoad(`standings:${id}`, () => api(`/api/standings/${id}`));
 const loadMyPredictions = () => cachedLoad('me:predictions', () => api('/api/predictions/me'));
+// The logged-in user's name. The header, the "You" marks and the admin panel all want
+// the same answer on one page load.
+const loadMe = () => cachedLoad('me', () => api('/api/me'));
 
 // ============== Theme ==============
 const THEME_CYCLE = ['dark', 'light', 'system'];
