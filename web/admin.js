@@ -267,9 +267,16 @@ function showRefreshInterval() {
 
 async function submitRefreshInterval(btn) {
     const t = selectedTournament();
-    const minutes = parseInt($('refresh-minutes').value, 10);
-    if (!t || isNaN(minutes) || minutes < 1 || minutes > MAX_REFRESH_MINUTES) {
-        shake(t ? $('refresh-minutes') : $('refresh-tournament'));
+    if (!t) {
+        toast('Pick a tournament first.');
+        shakeEl($('refresh-tournament'));
+        return;
+    }
+    const minutes = Number($('refresh-minutes').value.trim());
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_REFRESH_MINUTES) {
+        toast(`Interval must be a whole number of minutes from 1 to ${MAX_REFRESH_MINUTES}.`);
+        shakeEl($('refresh-minutes'));
+        $('refresh-minutes').focus();
         return;
     }
     btn.disabled = true;
