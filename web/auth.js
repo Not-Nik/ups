@@ -165,7 +165,15 @@ async function attemptCreateAccount() {
         const data = await withDisabled(['modal-submit', 'modal-cancel', 'modal-create'], async () => {
             const r = await api('/api/submit', {method: 'POST', body: {predictions: [], name}});
             if (r.token) saveToken(r.token);
-            if (password) await tryFetch(() => api('/api/password', {method: 'POST', body: {password}}));
+            // A password that doesn't go through leaves the account claimable by
+            // anyone, so say so rather than let the UI read as if it were set.
+            if (password) {
+                try {
+                    await api('/api/password', {method: 'POST', body: {password}});
+                } catch (e) {
+                    if (!e.rateLimited) showToast('Account created without a password — set one from the user menu.');
+                }
+            }
             return r;
         });
         nameModal.close(null);
