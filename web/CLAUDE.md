@@ -4,35 +4,56 @@
 Production at https://pulow.cc. Currently labelled BETA in the header.
 
 The Rust backend lives one directory up (`../src/main.rs`, warp + sqlx/sqlite). Match data, brackets and league
-standings are pulled from toornament by `../src/loader.rs`, on demand whenever `/api/matches/:id` or
-`/api/standings/:id` is hit.
+standings are pulled from toornament by `../src/loader.rs`, on demand whenever `/api/matches/:id`,
+`/api/standings/:id`, `/api/teams/:id` or `/api/players/:id` is hit.
 
 ## Stack & layout
 
 Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 
 - `index.html` / `index.js` — landing page: every tournament as a tiled grid
-- `tournament.html` — one tournament: Matches (predictions grid), Standings, Teams, Players and Leaderboard views
+- `tournament.html` — one tournament: Matches (the predictions grid and the brackets), Standings, Teams, Players and Leaderboard views
 - `404.html` — error page
 - `me.html` / `me.js` — the user's profile: league (top-N) predictions, newest league first, each pick
   with the team's current place once the league has started (green where it matches) or an Edit link to
   the Standings view while it's open; then match predictions with ✓/✗ on finished matches
-- `privacy.html` / `privacy.js` — privacy policy
+- `privacy.html` / `privacy.js` — privacy policy and its two buttons: "Clear local data" (`/api/logout`, this
+  browser's keys, theme aside) and "Clear server data" (`/api/delete`)
+- `incidents.html` / `incidents.js` — incident write-ups hardcoded in `INCIDENTS` (no endpoint — publishing means
+  prepending an entry); the same script also runs on tournament.html and toasts the newest one once per change of
+  the list (content fingerprint under `ups_incidents_seen`)
 - `admin.html` / `admin.js` — admin panel: add tournaments and matches, set each league stage's pick count
   and whether its groups stay predictable after their first result, each tournament's refresh interval,
   and release a passwordless account so its name can be claimed again
   (login-gated, admin-only)
-- `app.js` — all tournament-page logic except the standings
+- `app.js` — all tournament-page logic except the standings and the brackets
+- `bracket.js` — the bracket sections of the matches view; loaded after app.js and shares its globals
 - `standings.js` — the Standings view (tables from `/api/standings/:id`)
 - `roster.js` — the searchable Teams and Players views
 - `leaderboard.js` — the Leaderboard view (ranked from matches + predictions on the client)
-- `auth.js` — header Log in button / user menu and the name + logout modals; loaded by index.html and
-  tournament.html (both carry that markup), before app.js
-- `common.js` — shared theme toggle (loaded by every page)
-- `style.css` — all styles, including Bootstrap overrides
+- `overlay.html` / `overlay.js` and `control.html` / `control.js` — the stream pair: a transparent OBS browser source
+  (two team banners with logo, name, score and hero-ban badge, tinted from the logo's average colour, plus a
+  full-screen "big" scene and a map-timeline scene) and the control room that drives it — pick the live match, score
+  it, set the best-of, the map sequence and the bans, switch scene, swap sides, move the logo
+- `overlay-common.js` — what they share: the `ups_overlay_*` localStorage keys that are their whole contract (current
+  match and tournament, per-match score, maps and best-of, global scene and logo position), the series derivations read
+  off them and the `/heroes/` and `/maps/` manifest loads. They talk through `storage` events only — no
+  BroadcastChannel, no polling, no URL params — and fetch with plain `fetch`, not `api()`: a broadcast surface has no
+  token and wants no refresh toast
+- `auth.js` — header Log in button / user menu (profile, change password, log out), the `#name-modal` dialog and the
+  log-out confirmation; loaded by index.html and tournament.html (both carry that markup), before app.js
+- `theme-head.js` — the blocking `<head>` script that puts the stored colour scheme on the document before its first
+  paint
+- `common.js` — the shared helpers and the theme toggle (loaded by every page)
+- `style.css` — all styles, including Bootstrap overrides; `overlay.css` — the overlay and control room's alone,
+  without Bootstrap. Both end in a `prefers-reduced-motion` block, dropping the motion that carries no information
 - `vendor/bootstrap.min.css` (5.3.3) and `vendor/html2canvas.min.js` (1.4.1) — vendored, do not load from CDN
-- `pulow.png` — watermark for saved images
-- `docs/superpowers/` — design specs and implementation plans
+- `pulow.png` — watermark for saved images; `favicon.ico`, `favicon-32.png` and `apple-touch-icon.png` are in every
+  page's head, `og.png` is the shareable pages' link preview
+- `heroes/` and `maps/` — the overlay's hero portraits and map screenshots; only the `heroes.json` / `maps.json`
+  manifests are committed, `../fetch-assets.py` (OverFast API) downloads the gitignored images
+- The document root is exactly `web/` (`warp::fs::dir("web")` in `../src/main.rs`): `../docs/superpowers/` (design
+  specs and plans, git-ignored) and `../fetch-assets.py` sit one directory up and are never served
 
 ## API surface
 
@@ -43,8 +64,8 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/tournaments`     | -    | Array of `{tournament_id, name, toornament_id, refresh_interval}` — drives the landing grid. `refresh_interval` is in seconds |
 | GET    | `/api/matches/:id`     | -    | Matches for one tournament; each has `id`, `team_a/b`, `logo_a/b`, `score_a/b` (nullable). Also triggers a toornament refresh (max once per the tournament's `refresh_interval`, 6 h by default) and answers `X-Refreshing: 1` while one runs |
 | GET    | `/api/match?ids=1,2,3` | -    | Matches by comma-separated id list; used by me.html for the user's prediction history       |
-| GET    | `/api/brackets/:id`    | -    | `{stage, group}` pairs of one tournament's bracket stages                                   |
-| GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — the nodes of one bracket                                  |
+| GET    | `/api/brackets/:id`    | -    | `{tournament_id, stage, group}` pairs of one tournament's bracket stages                     |
+| GET    | `/api/bracket`         | -    | `?tournament_id=&stage=&group=` — one bracket's nodes: `{node_id, stage_number, stage_type, group_name, branch, round_number, position, depth, team_a/b?, logo_a/b?, score_a/b?, match_id?}` plus `source_a/b`, the feeding nodes, each with a `source_type_a/b` of `"winner"` or `"loser"` — that pair is what draws the edges, and `match_id` is null for a slot with no predictable match |
 | GET    | `/api/standings/:id`   | -    | Current table of every league/swiss/pools group of one tournament, sorted by stage, group, then `position`. Triggers the same refresh as `/api/matches/:id` and answers `X-Refreshing` the same way. Every row carries its group's `group_id`, `open` (no match of the group has a score yet, or its stage is forced open, so it still takes predictions) and `pick_count` (how many places users predict, from its stage) |
 | GET    | `/api/stages/:id`      | -    | The stages of one tournament that have standings (league/swiss/pools) as `{stage_id, number, name, stage_type, pick_count, force_open}`, sorted by `number`. Empty until the tournament's first refresh |
 | POST   | `/api/stage/picks`     | admin| `{stage_id, pick_count}` — sets how many places of the stage's groups users predict, 1 to 32 (4 by default). `BadRequest` outside that range or for an unknown stage. Predictions already stored are left alone |
@@ -52,11 +73,14 @@ All JSON. Auth via `Authorization: Bearer <token>`.
 | GET    | `/api/teams/:id`       | -    | Every team of one tournament as `{id, name, short_name, logo, toornament_id}`, sorted by name. Names aren't unique, so `id` is the key to tell two teams apart; `toornament_id` is `null` for teams added by hand. Same refresh and `X-Refreshing` as `/api/matches/:id` |
 | GET    | `/api/players/:id`     | -    | Every team's lineup for one tournament as a flat list of `{team_id, team, short_name, logo, position, name, battle_tag, toornament_user_id}`, sorted by player name, then team name and lineup `position`. Same refresh and `X-Refreshing` as `/api/matches/:id`. Player names aren't unique, not even within a tournament, and there's no player id: lineups are rewritten on every refresh |
 | GET    | `/api/predictions/:id` | -    | All users' predictions for a match                                                          |
+| POST   | `/api/predictions`     | -    | A bare JSON array of match ids → the same rows for all of them at once; used by "expand all" (app.js) and the Leaderboard instead of one `GET` per match |
 | GET    | `/api/predictions/me`  | yes  | Current user's past predictions as `{matches, standings}`: `matches` in the `/api/predictions/:id` shape, `standings` as `{group_id, position, team_id, team, short_name, logo, tournament_id, tournament, stage_name, group_name, current_position, open}` across every tournament, sorted by group then `position`. `current_position` is the team's place in the group's standings now (`null` without a standings row); `open` is the same as on a standings row |
 | GET    | `/api/standings/predictions/:id` | - | All users' top-N predictions for one tournament as a flat list of `{name, group_id, position, team_id}`, sorted by name, group, then `position` (1 to the stage's `pick_count`). The server only stores them; any scoring happens on the client |
 | GET    | `/api/me`              | yes  | `{name}`                                                                                    |
 | POST   | `/api/submit`          | opt  | `{predictions?, standings?, name?}` — name only when no token; returns `{token}` for new accounts. `standings` is a list of `{group_id, teams}`, `teams` being up to `pick_count` distinct team ids, 1st place first; each replaces the user's prediction for that group (`[]` clears it). Groups where a match already has a score are skipped, like matches with a score, unless their stage is forced open. `BadRequest` (and nothing stored) for an unknown group, duplicates, more teams than the stage's `pick_count` or a team from another tournament |
 | POST   | `/api/login`           | -    | `{name, password}` → `{token}`                                                              |
+| POST   | `/api/logout`          | yes  | Drops this session only — the account, its other sessions and its predictions stay. The header's log-out then removes the token and reloads |
+| POST   | `/api/delete`          | yes  | No body — ends the account: sessions, match predictions and league predictions all go with it (FK cascade from `users`). privacy.html's "Clear server data" button |
 | POST   | `/api/password`        | yes  | `{password}` — sets/updates account password                                                |
 | POST   | `/api/account/release` | admin| `{name}` — ends a passwordless account's seven-day claim window right away, so its name can be claimed again (a takeover drops the old owner's sessions and keeps the predictions; the claimer gets a fresh token from `/api/submit`). Returns `{name}` (the stored casing). `BadRequest` for unknown names and for accounts with a password, which are never claimable |
 | POST   | `/api/tournament`      | admin| `{name, toornament_id?}` (+ a dummy `tournament_id`) — creates a tournament; the id is auto-assigned and returned on `/api/tournaments` |
@@ -71,8 +95,9 @@ group's matches has a score, or its stage is forced open — the same rule `/api
 the three score fields are `null` there, and `points` is toornament's tiebreaker-weighted value (925, 818, …), so show
 W/L for swiss rather than points.
 
-Server returns `{err: 'Code'}` on failures. `AccountExists` is the only error code handled specially in the client (
-retry name prompt).
+Server returns `{err: 'Code'}` on failures, every route but `/api/proxy` behind an IP rate limiter (100 a minute, burst
+50). Two codes are the client's business: `RateLimited`, which `api()` toasts and rethrows as `err.rateLimited` so
+callers can stay quiet, and `AccountExists` (401), which makes `submitWithName` ask for another name.
 
 "admin" auth means a token whose account has the `Admin` flag (`is_admin` in `../src/account.rs`). Non-admins get a
 404 with `{err: 'AccessDenied'}`; `admin.js` maps that to "This account is not an admin."
@@ -80,13 +105,16 @@ retry name prompt).
 ## Auth
 
 - Token stored in `localStorage` under `ups_token`.
-- `api()` helper auto-attaches the bearer header when a token exists. Don't call `fetch` directly for `/api/*`.
-- Theme preference under `ups_theme` (`dark`/`light`/`system`).
+- `api()` helper auto-attaches the bearer header when a token exists. Don't call `fetch` directly for `/api/*`
+  (the overlay pages excepted, by design).
+- Theme preference under `ups_theme` (`dark`/`light`/`system`), applied before the first paint by `theme-head.js`.
+- Beyond those two, localStorage holds only the incident toast's read marker (`ups_incidents_seen`) and the
+  overlay's live-match keys (`ups_overlay_*`) — never a name, never where the user is.
 
 ## Location state
 
 Where you are lives in the **query string**, never in `localStorage` — a link reproduces the exact view and
-Back walks through it. `localStorage` is only for the token and the theme.
+Back walks through it. What localStorage does hold is listed under Auth.
 
 - `?tournament=<id>` — which tournament tournament.html shows. It is fixed for the page's lifetime;
   unknown or missing redirects to `/`. `TOURNAMENT_PARAM` / `tournamentHref(id)` in common.js are the
@@ -97,7 +125,7 @@ Back walks through it. `localStorage` is only for the token and the theme.
 - `?table=<stage>[:<group>]` — which standings table is open; the group is appended only where the
   stage holds several (`standingsParam` in standings.js). Unknown or missing falls back to the first.
 - `?tab=<tab>` — which day/bracket tab of the matches view is open. `renderTabs` assigns each tab its `param`: a league day is its own
-  name (`tab=Day+5`), a day of a wildcard stage is `<stage>:<round>` (`tab=Wildcard+Liga+3:Day+1`), a bracket is `bracket:<stage>` — the group is appended only where one stage holds
+  name (`tab=Day+5`), a day of a wildcard stage is `<stage>:<round>` (`tab=Wildcard+Liga+3:Day+1`), a bracket is `bracket:<stage>` — its merged group key is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
   internal day key (`bracketDayKey`) joins its parts on NUL and never goes in the URL. `tabParam(day)`
   just looks the param up; params are only compared against the rendered tabs, so they must be stable,
@@ -122,11 +150,24 @@ Tournaments are ordered newest first (`byNewestTournament` in common.js — desc
 `index.html` lists them in a grid, newest in the top left, oldest in the bottom right (plain row-major
 CSS grid over the sorted list). Cards link to tournament.html via `tournamentHref`.
 
-tournament.html's second header line (`#back-bar`) holds a "← Back to tournaments" `.bar-link` to `/`.
-The `.view-btn` tabs — Matches, Standings, Teams, Players and Leaderboard — sit in `#view-bar` in main, between the
-tournament name and the matches' day tabs. Each view shows the main-area elements
-marked `data-view-panel="<view>"` and hides the rest. The matches load on page load whatever the view;
-every other view loads once, the first time it opens, through its entry in `VIEW_LOADERS` (app.js).
+tournament.html's second header line (`#back-bar`) holds a "← Back to tournaments" `.bar-link` to `/`, its footer links
+privacy.html and incidents.html. The `.view-btn` tabs — Matches, Standings, Teams, Players and Leaderboard — sit in
+`#view-bar` in main, between the tournament name and the matches' day tabs. Each view shows the main-area elements
+marked `data-view-panel="<view>"` and hides the rest. The matches load on page load whatever the view; every other view
+loads once, the first time it opens, through its entry in `VIEW_LOADERS` (app.js). The row above the grid also holds the
+stream-overlay dialog (links to overlay.html and control.html), "expand all" (one batched `POST /api/predictions` for
+the panels it opens) and "Save as image".
+
+A stage of a bracket format (`BRACKET_STAGE_TYPES`) is drawn as a bracket instead of a day grid (bracket.js), inside the
+matches view — there is no sixth tab. Its matches never enter the section grid, and its nodes come from
+`/api/brackets/:id` plus one `/api/bracket` per pair, so an all-TBD bracket still gets a tab. `mergeConnected` unions a
+stage's groups whose nodes feed each other (a double-elim's Winners and Losers Bracket) into one tab labelled `Bracket`;
+a group nobody crosses into keeps its own name (WB/LB/Main abbreviated), and only a stage holding several brackets
+appends that key to its `?tab=bracket:<stage>`. `bracketLayout` places everything in plain data (graph, a column per
+round, rows, edge routing, edge slots, winners above losers), drawn as absolutely positioned `.bracket-cell`s over one
+SVG layer of elbow paths; a `ResizeObserver` relayouts when a predictions panel opens, which `bracketReflowPaused`
+suspends during an image export. A node with a `match_id` is app.js's own `createCard` — predictions and Players links
+and all; the rest are dimmed `TBD` boxes. Nothing animates — the edges are all that shows who advanced.
 
 The Standings view shows one group's table at a time. Its tab bar (`#standings-tabs`) works like the
 matches one: a `.category-btn` per stage on top, and the open stage's group tabs below — left out when
@@ -139,12 +180,12 @@ row's `pick_count`: 4 by default, set per stage in the admin panel (last season:
 user's saved picks come from `/api/predictions/me` (`loadStandingPicks`, fetched alongside the standings; empty
 when logged out). While the group is `open`, every team is listed — saved picks first, then the rest in table
 order — and dragged into order by its `.pick-handle`, or moved with the arrow keys on a focused handle
-(`makePickable`). While dragged, a row moves into the slot under the pointer and is shifted from there with
-`translateY`, so it follows the pointer smoothly, kept within the list's top and bottom edges.
+(`makePickable`). A dragged row sits in the slot under the pointer, kept there by `translateY` and inside the list's top
+and bottom edges.
 The rows it displaces slide into their new slots (`slideRows`, a FLIP animation through the Web Animations API, also
 used for arrow-key moves; skipped under `prefers-reduced-motion`). Slots are picked by `offsetTop`, which ignores
-the slide transforms, so a row mid-slide can't flip the order back. Dragging uses pointer events on the document, not HTML5 drag and drop, so it works on touch;
-the handle has `touch-action: none` and the rest of the row still scrolls the page. A dashed line under the Nth
+the slide transforms, so a row mid-slide can't flip the order back. Dragging uses document pointer events, not HTML5
+drag and drop, so it works on touch; the handle sets `touch-action: none` and the row still scrolls the page. A dashed line under the Nth
 row marks the cut (`.pick-cut`, set by `numberPicks`), only where a row exists below it (in a group of N or fewer, every team is saved). "Submit Prediction" (worded like the matches' "Submit Predictions", "Submitted" once stored) posts the first N as a `standings` entry through `submitWithName`
 (app.js), the same name prompt / taken-name retry / password prompt as match predictions. Once the group is
 locked, only the saved picks are shown, without handles; a locked group without picks shows nothing. An admin can
@@ -160,8 +201,9 @@ to that team's players.
 The players table is a `sortableTable` (`PLAYER_COLUMNS`): sorted by player name at first, a click on
 Team groups the lineups again (team name, then lineup position), BattleTag sorts too.
 
-The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of its own: it fetches
-`/api/matches/:id`, keeps the matches with a final score, and posts their ids to `POST /api/predictions`.
+The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of its own: it takes the page's cached
+matches and standings (`loadMatches`, `loadStandingsRows`, so opening it after the other views costs nothing), keeps
+the matches with a final score, and posts their ids to `POST /api/predictions`.
 An exact score earns `EXACT_POINTS` (2), any other correct winner `WINNER_POINTS` (1) — the winner
 check is `sameOutcome` in common.js, shared with me.js's ✓/✗: sign of the score difference, so a draw
 only counts on an actual draw. A prediction whose two numbers add up to 100 is a percentage
@@ -245,46 +287,76 @@ Sorting:
 ## app.js conventions
 
 - 4-space indent (the local formatter will reformat anything else).
-- Helpers — prefer these to raw DOM calls (most live in common.js; `loadImage`, `groupBy` and
-  `findCard` in app.js):
+- Helpers — prefer these to raw DOM calls. Almost all of them live in common.js, which loads first on every page;
+  `loadImage`, `groupBy`, `sortableTable`, `findCard` and `percentRowHTML` are the ones app.js still owns:
     - `$(id)` — `getElementById`
     - `show`/`hide`/`setHidden(el, hidden)` — `d-none` toggling
     - `onClick(id, fn)` / `onEnter(id, fn)` — listener binding by id
     - `makeEl(tag, {dataset, ...props})` — element construction
     - `shakeEl(el)` — restart the shake animation across a forced reflow
-    - `escapeHtml` / `escapeAttr` — for any user-provided string in templates
+    - `escapeHtml` / `escapeAttr` — for any user-provided string in templates; `proxied(url)` for every logo `src`
+    - `statusLine({cls, text})` / `renderStatus(el, {cls, text})` — the centred line a view shows loading, empty and
+      failed (app.js's `statusMsg` is the string form a predictions panel uses)
     - `loadImage(src)` — Promise wrapper around `new Image()`
     - `firstInt(s)` — first `\d+` match as integer or `NaN`
     - `groupBy(items, key)` — returns `Map<key, [[item, index], ...]>`
     - `sortableTable(rows, columns, {sortKey, tableClass, bodyClass})` (app.js) — a card with a `.data-table`
       sorted by clicking its headers; returns `{card, trs}`
-    - `api(url, {method, body})` — auth + JSON; throws with `.code` from `{err}` on `!ok`, and owns the
-      `X-Refreshing` toast
+    - `predictionRowHTML(p, sep, current, {match, you, own, heading})` — one prediction as a row, shared by a match
+      card's panel and me.html so the two can't drift
+    - `DEFAULT_PICK_COUNT` (4) — the pick slots a standings row arriving without a `pick_count` falls back to
+    - `api(url, {method, body})` — auth + JSON; throws with `.code` and `.rateLimited` from `{err}` on `!ok`, owns the
+      `X-Refreshing` toast, and drops the cached `/api/me` and `/api/predictions/me` after a `POST /api/submit` or
+      `/api/login`
+    - the load cache — `cachedLoad(key, load)` / `invalidateLoad(key)` behind `loadMatches`, `loadStandingsRows`,
+      `loadMyPredictions` and `loadMe`: several views of one page ask an endpoint once, whoever gets there first, and a
+      rejected load is dropped so the next call retries. `loadRoster` and the overlay pages key their own data in the
+      same cache
     - `tryFetch(fn)` — swallows errors, returns `undefined` (use for non-critical loads)
     - `withDisabled(ids, fn)` — disables buttons around an async op, re-enables in `finally`
     - `findCard(index)` — `.card[data-index="..."]` lookup
     - `ifLogin(yes, no)` — branches by current modal mode
 - Iterate teams with `SIDES = ['a','b']` and `OTHER_SIDE = {a:'b', b:'a'}` rather than hard-coding the two sides.
+  `predictionRowHTML` and `REFRESH_MSG` are shared from common.js the same way: every `web/*.js` is a classic script in
+  one global scope, so a name two of a page's scripts declare is a SyntaxError that kills both, and common.js is what
+  loads before all of them.
 - Templates use `insertAdjacentHTML` / template literals. Always run user-controlled strings through `escapeHtml` (text
   content) or `escapeAttr` (attribute values).
 
 ## Modal
 
-Lives in auth.js. Single `#name-modal` re-used for three flows via `MODAL_MODES`:
+Lives in auth.js. One `#name-modal` dialog re-used for four flows via `MODAL_MODES`:
 
 - `'name'` — first-submit name prompt (with optional error + shake)
-- `'login'` — login form, exposes the password field
-- `'password'` — post-submit "set a password?" prompt
+- `'login'` — login form, plus a "Create account" button (an empty `POST /api/submit`, then `/api/password`)
+- `'password'` — post-submit "set a password?" prompt, name field disabled
+- `'changePassword'` — the user menu's, same shape as `'password'`
 
-`nameModal.open(mode, opts)` is the single entry point; `prompt`/`promptLogin`/`promptPassword` are thin wrappers that
-return a Promise resolved by user action. `nameModal.mode` is the source of truth for `ifLogin` branching. `close()`
-hides the modal and resolves; `resolve()` only resolves (used by password-skip).
+`nameModal.open(mode, opts)` is the single entry point; `prompt`/`promptLogin`/`promptPassword`/`promptChangePassword`
+are thin wrappers returning a Promise resolved by user action. `nameModal.mode` is the source of truth for `ifLogin`
+branching; only the pending prompt is ever resolved (`_settle`), so a second close is harmless. Its one password field
+is `current-password` in `'login'` and `new-password` everywhere else.
+
+`openDialog`/`closeDialog`, next to the modal in auth.js, are how every dialog opens and shuts: the keyboard stays
+inside it (Tab cycles its visible controls, Escape is its Cancel — or Skip, whichever the mode shows), the page behind
+goes `aria-hidden`, and focus lands on `focusId` or the first control, then back on whatever opened it (the user button,
+not the menu item that hid with the menu, for the log-out confirmation). One dialog holds the trap at a time; an overlap
+hands it over. The image dialog and `#logout-modal` are static markup driven through them, `#overlay-info-modal` the
+last one left on bare `show`/`hide`.
 
 ## Save-as-image
 
-`saveImage()` hides irrelevant grid children, then `renderGridCanvas()` runs html2canvas with the body background +
-watermark. `collectImageHides()` walks `#grid` in order: it drops whole sections with no user predictions and trims any
-leading `section-divider` from the first kept section in a single pass.
+`saveImage()` runs from the image dialog (`imageDialog`): a checkbox per section of the open day (pre-checked to those
+with the user's own predictions, or all of them where they have none) or per bracket branch (Winners / Losers), plus an
+"Include my predictions" switch. `collectImageHides()` walks `#grid` in order, dropping unchecked sections and trimming
+any leading `section-divider` from the first kept one; `collectBracketHides()` drops the cells, labels and edges of
+unchecked branches (an edge goes when either endpoint does, so none dangles). Submitted badges and edit overlays never
+belong in an image, and an expanded predictions panel — every user's picks — is stripped from every export whatever the
+switches say; score inputs and outcome signs go only when the user excludes their predictions, in which case the inputs
+of submitted scores are re-enabled for the render so they show ungreyed. `renderGridCanvas()` runs html2canvas over the
+bracket's own canvas on a bracket tab, else over `#grid`, with the body background at device-pixel scale, then pads it
+and draws the `pulow.png` watermark (a watermark that fails to load is no failure; any other one is caught by the caller
+as "Failed to create the image"). `saveImage`'s `finally` restores everything either way.
 
 ## Working with the user
 
