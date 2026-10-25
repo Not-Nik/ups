@@ -236,12 +236,11 @@ $('toast')?.addEventListener('click', () => hide($('toast')));
 // so, and api() toasts this line for it, so no caller has to repeat the check.
 globalThis.REFRESH_MSG = "Hang tight, we're fetching the latest results just for you";
 
-// JSON fetch with auto-auth. Returns parsed body ({} when the response has none),
-// or {data, res} when `response` is set and the caller needs the headers.
+// JSON fetch with auto-auth. Returns the parsed body ({} when the response has none).
 // Throws on !res.ok with `code` populated from a { err } body and `rateLimited`
 // flagged when the server reports {err: "RateLimited"} — the helper also
 // surfaces a toast so the user sees something even when the caller swallows.
-async function api(url, {method = 'GET', body, response = false} = {}) {
+async function api(url, {method = 'GET', body} = {}) {
     const init = {method, headers: {}};
     const token = getToken();
     if (token) init.headers['Authorization'] = `Bearer ${token}`;
@@ -265,7 +264,7 @@ async function api(url, {method = 'GET', body, response = false} = {}) {
         invalidateLoad('me:predictions');
         invalidateLoad('me');
     }
-    return response ? {data, res} : data;
+    return data;
 }
 
 // Run an async function, swallowing errors and returning undefined on failure.

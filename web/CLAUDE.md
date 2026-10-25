@@ -258,8 +258,8 @@ Sorting:
     - `groupBy(items, key)` — returns `Map<key, [[item, index], ...]>`
     - `sortableTable(rows, columns, {sortKey, tableClass, bodyClass})` (app.js) — a card with a `.data-table`
       sorted by clicking its headers; returns `{card, trs}`
-    - `api(url, {method, body, response})` — auth + JSON; throws with `.code` from `{err}` on `!ok`. With
-      `response: true` it returns `{data, res}` so the caller can read headers
+    - `api(url, {method, body})` — auth + JSON; throws with `.code` from `{err}` on `!ok`, and owns the
+      `X-Refreshing` toast
     - `tryFetch(fn)` — swallows errors, returns `undefined` (use for non-critical loads)
     - `withDisabled(ids, fn)` — disables buttons around an async op, re-enables in `finally`
     - `findCard(index)` — `.card[data-index="..."]` lookup
