@@ -1107,13 +1107,17 @@ function bindEvents() {
         if (e.target === overlayInfoModal) hide(overlayInfoModal);
     });
     onClick('image-modal-cancel', () => imageDialog.close());
-    onClick('image-modal-save', () => {
+    onClick('image-modal-save', () => withDisabled(['image-modal-save'], async () => {
         const opts = imageDialog.readOptions();
         imageDialog.close();
-        saveImage(opts);
-    });
+        try {
+            await saveImage(opts);
+        } catch {
+            showToast('Failed to create the image. Please try again.');
+        }
+    }));
     $('image-section-list').addEventListener('change', () => imageDialog.updateSaveEnabled());
-    onClick('submit-all-btn', () => {
+    onClick('submit-all-btn', () => withDisabled(['submit-all-btn'], async () => {
         const invalid = findInvalidInputs();
         if (invalid.length) {
             // The inputs to fix live on the matches view.
@@ -1133,8 +1137,8 @@ function bindEvents() {
             refreshTabStates();
             return;
         }
-        doSubmit(state.pendingIndices());
-    });
+        await doSubmit(state.pendingIndices());
+    }));
 
     $('view-bar').querySelectorAll('.view-btn').forEach(btn => {
         btn.addEventListener('click', () => {
