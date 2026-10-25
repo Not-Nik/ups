@@ -323,14 +323,14 @@ function standingsTable(rows) {
     const card = makeEl('div', {className: 'card standings-card'});
     const body = rows.map(r => `
         <tr class="${r.dropped ? 'standings-dropped' : ''}"${r.dropped ? ' title="Dropped out"' : ''}>
-            <td class="standings-rank">${r.rank}</td>
+            <td class="standings-rank">${escapeHtml(String(r.rank))}</td>
             <td class="standings-team">
                 <span class="d-flex align-items-center gap-2">
                     ${r.logo ? `<img src="${escapeAttr(proxied(r.logo))}" class="team-logo" alt="">` : ''}
                     <span class="text-truncate">${teamLinkHTML(state.activeTournament, r.team)}</span>
                 </span>
             </td>
-            ${cols.map(c => `<td class="standings-num ${c.cls ?? ''}">${c.cell(r)}</td>`).join('')}
+            ${cols.map(c => `<td class="standings-num ${c.cls ?? ''}">${escapeHtml(String(c.cell(r)))}</td>`).join('')}
         </tr>`).join('');
     card.insertAdjacentHTML('beforeend', `
         <div class="card-body">
