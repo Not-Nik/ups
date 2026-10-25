@@ -124,7 +124,7 @@ async function initControl() {
 
     const fillBanBtn = (btn, key, name) => {
         btn.replaceChildren();
-        if (key) {
+        if (key) { // loadMaps/normaliseBans have dropped any key that is not a slug
             btn.append(
                 makeEl('img', {className: 'cr-ban-icon', src: heroIcon(key), alt: ''}),
                 makeEl('span', {textContent: name || key}),
@@ -159,10 +159,9 @@ async function initControl() {
                 title: h.name,
                 dataset: {name: h.name.toLowerCase()},
             });
-            cell.append(
-                makeEl('img', {className: 'ban-cell-icon', src: heroIcon(h.key), alt: ''}),
-                makeEl('span', {className: 'ban-cell-name', textContent: h.name}),
-            );
+            const icon = heroIcon(h.key);
+            if (icon) cell.append(makeEl('img', {className: 'ban-cell-icon', src: icon, alt: ''}));
+            cell.append(makeEl('span', {className: 'ban-cell-name', textContent: h.name}));
             cell.addEventListener('click', () => {
                 setBan(id, idx, h.key);
                 closeModal();
@@ -214,9 +213,13 @@ async function initControl() {
                     title: m.name,
                     dataset: {name: m.name.toLowerCase()},
                 });
+                // No art for a key that is not a plain slug (see mapImage): the cell
+                // keeps its shape with the same placeholder a missing file gets.
+                const art = mapImage(m.key);
                 const img = makeEl('img', {className: 'map-cell-icon', alt: ''});
-                img.addEventListener('error', () => img.classList.add('map-cell-noart'));
-                img.src = mapImage(m.key);
+                img.addEventListener('error', () => img.classList.add('map-cell-noart'), {once: true});
+                if (art) img.src = art;
+                else img.classList.add('map-cell-noart');
                 cell.append(img, makeEl('span', {className: 'ban-cell-name', textContent: m.name}));
                 cell.addEventListener('click', () => {
                     if (slotIdx === null) addMap(mid, m.key);
@@ -513,7 +516,7 @@ async function initControl() {
                 // The card is just the map; clicking it re-opens the picker (change or
                 // remove). Winners are set from the per-team Won buttons up top.
                 const pick = makeEl('button', {className: 'cr-map-pick', type: 'button'});
-                if (slot.map) {
+                if (slot.map) { // loadMaps has dropped any key that is not a slug
                     pick.append(
                         makeEl('img', {className: 'cr-map-thumb', src: mapImage(slot.map), alt: ''}),
                         makeEl('span', {textContent: names.get(slot.map) || slot.map}),
