@@ -155,7 +155,10 @@ const wantedView = () => {
 function activateView(view, record = 'push') {
     state.activeView = view;
     $('view-bar').querySelectorAll('.view-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === view);
+        const active = btn.dataset.view === view;
+        btn.classList.toggle('active', active);
+        if (active) btn.setAttribute('aria-current', 'page');
+        else btn.removeAttribute('aria-current');
     });
     document.querySelectorAll('[data-view-panel]').forEach(el => {
         setHidden(el, el.dataset.viewPanel !== view);
@@ -334,8 +337,9 @@ const teamRowHTML = ({name, logo, score, color, side}) => `
   <div class="team-row${side === 1 ? ' mt-1' : ''}">
     ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
     <span class="team-name fw-semibold small ${color}">${teamLinkHTML(state.activeTournament, name)}</span>
-    <input type="text" class="form-control score-input" data-side="${side}" inputmode="numeric" placeholder="0">
-    ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${score}</span>` : ''}
+    <input type="text" class="form-control score-input" data-side="${side}" inputmode="numeric" placeholder="0"
+           aria-label="Predicted score for ${escapeAttr(name)}">
+    ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${escapeHtml(String(score))}</span>` : ''}
   </div>`;
 
 function createCard(match, index, day) {
@@ -467,15 +471,19 @@ function selectCategory(group) {
     activateTab(group.entries[0].day);
 }
 
-// Re-apply .active and .invalid-day across both lines after a re-render.
+// Re-apply .active, .invalid-day and aria-selected across both lines after a re-render.
 function refreshTabStates() {
     const i = categoryIndexOf(state.activeTab);
     $('tab-categories').querySelectorAll('.category-btn').forEach((btn, k) => {
-        btn.classList.toggle('active', k === i);
+        const active = k === i;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', String(active));
         btn.classList.toggle('invalid-day', state.categories[k].entries.some(e => state.invalidDays.has(e.day)));
     });
     $('tabs-bar').querySelectorAll('.tab-btn[data-day]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.day === state.activeTab);
+        const active = btn.dataset.day === state.activeTab;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', String(active));
         btn.classList.toggle('invalid-day', state.invalidDays.has(btn.dataset.day));
     });
 }
@@ -485,6 +493,8 @@ function appendTabBtn(row, e) {
     const btn = makeEl('button', {
         className: 'tab-btn btn', textContent: e.text, dataset: {day: e.day},
     });
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', 'false');
     btn.addEventListener('click', () => activateTab(e.day));
     row.appendChild(btn);
     return btn;
@@ -678,16 +688,21 @@ function renderTabs(days, brackets, matches) {
     state.categories = categories;
 
     const top = makeEl('div', {id: 'tab-categories', className: 'd-flex flex-wrap'});
+    top.setAttribute('role', 'tablist');
     categories.forEach(g => {
         const btn = makeEl('button', {
             className: 'tab-btn btn category-btn', textContent: g.label,
         });
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-selected', 'false');
         btn.addEventListener('click', () => selectCategory(g));
         top.appendChild(btn);
     });
     loose.forEach(e => appendTabBtn(top, e));
     bar.appendChild(top);
-    bar.appendChild(makeEl('div', {id: 'category-tabs', className: 'd-flex flex-wrap d-none'}));
+    const sub = makeEl('div', {id: 'category-tabs', className: 'd-flex flex-wrap d-none'});
+    sub.setAttribute('role', 'tablist');
+    bar.appendChild(sub);
 
     return [...categories.flatMap(g => g.entries), ...loose];
 }
