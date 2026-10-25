@@ -98,15 +98,13 @@ function mergeConnected(brackets) {
     return out;
 }
 
+// ============== Layout ==============
 // The edge slots bracketLayout worked out per bracket (its nodes array).
 const slotCache = new WeakMap();
 
 // Layout: assign every node an {x, y, col} and resolve the source edges into
-// orthogonal paths. Columns come from longest-path layering over the feed graph: a
-// node sits one column past its deepest feeder (cross-branch drops included), so a
-// match lines up with whatever actually feeds it (e.g. a losers round that only takes
-// the previous winners round's losers sits level with that winners round, not after
-// it). Rows place each node at the average height of its same-branch feeders.
+// orthogonal paths, in the five phases below, each adding to one layout object (`L`).
+// Plain data only — no phase touches the document.
 // `expanded` maps a node id to extra pixels (an open predictions panel); those cards
 // push everything below them down so nothing overlaps. Empty = the base layout.
 function bracketLayout(nodes, expanded = new Map()) {
@@ -121,12 +119,8 @@ function bracketLayout(nodes, expanded = new Map()) {
     return {pos: L.pos, edges: L.edges, sections: L.sections, multiBranch: L.multiBranch, width, height};
 }
 
-// The phases below add to one layout object, `L`, stage by stage: the feed graph, then
-// its columns and rows (the node positions), then the routed edges. Plain data only —
-// no phase touches the document.
-//
-// Phase 1 — the feed graph: each node's sources that are in this bracket, and the nodes
-// grouped by branch, in the order the branches stack top down.
+// Phase 1 — the feed graph: which nodes feed which, and the nodes grouped by branch, in
+// the order the branches stack top down.
 function bracketGraph(nodes) {
     const byId = new Map(nodes.map(n => [n.node_id, n]));
     const branches = new Map();
@@ -142,7 +136,10 @@ function bracketGraph(nodes) {
     };
 }
 
-// Phase 2 — layers: one column per round of a branch.
+// Phase 2 — layers: a node sits one column past its deepest feeder (cross-branch drops
+// included), so a match lines up with whatever actually feeds it (e.g. a losers round
+// that only takes the previous winners round's losers sits level with that winners round,
+// not after it).
 function assignColumns(L) {
     // Longest-path column per node (memoised DFS; the feed graph is a DAG).
     const col = new Map();
@@ -169,8 +166,8 @@ function assignColumns(L) {
     L.col = col;
 }
 
-// Phase 3 — rows: a node sits at the average height of its same-branch feeders, an open
-// panel pushes down everything below it, and each branch's band follows from the result.
+// Phase 3 — rows: each node at the average height of its same-branch feeders, an open
+// panel pushing down everything below it, and each branch's band from the result.
 function assignRows(L, expanded) {
     const col = L.col;
     const labelTop = L.multiBranch ? LABEL_H : 0;
@@ -294,6 +291,13 @@ const edgeOf = (L, {e, lane, runs}) => runs.length === 1
     : {...e, kind: 'channel', chY: laneY(L, e, lane), sx: slotX(runs[0]), ex: slotX(runs[1])};
 
 // Phase 4 — routing: every source edge becomes a line between its endpoints' slots.
+// Every vertical run of a line sits on a slot: a lane in the gap between two columns,
+// slot 0 leftmost. A run comes in horizontally from the gap's left edge at `leftY` and
+// leaves towards its right edge at `rightY`. Two runs need different slots when they
+// overlap along the height they pass; and where one comes in at the height another leaves
+// at, the incoming one must sit left of the leaving one, or their horizontals would lie on
+// top of each other. That's VLSI channel routing turned on its side (gap = channel,
+// slot = track, the second rule = the vertical constraint graph).
 function routeEdges(L) {
     // Edges enter at the target's two slot heights. They leave the source's top (winner)
     // or bottom (loser) only when the source sends both onward, so its two outgoing lines
@@ -321,14 +325,6 @@ function routeEdges(L) {
         });
     }
 
-    // Routing. Every vertical run of a line sits on a slot: a lane in the gap between two
-    // columns, slot 0 leftmost. A run comes in horizontally from the gap's left edge at
-    // `leftY` and leaves towards its right edge at `rightY`. Two runs need different slots
-    // when they overlap along the height they pass; and where one comes in at the height
-    // another leaves at, the incoming one must sit left of the leaving one, or their
-    // horizontals would lie on top of each other. That's VLSI channel routing turned on
-    // its side (gap = channel, slot = track, the second rule = the vertical constraint
-    // graph).
     // One line per edge: its runs (one for an elbow, two for a channel) and, for a channel,
     // its lane across the band, lane 0 on top. Lanes start in edge order.
     const gaps = new Map();
@@ -344,7 +340,7 @@ function routeEdges(L) {
 }
 
 // Phase 5 — the slots and lanes the lines are drawn with: the left-edge pass, then the
-// untangling pass on top of it, or the last of both for this very same bracket.
+// untangling pass on top of it, or the last of both worked out for this very bracket.
 function resolveSlots(L) {
     // An open panel pushes everything below it down by the same amount, which keeps every
     // height's order, so the lanes and slots worked out for a bracket hold for every
@@ -367,14 +363,7 @@ function resolveSlots(L) {
     L.edges = L.lines.map(l => edgeOf(L, l));
 }
 
-// Untangling. The left-edge pass only keeps the rules; it doesn't look at crossings,
-// and the band's lanes (a channel the classic way round, lanes as its tracks) need
-// ordering too. Lane order and gap slots decide crossings together, so both are
-// hill-climbed at once on the drawn lines themselves: a pair of lines costs one per
-// crossing of their segments, and far more than any crossing count where two segments
-// lie on top of each other or meet end to end, so no move ever breaks a rule. Moves:
-// put a run on another slot of its gap, swap two runs' slots, swap two whole slots of
-// a gap, swap two channels' lanes; whatever lowers the cost is kept, until nothing does.
+// A cost no number of crossings can reach, so a move that breaks a rule is never taken.
 const RULE_COST = 1e6;
 
 // The line's segments (as horizontal or vertical spans) and its bounding box, which is
@@ -422,6 +411,14 @@ const boundsOf = (L, {e, lane}) => {
 const meet = (A, B) => A.x0 <= B.x1 + RUN_MARGIN && B.x0 <= A.x1 + RUN_MARGIN
     && A.y0 <= B.y1 + RUN_MARGIN && B.y0 <= A.y1 + RUN_MARGIN;
 
+// Untangling. The left-edge pass only keeps the rules; it doesn't look at crossings,
+// and the band's lanes (a channel the classic way round, lanes as its tracks) need
+// ordering too. Lane order and gap slots decide crossings together, so both are
+// hill-climbed at once on the drawn lines themselves: a pair of lines costs one per
+// crossing of their segments, and far more than any crossing count where two segments
+// lie on top of each other or meet end to end, so no move ever breaks a rule. Moves:
+// put a run on another slot of its gap, swap two runs' slots, swap two whole slots of
+// a gap, swap two channels' lanes; whatever lowers the cost is kept, until nothing does.
 function untangle(L) {
     // A line's state is its slots and lane. The same trial states come round on every
     // pass, so pair costs are memoised per pair of states, and a line's shape is only
@@ -514,6 +511,8 @@ function untangle(L) {
         g.count = used.length;
     }
 }
+
+// ============== Drawing ==============
 
 // elbow3: source stub, one vertical run on its slot, target stub. channel: a run on a
 // slot of the gap after the source, across the inter-branch band, a run on a slot of the
