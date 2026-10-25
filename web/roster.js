@@ -40,34 +40,20 @@ function bindSearch(view, items) {
     apply();
 }
 
-// Fetch one roster endpoint and hand its rows to `render`, with the loading, empty
-// and failure states every list shares. Resolves true once rendered.
-async function loadRoster(view, url, render) {
+// Fetch one roster endpoint and hand its rows to `render`, with the loading, empty and
+// failure states every list shares. cachedLoad keeps two quick clicks on one view to a
+// single load and drops a failed one, so the next click fetches again.
+const loadRoster = (view, key, load, render) => cachedLoad(key, async () => {
     const root = $(view);
-    root.replaceChildren(makeEl('p', {className: 'text-secondary text-center py-5', textContent: 'Loading…'}));
-    try {
-        const {data: rows, res} = await api(url, {response: true});
-        // Same background toornament refresh as /api/matches (see loadTournament).
-        if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
-        if (!rows.length) {
-            $(`${view}-search`).disabled = true;
-            root.replaceChildren(makeEl('p', {
-                className: 'text-secondary text-center py-5',
-                textContent: `No ${view} for this tournament.`,
-            }));
-            return true;
-        }
-        root.replaceChildren();
-        bindSearch(view, render(root, rows));
-        return true;
-    } catch {
-        root.replaceChildren(makeEl('p', {
-            className: 'text-danger text-center py-5',
-            textContent: `Failed to load ${view}. Please refresh.`,
-        }));
-        return false;
+    renderStatus(root, {text: 'Loading…'});
+    const rows = await load();
+    if (!rows.length) {
+        $(`${view}-search`).disabled = true;
+        return renderStatus(root, {text: `No ${view} for this tournament.`});
     }
-}
+    root.replaceChildren();
+    bindSearch(view, render(root, rows));
+}).catch(() => renderStatus($(view), {cls: 'text-danger', text: `Failed to load ${view}. Please refresh.`}));
 
 const logoHTML = (logo, cls) => logo ? `<img src="${escapeAttr(proxied(logo))}" class="${cls}" alt="">` : '';
 
