@@ -29,12 +29,6 @@ const incidentHash = s => {
     return (h >>> 0).toString(36);
 };
 
-const incidentEscape = str => {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-};
-
 const incidentsVersion = () => incidentHash(JSON.stringify(INCIDENTS));
 const incidentsUnread = () => localStorage.getItem(INCIDENTS_SEEN_KEY) !== incidentsVersion();
 const markIncidentsRead = () => localStorage.setItem(INCIDENTS_SEEN_KEY, incidentsVersion());
@@ -48,12 +42,12 @@ function renderIncidents(container) {
     }
     for (const inc of INCIDENTS) {
         const body = inc.body
-            .map(p => `<p class="text-secondary small">${incidentEscape(p)}</p>`)
+            .map(p => `<p class="text-secondary small">${escapeHtml(p)}</p>`)
             .join('');
         container.insertAdjacentHTML('beforeend', `
             <section class="mb-4">
-                <p class="text-secondary mb-1" style="font-size:.75rem">${incidentEscape(inc.date)}</p>
-                <h3 class="h6 fw-semibold mb-2">${incidentEscape(inc.title)}</h3>
+                <p class="text-secondary mb-1" style="font-size:.75rem">${escapeHtml(inc.date)}</p>
+                <h3 class="h6 fw-semibold mb-2">${escapeHtml(inc.title)}</h3>
                 ${body}
             </section>`);
     }
