@@ -476,6 +476,14 @@ function syncSection() {
     $('match-stage-type').value = combo.stage_type ?? '';
 }
 
+// The tournament the match form is filled for: its id, or null while the select holds
+// nothing usable (no tournaments created yet). The one rule every part of the match
+// card asks the same question about.
+const matchTournamentId = () => {
+    const tid = parseInt($('match-tournament').value, 10);
+    return isNaN(tid) ? null : tid;
+};
+
 async function loadTournamentData() {
     teamLogos = new Map();
     sectionCombos = new Map();
