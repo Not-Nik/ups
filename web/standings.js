@@ -83,10 +83,6 @@ function renderStandingsTabs() {
 // handle, or moved with the arrow keys; the first `pick_count` are saved through
 // /api/submit. Once the group is locked only the saved picks are shown.
 
-// The server's default pick_count for a stage, for a row arriving without one;
-// leaderboard.js scores a group's pick slots with the same fallback.
-const DEFAULT_PICK_COUNT = 4;
-
 // Map of group_id -> the user's picked team ids, 1st place first. Empty when logged out.
 async function loadStandingPicks() {
     const picks = new Map();

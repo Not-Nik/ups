@@ -158,6 +158,12 @@ globalThis.predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, yo
     </li>`;
 };
 
+// ============== Standings picks ==============
+// The server's default pick_count for a stage, for a standings row arriving without
+// one. The standings view and the leaderboard both fall back to it, so a group's
+// pick slots are never counted as zero.
+const DEFAULT_PICK_COUNT = 4;
+
 // ============== DOM helpers ==============
 const show = el => el.classList.remove('d-none');
 const hide = el => el.classList.add('d-none');
