@@ -447,7 +447,7 @@ async function initControl() {
         mapsHead.append(
             makeEl('h2', {className: 'cr-maps-title', textContent: 'Maps'}),
             boSelect,
-            actionBtn('Add map', () => openMapPicker(id, null)),
+            addMapBtn,
         );
         const mapsSection = makeEl('div', {className: 'cr-maps-section'});
         mapsSection.append(mapsHead, mapsList);
