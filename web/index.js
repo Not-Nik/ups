@@ -8,13 +8,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const grid = $('tournament-grid');
-    const tournaments = (await tryFetch(() => api('/api/tournaments'))) ?? [];
+    // A failed request and a league with no tournaments yet are different pages, so
+    // they can't both come out of tryFetch as undefined.
+    let tournaments;
+    try {
+        tournaments = await api('/api/tournaments');
+    } catch {
+        renderStatus(grid, {text: 'Failed to load tournaments. Please refresh.'});
+        return;
+    }
 
     if (!tournaments.length) {
-        grid.replaceChildren(makeEl('p', {
-            className: 'text-secondary text-center py-5',
-            textContent: 'Failed to load tournaments. Please refresh.',
-        }));
+        renderStatus(grid, {text: 'No tournaments yet.'});
         return;
     }
 
