@@ -180,7 +180,7 @@ async function findTournament() {
 
 async function loadTournament(id) {
     try {
-        const {data: matches, res} = await api(`/api/matches/${id}`, {response: true});
+        const matches = await loadMatches(id);
         const brackets = await loadBrackets(id);
         renderGrid(matches, brackets);
         await loadPastPredictions();
@@ -309,6 +309,13 @@ const renderPanelPredictions = (panel, match, predictions) => {
     setPanelHTML(panel, html);
 };
 
+const loadMatchPredictions = id =>
+    cachedLoad(`predictions:${id}`, () => api(`/api/predictions/${id}`));
+
+// Whether to render into a panel: it may have been collapsed, or its card
+// replaced by a re-render, while the request was in flight.
+const panelStillOpen = panel => panel.isConnected && panel.classList.contains('open');
+
 async function togglePredictions(match, panel, btn) {
     const opening = !panel.classList.contains('open');
     [panel, btn].forEach(el => el.classList.toggle('open', opening));
@@ -316,9 +323,10 @@ async function togglePredictions(match, panel, btn) {
 
     setPanelStatus(panel, 'text-secondary', 'Loading…');
     try {
-        renderPanelPredictions(panel, match, await api(`/api/predictions/${match.id}`));
+        const predictions = await loadMatchPredictions(match.id);
+        if (panelStillOpen(panel)) renderPanelPredictions(panel, match, predictions);
     } catch {
-        setPanelStatus(panel, 'text-danger', 'Failed to load.');
+        if (panelStillOpen(panel)) setPanelStatus(panel, 'text-danger', 'Failed to load.');
     }
 }
 
@@ -545,20 +553,18 @@ async function openAllPredictions(targets) {
         [btn, panel].forEach(el => el.classList.add('open'));
         setPanelStatus(panel, 'text-secondary', 'Loading…');
     });
-    try {
-        const ids = targets.map(t => t.match.id);
-        const all = await api('/api/predictions', {method: 'POST', body: ids});
-        const byId = new Map();
-        all.forEach(p => {
-            if (!byId.has(p.id)) byId.set(p.id, []);
-            byId.get(p.id).push(p);
-        });
-        targets.forEach(({panel, match}) =>
-            renderPanelPredictions(panel, match, byId.get(match.id) ?? [])
-        );
-    } catch {
-        targets.forEach(({panel}) => setPanelStatus(panel, 'text-danger', 'Failed to load.'));
-    }
+    // The panels read the same predictions:<id> cache togglePredictions uses; one
+    // batched POST feeds all the misses, and only the first cachedLoad call starts it.
+    let batch;
+    const loadBatch = () => batch ??= api('/api/predictions', {method: 'POST', body: targets.map(t => t.match.id)});
+    const loads = targets.map(({match}) => cachedLoad(`predictions:${match.id}`, loadBatch));
+    const results = await Promise.allSettled(loads);
+    results.forEach((r, i) => {
+        const {panel, match} = targets[i];
+        if (!panelStillOpen(panel)) return;
+        if (r.status === 'fulfilled') renderPanelPredictions(panel, match, r.value);
+        else setPanelStatus(panel, 'text-danger', 'Failed to load.');
+    });
 }
 
 function updateExpandAllIcon() {
@@ -861,7 +867,10 @@ async function doSubmit(indices) {
         const [score_a, score_b] = state.scores[i];
         return {id: state.matches[i].id, score_a, score_b};
     });
-    if (await submitWithName({predictions})) indices.forEach(markSubmitted);
+    if (await submitWithName({predictions})) {
+        predictions.forEach(p => invalidateLoad(`predictions:${p.id}`));
+        indices.forEach(markSubmitted);
+    }
 }
 
 // ============== Past predictions / finished matches ==============
