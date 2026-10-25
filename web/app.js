@@ -234,16 +234,16 @@ const youRowHTML = p => predictionRowHTML(p, ' : ', ' : ', {you: myName});
 const percentRowHTML = p => {
     const fav = p.score_a > p.score_b ? ' chance-fav-a' : p.score_b > p.score_a ? ' chance-fav-b' : '';
     return `
-  <div class="chance-row${fav}" style="--share: ${p.score_a}%" title="${escapeAttr(predictionText(p, ' : '))}">
+  <div class="chance-row${fav}" style="--share: ${escapeAttr(String(p.score_a))}%" title="${escapeAttr(predictionText(p, ' : '))}">
     <span class="chance-a">
       <span class="small text-truncate">${escapeHtml(p.name)}</span>
-      <span class="chance-num small fw-semibold">${p.score_a}%</span>
+      <span class="chance-num small fw-semibold">${escapeHtml(String(p.score_a))}%</span>
     </span>
-    <span class="chance-b chance-num small fw-semibold">${p.score_b}%</span>
+    <span class="chance-b chance-num small fw-semibold">${escapeHtml(String(p.score_b))}%</span>
   </div>`;
 };
 
-const statusMsg = (cls, text) => `<p class="${cls} small text-center my-2">${text}</p>`;
+const statusMsg = (cls, text) => `<p class="${cls} small text-center my-2">${escapeHtml(text)}</p>`;
 
 const setPanelHTML = (panel, html) => {
     const inner = panel.querySelector('.predictions-inner');
