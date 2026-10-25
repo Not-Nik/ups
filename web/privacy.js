@@ -5,7 +5,7 @@ const clearStorageBtn = document.getElementById('clear-storage');
 const clearStorageConf = document.getElementById('clear-storage-confirm');
 const clearStorageMsg = document.getElementById('clear-storage-msg');
 
-if (!localStorage.getItem('ups_token')) clearServerBtn.disabled = true;
+if (!getToken()) clearServerBtn.disabled = true;
 
 clearStorageBtn.addEventListener('click', () => {
     clearStorageMsg.style.display = 'none';
@@ -29,7 +29,7 @@ clearServerBtn.addEventListener('click', () => {
 });
 
 clearServerConf.addEventListener('click', async () => {
-    const token = localStorage.getItem('ups_token');
+    const token = getToken();
     if (!token) return;
     clearServerConf.style.display = 'none';
     clearServerBtn.disabled = true;
@@ -37,11 +37,7 @@ clearServerConf.addEventListener('click', async () => {
     clearServerMsg.textContent = 'Deleting…';
     clearServerMsg.style.display = '';
     try {
-        const res = await fetch('/api/delete', {
-            method: 'POST',
-            headers: {'Authorization': `Bearer ${token}`},
-        });
-        if (!res.ok) throw new Error();
+        await api('/api/delete', {method: 'POST'});
         localStorage.removeItem('ups_token');
         clearServerMsg.className = 'small text-success';
         clearServerMsg.textContent = 'Server data deleted.';
