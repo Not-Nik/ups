@@ -61,8 +61,36 @@ const showPage = () => {
     hiddenForDialog = [];
 };
 
-// Keeps the keyboard on the dialog while it is open, and Escape is its cancel button.
+// Keeps the keyboard on the dialog while it is open, and Escape is its cancel
+// button. Only one dialog holds the trap and the hidden page: opening a second
+// hands the pair over rather than stacking a second keydown listener, and close-
+// ing the one that lost it leaves the holder's alone, so a takeover can never
+// strand a listener or leave the page permanently aria-hidden.
 let dialogTrap = null;
+let trappedDialog = null;
+
+// Binds the trap for one open dialog; returns the function that unbinds it.
+function addDialogTrap(dialog, onEscape) {
+    const onKey = e => trapKeys(e, dialog, onEscape);
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+}
+
+// For a dialog the caller has just shown; the caller focuses into it itself.
+function openDialog(dialog, onEscape) {
+    hidePage(dialog);
+    dialogTrap?.();
+    dialogTrap = addDialogTrap(dialog, onEscape);
+    trappedDialog = dialog;
+}
+
+function closeDialog(dialog) {
+    if (trappedDialog !== dialog) return;
+    dialogTrap?.();
+    dialogTrap = null;
+    trappedDialog = null;
+    showPage();
+}
 
 function trapKeys(e, dialog, onEscape) {
     if (e.key === 'Escape') {
@@ -86,7 +114,9 @@ function trapKeys(e, dialog, onEscape) {
 }
 
 // Rows hidden with d-none have no layout box, so their controls stay out of the trap.
-const isVisible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+// Also answers whether the control that opened a dialog is still around to take the
+// focus back; a menu item that hid with its menu is not.
+const isVisible = el => !!(el?.offsetWidth || el?.offsetHeight || el?.getClientRects().length);
 
 const nameModal = {
     _resolve: null,
@@ -139,9 +169,7 @@ const nameModal = {
         if (cfg.shake) shakeEl(nameInput);
 
         if (!reopen) this._restore = document.activeElement;
-        hidePage(modal);
-        dialogTrap?.();
-        dialogTrap = addDialogTrap(modal, () => this._cancel());
+        openDialog(modal, () => this._cancel());
         (cfg.focusId ? $(cfg.focusId) : nameInput).focus();
 
         return new Promise(resolve => {
@@ -190,21 +218,12 @@ const nameModal = {
         this.mode = null;
         this._cfg = null;
         hide($('name-modal'));
-        dialogTrap?.();
-        dialogTrap = null;
-        showPage();
+        closeDialog($('name-modal'));
         if (this._restore?.isConnected) this._restore.focus();
         this._restore = null;
         this.resolve(result);
     },
 };
-
-// Binds the trap for one open dialog; returns the function that unbinds it.
-function addDialogTrap(dialog, onEscape) {
-    const onKey = e => trapKeys(e, dialog, onEscape);
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-}
 
 async function loadCurrentUser() {
     if (!getToken()) return;
@@ -335,11 +354,24 @@ function bindAuthEvents() {
         await nameModal.promptChangePassword($('user-name').textContent);
         nameModal.close(null);
     });
+    // The button that opened the menu is also what a keyboard close returns to:
+    // the logout item it was opened from hides again with the menu.
+    let logoutRestore = null;
+    const closeLogout = () => {
+        hide(logoutModal);
+        closeDialog(logoutModal);
+        (isVisible(logoutRestore) ? logoutRestore : userBtn).focus();
+        logoutRestore = null;
+    };
+
     onClick('logout-btn', () => {
+        logoutRestore = document.activeElement;
         setMenuOpen(false);
         show(logoutModal);
+        openDialog(logoutModal, closeLogout);
+        focusables(logoutModal)[0]?.focus();
     });
-    onClick('logout-cancel', () => hide(logoutModal));
+    onClick('logout-cancel', closeLogout);
     onClick('logout-confirm', async () => {
         await tryFetch(() => api('/api/logout', {method: 'POST'}));
         localStorage.removeItem('ups_token');

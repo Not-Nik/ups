@@ -791,6 +791,7 @@ const imageSectionItems = () => {
 };
 
 const imageDialog = {
+    _restore: null,
     open() {
         const list = $('image-section-list');
         list.replaceChildren();
@@ -805,11 +806,17 @@ const imageDialog = {
 
         $('image-include-predictions').checked = true;
         this.updateSaveEnabled();
+        this._restore = document.activeElement;
         show($('image-modal'));
+        openDialog($('image-modal'), () => this.close());
+        focusables($('image-modal'))[0]?.focus();
     },
 
     close() {
         hide($('image-modal'));
+        closeDialog($('image-modal'));
+        if (isVisible(this._restore)) this._restore.focus();
+        this._restore = null;
     },
 
     updateSaveEnabled() {
