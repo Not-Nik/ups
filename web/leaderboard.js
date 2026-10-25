@@ -70,7 +70,7 @@ const roundQuarter = x => Math.round(x * 4) / 4;
 // significant digit, sits in a bubble over it on hover.
 function pointsCell(points, exact) {
     const value = escapeAttr(String(Number(exact.toFixed(6))));
-    return `<span class="leaderboard-exact" data-exact="${value}">${points.toFixed(2)}</span>`;
+    return `<span class="leaderboard-exact" data-exact="${value}">${escapeHtml(points.toFixed(2))}</span>`;
 }
 
 // Every group's share of its stage's points: STAGE_POINTS for a stage on its own, half
