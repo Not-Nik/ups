@@ -491,7 +491,7 @@ async function initControl() {
         syncScores();
 
         syncBans = async () => {
-            const names = await heroMap();
+            const names = await heroMap().catch(() => new Map());
             const maps = loadMaps(id);
             const i = latestMapIndex(maps);
             const bans = i === -1 ? [null, null] : maps[i].bans;
@@ -515,7 +515,7 @@ async function initControl() {
         syncBo();
 
         syncMaps = async () => {
-            const names = await mapNames();
+            const names = await mapNames().catch(() => new Map());
             const maps = loadMaps(id);
             const upi = upcomingIndex(maps);
             const mpoint = matchPointTeams(countWins(maps), loadBo(id));
