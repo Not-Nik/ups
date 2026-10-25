@@ -50,7 +50,7 @@ function sortableTable(rows, columns, {sortKey = columns[0].key, tableClass = ''
     const trs = new Map(rows.map(r => {
         const tr = makeEl('tr');
         tr.insertAdjacentHTML('beforeend', columns
-            .map(c => `<td class="${c.cls ?? ''}">${c.cell ? c.cell(r) : escapeHtml(String(r[c.key]))}</td>`).join(''));
+            .map(c => `<td class="${c.cls ?? ''}">${c.cell ? c.cell(r) : escapeHtml(r[c.key] ?? '')}</td>`).join(''));
         return [r, tr];
     }));
 
