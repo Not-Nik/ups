@@ -1864,3 +1864,19 @@ body.scene-maps.anim-ready .maps-track .map-card {
         height: 48px;
     }
 }
+
+/* ============== Reduced motion ==============
+   The scene's decorative loops: the glow breathes, the snakes travel, the shapes
+   drift and the fireworks burst forever. None of them carries information, so all
+   of them stop; the banner and scene transitions stay, since they show which scene
+   is open and which team is which. */
+@media (prefers-reduced-motion: reduce) {
+    .scene-glow,
+    .scene-snake path,
+    .boom-flash,
+    .boom-ring,
+    .boom-spark,
+    .scene-shape {
+        animation: none;
+    }
+}
