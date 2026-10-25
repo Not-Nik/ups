@@ -309,22 +309,34 @@ function bindAuthEvents() {
     onClick('password-submit', attemptSetPassword);
     onEnter('password-input', ifLogin(attemptLogin, attemptSetPassword));
 
+    const userBtn = $('user-btn');
     const userDropdown = $('user-dropdown');
     const logoutModal = $('logout-modal');
 
+    // The two pages carry the same menu markup with no semantics of its own, so they
+    // get it from here once. setMenuOpen is the only way in and out of the menu, so the
+    // button's aria-expanded can never disagree with what is on screen.
+    userBtn.setAttribute('aria-expanded', 'false');
+    userDropdown.setAttribute('role', 'menu');
+    userDropdown.querySelectorAll('.user-dropdown-item').forEach(item => item.setAttribute('role', 'menuitem'));
+    const setMenuOpen = open => {
+        setHidden(userDropdown, !open);
+        userBtn.setAttribute('aria-expanded', String(open));
+    };
+
     onClick('user-btn', e => {
         e.stopPropagation();
-        userDropdown.classList.toggle('d-none');
+        setMenuOpen(userDropdown.classList.contains('d-none'));
     });
-    document.addEventListener('click', () => hide(userDropdown));
+    document.addEventListener('click', () => setMenuOpen(false));
 
     onClick('change-password-btn', async () => {
-        hide(userDropdown);
+        setMenuOpen(false);
         await nameModal.promptChangePassword($('user-name').textContent);
         nameModal.close(null);
     });
     onClick('logout-btn', () => {
-        hide(userDropdown);
+        setMenuOpen(false);
         show(logoutModal);
     });
     onClick('logout-cancel', () => hide(logoutModal));
