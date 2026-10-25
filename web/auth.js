@@ -53,8 +53,12 @@ const nameModal = {
 
         nameInput.value = cfg.nameValue ?? '';
         nameInput.disabled = !!cfg.nameDisabled;
+        nameInput.autocomplete = mode === 'login' ? 'username' : 'off';
 
         passwordInput.value = '';
+        // The one password field serves logins and account creation; managers need to
+        // tell the two apart.
+        passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
         setHidden(passwordInput, !cfg.showPassword);
 
         const altActions = cfg.actions === 'password';
