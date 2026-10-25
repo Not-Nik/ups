@@ -1,26 +1,6 @@
 // My predictions page: profile header + the user's past predictions with their
-// outcome where the match has a final score.
-
-const SIDES = ['a', 'b'];
-
-function predictionRowHTML(pred, match) {
-    const teams = match
-        ? SIDES.map(k => teamLinkHTML(match.tournament_id, match[`team_${k}`])).join(' vs ')
-        : `Match #${pred.id}`;
-    let outcome = '';
-    if (match && match.score_a != null && match.score_b != null) {
-        const correct = sameOutcome(pred, match);
-        outcome = `<span class="ms-2 small ${correct ? 'text-success' : 'text-danger'}">${correct ? '&#10003;' : '&#10007;'} ` +
-            `${match.score_a}:${match.score_b}</span>`;
-    }
-    return `<li class="prediction-item">
-        <div>
-            ${match && match.stage_name ? `<div class="text-secondary small">${escapeHtml(sectionTitle(sectionKey(match)))}</div>` : ''}
-            <div class="fw-semibold small">${teams}</div>
-        </div>
-        <span class="pred-score small">${predictionText(pred)}${outcome}</span>
-    </li>`;
-}
+// outcome where the match has a final score. predictionRowHTML itself lives in
+// common.js.
 
 // One league's top-N picks (sorted by position). Once the league has started, each
 // pick shows the team's current place, green where it's the predicted one. While it's
@@ -115,7 +95,10 @@ async function init() {
         const rows = predictions.map(p => {
             const match = byId.get(p.id) ?? null;
             if (match && match.score_a != null && match.score_b != null) done++;
-            return predictionRowHTML(p, match);
+            // A prediction whose match is gone is named by its id alone.
+            return match
+                ? predictionRowHTML(p, ' : ', ' | ', {match, own: true})
+                : `<li class="prediction-item"><div><div class="fw-semibold small">Match #${escapeHtml(String(p.id))}</div></div><span class="pred-score small">${predictionText(p, ' : ')}</span></li>`;
         });
         show($('predictions-heading'));
         $('prediction-list').innerHTML = rows.join('');
