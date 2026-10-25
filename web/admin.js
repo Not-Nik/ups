@@ -525,11 +525,16 @@ function matchBody() {
             return null;
         }
     }
-    const tournament_id = parseInt($('match-tournament').value, 10);
-    if (isNaN(tournament_id)) {
-        shake($('match-tournament'));
+    const tournament_id = matchTournamentId();
+    if (tournament_id === null) {
+        toast('Pick a tournament for this match.');
+        shakeEl($('match-tournament'));
         return null;
     }
+    const score_a = intOrNull('match-score-a', 'Score A');
+    const score_b = intOrNull('match-score-b', 'Score B');
+    const stage_number = intOrNull('match-stage-number', 'Stage number');
+    if ([score_a, score_b, stage_number].includes(undefined)) return null;
     return {
         id: 0,
         tournament_id,
