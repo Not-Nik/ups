@@ -94,7 +94,10 @@ function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWei
     const teamSizes = new Map();
     const pickCount = new Map();
     standingRows.forEach(r => {
-        pickCount.set(r.group_id, r.pick_count);
+        // A row without a usable pick_count scores against the server's default (as in
+        // standings.js), so a group's points are never divided by zero slots.
+        const picks = Number(r.pick_count);
+        pickCount.set(r.group_id, picks > 0 ? picks : DEFAULT_PICK_COUNT);
         teamSizes.set(r.group_id, (teamSizes.get(r.group_id) ?? 0) + 1);
         current.set(`${r.group_id}:${r.team_id}`, r.position);
     });
