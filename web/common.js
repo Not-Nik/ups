@@ -113,10 +113,10 @@ const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 const proxied = url => `/api/proxy?url=${encodeURIComponent(url)}`;
 
 // ============== Match sides ==============
-// Assigned on globalThis rather than declared, here and for REFRESH_MSG and
-// predictionRowHTML below: each of those four still has a top-level copy in a page
-// script, and one name declared by two scripts of a page is a SyntaxError that kills
-// both. A page script's own copy shadows (or redeclares) these until it is deleted.
+// Assigned on globalThis rather than declared, here and for OTHER_SIDE, REFRESH_MSG and
+// predictionRowHTML below: overlay-common.js declares its own SIDES, and one name
+// declared by two scripts of a page is a SyntaxError that kills both, while a copy of an
+// assigned global only shadows it.
 globalThis.SIDES = ['a', 'b'];
 globalThis.OTHER_SIDE = {a: 'b', b: 'a'};
 
