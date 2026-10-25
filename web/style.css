@@ -1250,3 +1250,29 @@ th[aria-sort="descending"] .sort-btn::after {
 .bracket-tbd {
     opacity: .5;
 }
+
+/* ============== Reduced motion ==============
+   Stops the motion this file adds on its own; colour, border and underline
+   feedback stays. The drag-to-pick slide is Web Animations and already gated
+   in standings.js. */
+@media (prefers-reduced-motion: reduce) {
+    .shake,
+    #incident-toast {
+        animation: none;
+    }
+
+    /* The predictions panel expands and the chevrons flip without tweening. */
+    .predictions-panel,
+    .toggle-btn::before,
+    .toggle-btn::after,
+    .chevron-arrow::before,
+    .chevron-arrow::after {
+        transition: none;
+    }
+
+    /* The edit icon sits still instead of rising out of the scrim on hover. */
+    .edit-overlay svg {
+        transition: none;
+        transform: none;
+    }
+}
