@@ -58,9 +58,7 @@ const loadRoster = (view, key, load, render) => cachedLoad(key, async () => {
 const logoHTML = (logo, cls) => logo ? `<img src="${escapeAttr(proxied(logo))}" class="${cls}" alt="">` : '';
 
 // ============== Teams ==============
-let teamsLoad = null;
-
-const loadTeams = id => teamsLoad ??= loadRoster('teams', `/api/teams/${id}`, (root, teams) =>
+const loadTeams = id => loadRoster('teams', `teams:${id}`, () => api(`/api/teams/${id}`), (root, teams) =>
     teams.map(team => {
         // The tile links to the team's lineup, like every team-link (see openTeamPlayers).
         const card = makeEl('a', {
@@ -104,7 +102,7 @@ const PLAYER_COLUMNS = [
             </span>`},
 ];
 
-const loadPlayers = id => playersLoad ??= loadRoster('players', `/api/players/${id}`, (root, players) => {
+const loadPlayers = id => loadRoster('players', `players:${id}`, () => api(`/api/players/${id}`), (root, players) => {
     players.forEach((p, i) => p.order = i);
     const {card, trs} = sortableTable(players, PLAYER_COLUMNS, {tableClass: 'roster-table'});
     root.appendChild(card);
