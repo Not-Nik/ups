@@ -102,10 +102,9 @@ async function init() {
         const rows = predictions.map(p => {
             const match = byId.get(p.id) ?? null;
             if (match && match.score_a != null && match.score_b != null) done++;
-            // A prediction whose match is gone is named by its id alone.
-            return match
-                ? predictionRowHTML(p, ' : ', ' | ', {match, own: true})
-                : `<li class="prediction-item"><div><div class="fw-semibold small">Match #${escapeHtml(String(p.id))}</div></div><span class="pred-score small">${predictionText(p, ' : ')}</span></li>`;
+            // A prediction whose match is gone has no section to head its row, so the
+            // empty heading asks for the one named by its id alone.
+            return predictionRowHTML(p, ' : ', ' | ', {match, own: true, heading: match ? null : ''});
         });
         show($('predictions-heading'));
         $('prediction-list').innerHTML = rows.join('');

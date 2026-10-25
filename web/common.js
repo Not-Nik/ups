@@ -126,10 +126,12 @@ globalThis.OTHER_SIDE = {a: 'b', b: 'a'};
 // prediction to the final score. The final score and its mark are only shown for the
 // viewer's own prediction (`own`, or the row whose name is `you`), since everyone
 // else's row ends at what they predicted.
-//   {match} the prediction's match — the row then carries its section title and its
-//           teams instead of a name (me.html); pass an already-known title in {heading}.
-//   {you}   the logged-in user's name, marked "You" on their row.
-//   {own}   the row is the viewer's own (me.html has no name to compare).
+//   {match}   the prediction's match — the row then carries its section title and its
+//             teams instead of a name (me.html).
+//   {heading} an already-known section title in place of the match's, or '' for none;
+//             with no match it asks for the id-only row of a prediction whose match is gone.
+//   {you}     the logged-in user's name, marked "You" on their row.
+//   {own}     the row is the viewer's own (me.html has no name to compare).
 globalThis.predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, you = '', own = null, heading = null} = {}) => {
     const isYou = !!you && p.name === you;
     const finished = match && match.score_a != null && match.score_b != null;
@@ -137,7 +139,7 @@ globalThis.predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, yo
         ? `<span class="ms-2 small ${sameOutcome(p, match) ? 'text-success' : 'text-danger'}">` +
           `${escapeHtml(current)}${sameOutcome(p, match) ? '&#10003;' : '&#10007;'} ${match.score_a}:${match.score_b}</span>`
         : ''}`;
-    if (!match && !heading) {
+    if (!match && heading == null) {
         return `
   <div class="d-flex justify-content-between align-items-baseline gap-3 py-1">
     <span class="small text-truncate">${escapeHtml(p.name)}${isYou ? '<span class="leaderboard-you">You</span>' : ''}</span>
@@ -148,7 +150,7 @@ globalThis.predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, yo
         ? escapeHtml(sectionTitle(sectionKey(match))) : null);
     const teams = match
         ? SIDES.map(k => teamLinkHTML(match.tournament_id, match[`team_${k}`])).join(' vs ')
-        : `Match #${p.id}`;
+        : `Match #${escapeHtml(String(p.id))}`;
     return `<li class="prediction-item">
         <div>
             ${title ? `<div class="text-secondary small">${title}</div>` : ''}
