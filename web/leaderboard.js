@@ -9,11 +9,6 @@ let leaderboardLoad = null;
 
 const loadLeaderboard = id => leaderboardLoad ??= renderLeaderboard(id);
 
-const leaderboardStatus = (cls, text) => makeEl('p', {
-    className: `${cls} text-center py-5`,
-    textContent: text,
-});
-
 // Points per prediction: the right winner earns WINNER_POINTS, an exact score
 // EXACT_POINTS in total (not on top of the winner's).
 const WINNER_POINTS = 1;
