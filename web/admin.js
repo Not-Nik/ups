@@ -218,9 +218,10 @@ async function submitPickCounts(btn) {
     for (const row of $('picks-stages').querySelectorAll('.admin-pick-row')) {
         const stage_id = Number(row.dataset.stage);
         const input = row.querySelector('.admin-pick-count');
-        const pick_count = parseInt(input.value, 10);
-        if (isNaN(pick_count) || pick_count < 1 || pick_count > MAX_PICK_COUNT) {
-            shake(input);
+        const pick_count = Number(input.value.trim());
+        if (!Number.isInteger(pick_count) || pick_count < 1 || pick_count > MAX_PICK_COUNT) {
+            toast(`${row.dataset.name}: pick count must be a whole number from 1 to ${MAX_PICK_COUNT}.`);
+            shakeEl(input);
             input.focus();
             return;
         }
