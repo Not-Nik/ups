@@ -19,11 +19,41 @@ function report(e, fallback) {
     toast(e.code === 'AccessDenied' ? 'This account is not an admin.' : e.code || fallback);
 }
 
-const intOrNull = id => {
-    const v = $(id).value.trim();
+// The one-liner a card shows in place of its rows: why there are none, or that
+// loading them went wrong.
+const statusNote = (text, failed = false) => makeEl('p', {
+    className: `small mb-0 ${failed ? 'text-danger' : 'text-secondary'}`,
+    textContent: text,
+});
+
+// A list load that reports instead of throwing, so a broken request is not mistaken for
+// an empty database: the reason goes on the toast and, where a container is given, into
+// the list's place. The caller still gets undefined, so it can keep its empty state.
+async function loadList(what, load, where = null) {
+    try {
+        return await load();
+    } catch (e) {
+        report(e, `${what} could not be loaded.`);
+        if (where) where.replaceChildren(statusNote(`${what} could not be loaded.`, true));
+    }
+}
+
+// The match form's nullable whole numbers — the server takes them as unsigned integers.
+// An empty field is null, meaning "not set", like before. A value the server would
+// answer with an error shakes the field, says what it wants, and gives undefined, so
+// nothing is sent at all; callers bail out on undefined.
+const intOrNull = (id, label) => {
+    const el = $(id);
+    const v = el.value.trim();
     if (!v) return null;
-    const n = parseInt(v, 10);
-    return (!isNaN(n) && n >= 0) ? n : null;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 0) {
+        toast(`${label} must be a whole number from 0 up, or empty.`);
+        shakeEl(el);
+        el.focus();
+        return undefined;
+    }
+    return n;
 };
 
 const textOrNull = id => {
@@ -88,7 +118,7 @@ $('login-password').addEventListener('keydown', e => {
 let tournaments = []; // from /api/tournaments, for the refresh interval card
 
 async function loadTournamentOptions() {
-    const list = await tryFetch(() => api('/api/tournaments'));
+    const list = await loadList('Tournaments', () => api('/api/tournaments'));
     if (!Array.isArray(list)) return;
     tournaments = list;
     for (const select of [$('match-tournament'), $('picks-tournament'), $('refresh-tournament')]) {
@@ -134,12 +164,10 @@ const MAX_PICK_COUNT = 32; // same limit as the server
 async function loadPickCounts() {
     const box = $('picks-stages');
     const tid = parseInt($('picks-tournament').value, 10);
-    const stages = isNaN(tid) ? [] : await tryFetch(() => api(`/api/stages/${tid}`));
-    if (!Array.isArray(stages) || !stages.length) {
-        box.replaceChildren(makeEl('p', {
-            className: 'text-secondary small mb-0',
-            textContent: 'No leagues loaded for this tournament yet.',
-        }));
+    const stages = isNaN(tid) ? [] : await loadList('Leagues', () => api(`/api/stages/${tid}`), box);
+    if (stages === undefined) return; // loadList has said so in the box
+    if (!stages.length) {
+        box.replaceChildren(statusNote('No leagues loaded for this tournament yet.'));
         return;
     }
     box.replaceChildren(...stages.map(stage => {
@@ -444,9 +472,9 @@ async function loadTournamentData() {
     teamLogos = new Map();
     sectionCombos = new Map();
     const stages = new Set(), groups = new Set(), rounds = new Set();
-    const tid = parseInt($('match-tournament').value, 10);
-    if (!isNaN(tid)) {
-        const matches = await tryFetch(() => api(`/api/matches/${tid}`));
+    const tid = matchTournamentId();
+    if (tid !== null) {
+        const matches = await loadList('Matches', () => api(`/api/matches/${tid}`));
         if (Array.isArray(matches)) {
             for (const m of matches) {
                 for (const side of ['a', 'b']) {
