@@ -35,6 +35,9 @@ function leagueHTML(picks) {
 
 const plural = (n, word, words = `${word}s`) => `${n} ${n === 1 ? word : words}`;
 
+// A long history outgrows one request line, so the match ids are fetched in chunks.
+const MATCH_IDS_CHUNK = 300;
+
 async function init() {
     if (!getToken()) {
         hide($('profile'));
@@ -83,10 +86,14 @@ async function init() {
 
     let done = 0;
     if (predictions.length) {
-        const ids = predictions.map(p => p.id).join(',');
+        const ids = predictions.map(p => p.id);
         let byId = new Map();
         try {
-            byId = new Map((await api(`/api/match?ids=${ids}`)).map(m => [m.id, m]));
+            const matches = [];
+            for (let i = 0; i < ids.length; i += MATCH_IDS_CHUNK) {
+                matches.push(...await api(`/api/match?ids=${ids.slice(i, i + MATCH_IDS_CHUNK)}`));
+            }
+            byId = new Map(matches.map(m => [m.id, m]));
         } catch {
             $('profile-sub').textContent = 'Failed to load matches.';
             return;
