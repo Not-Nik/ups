@@ -15,16 +15,23 @@ const BO_OPTIONS = [[null, 'Bo: Off'], [3, 'Bo3'], [5, 'Bo5'], [7, 'Bo7']];
 
 // At most one picker modal is open at a time. openModal dismisses any current one,
 // mounts a fresh full-screen backdrop with a box of `boxClass` (clicking outside the
-// box closes it), and returns the box to fill. closeModal (and Escape) dismiss it.
+// box closes it), and returns the box to fill. The box is the dialog: it is named by
+// `label`, and closing it puts focus back on `opener`, the control that opened it.
+// closeModal (and Escape) dismisses.
 let activeModal = null;
+let modalOpener = null;
 const closeModal = () => {
-    activeModal?.remove();
+    if (!activeModal) return;
+    activeModal.remove();
     activeModal = null;
+    if (modalOpener?.isConnected) modalOpener.focus();
+    modalOpener = null;
 };
 
-function openModal(boxClass) {
+function openModal(boxClass, {label, opener = null} = {}) {
     closeModal();
-    const box = makeEl('div', {className: boxClass});
+    const box = makeEl('div', {className: boxClass, role: 'dialog', tabIndex: -1, ariaLabel: label});
+    box.setAttribute('aria-modal', 'true'); // no IDL property to assign
     const overlay = makeEl('div', {className: 'ban-picker-overlay'});
     overlay.append(box);
     overlay.addEventListener('click', e => {
@@ -32,6 +39,7 @@ function openModal(boxClass) {
     });
     document.body.append(overlay);
     activeModal = overlay;
+    modalOpener = opener;
     return box;
 }
 
@@ -136,7 +144,7 @@ async function initControl() {
     };
 
     // Searchable icon grid for choosing (or clearing) a team's banned hero.
-    async function openPicker(id, idx) {
+    async function openPicker(id, idx, opener) {
         const search = makeEl('input', {className: 'ban-search', type: 'text', placeholder: 'Search hero…'});
         const clearBtn = makeEl('button', {className: 'cr-swap ban-clear', type: 'button', textContent: 'Clear ban'});
         clearBtn.addEventListener('click', () => {
@@ -147,7 +155,7 @@ async function initControl() {
         head.append(search, clearBtn);
         const grid = makeEl('div', {className: 'ban-grid'});
 
-        const box = openModal('ban-picker');
+        const box = openModal('ban-picker', {label: 'Ban a hero', opener});
         box.append(head, grid);
         search.focus();
 
@@ -179,7 +187,7 @@ async function initControl() {
 
     // Searchable, mode-grouped grid for choosing a map. `slotIdx === null` adds a new
     // map slot on pick; an existing index changes that slot's map (and offers removal).
-    async function openMapPicker(mid, slotIdx) {
+    async function openMapPicker(mid, slotIdx, opener) {
         const search = makeEl('input', {className: 'ban-search', type: 'text', placeholder: 'Search map…'});
         const head = makeEl('div', {className: 'ban-picker-head'});
         head.append(search);
@@ -193,7 +201,7 @@ async function initControl() {
         }
         const grid = makeEl('div', {className: 'map-grid'});
 
-        const box = openModal('ban-picker');
+        const box = openModal('ban-picker', {label: 'Pick a map', opener});
         box.append(head, grid);
         search.focus();
 
@@ -257,9 +265,10 @@ async function initControl() {
     };
 
     // Three-stage match picker: pick a tournament, then a day, then a match.
-    async function openMatchPicker(currentTournamentId, currentId) {
-        const box = openModal('match-picker');
+    async function openMatchPicker(currentTournamentId, currentId, opener) {
+        const box = openModal('match-picker', {label: 'Change match', opener});
         box.append(crEmpty('Loading tournaments…'));
+        box.focus(); // nothing else to focus until the list is in
 
         let tournaments;
         try {
