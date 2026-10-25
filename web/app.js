@@ -977,10 +977,10 @@ function collectImageHides({sections, includePredictions}) {
 
     // Submitted-badges and edit overlays are UI affordances and never belong in
     // the image; score inputs and prediction signs are stripped only when the
-    // user opts out.
-    const selector = includePredictions
-        ? '.submitted-badge, .edit-overlay'
-        : '.score-input, .pred-sign, .submitted-badge, .edit-overlay';
+    // user opts out. An expanded predictions panel lists every user's picks, so
+    // it is always stripped — the export must never leak other people's data.
+    const always = '.submitted-badge, .edit-overlay, .predictions-panel.open';
+    const selector = includePredictions ? always : `.score-input, .pred-sign, ${always}`;
     exportVisibleCards(toHide).forEach(card =>
         card.querySelectorAll(selector).forEach(n => toHide.push(n)));
     forEachKeptEl(toHide, '.section-header', header => {
