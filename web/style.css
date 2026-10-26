@@ -82,6 +82,13 @@
     align-items: start;
 }
 
+/* A status line in one of these grids is a single item in the first column, so its
+   text-align centres it in 220px rather than on the page. Spanning the row fixes it. */
+.matches-grid > .grid-span,
+.tournament-grid > .grid-span {
+    grid-column: 1 / -1;
+}
+
 /* Landing page tiles: newest fills the top left, oldest the bottom right. */
 .tournament-card {
     /* Flex-centred rather than just text-align, so a one-line name sits in the middle

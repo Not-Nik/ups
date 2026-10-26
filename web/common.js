@@ -177,9 +177,10 @@ const onEnter = (id, fn) => $(id).addEventListener('keydown', e => {
 
 // The centred one-liner a view shows while it loads, when there is nothing there, or
 // when its fetch failed. statusLine builds the element, renderStatus puts it in a
-// container in place of whatever was there. Both escape the text.
+// container in place of whatever was there. Both escape the text. grid-span keeps it
+// on one line of a tile grid instead of centred inside the first column.
 const statusLine = ({cls = 'text-secondary', text}) => makeEl('p', {
-    className: `${cls} text-center py-5`,
+    className: `${cls} text-center py-5 grid-span`,
     textContent: text,
 });
 
