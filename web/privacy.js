@@ -14,9 +14,12 @@ clearStorageBtn.addEventListener('click', () => {
 
 clearStorageConf.addEventListener('click', async () => {
     if (getToken()) await tryFetch(() => api('/api/logout', {method: 'POST'}));
-    // Only this app's own keys — the theme preference stays.
-    localStorage.removeItem('ups_token');
-    localStorage.removeItem('ups_incidents_seen');
+    // Every key this app writes goes — the overlay's live-match keys name the user's
+    // current match and scores too — with the theme preference the one thing kept.
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('ups_') && key !== 'ups_theme') localStorage.removeItem(key);
+    }
     clearServerBtn.disabled = true;
     clearStorageConf.style.display = 'none';
     clearServerConf.style.display = 'none';
