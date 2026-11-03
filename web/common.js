@@ -405,7 +405,6 @@ const cachedLoad = (key, load) => {
 };
 
 const invalidateLoad = key => dataCache.delete(key);
-const clearLoads = () => dataCache.clear();
 
 const loadMatches = id => cachedLoad(`matches:${id}`, () => api(`/api/matches/${id}`));
 // The standings rows of one tournament. loadStandings (standings.js) is that view's
