@@ -38,19 +38,23 @@ async function loadList(what, load, where = null) {
 // nothing is sent at all; callers bail out on undefined.
 const intOrNull = (id, label) => {
     const el = $(id);
-    const reject = () => {
-        toast(`${label} must be a whole number from 0 up, or empty.`);
+    const want = `${label} must be a whole number from 0 up, or empty.`;
+    const reject = msg => {
+        toast(msg);
         shakeEl(el);
         el.focus();
         return undefined;
     };
     // A number input reports '' for content it cannot parse ("12abc", "1e", "-"), which
     // must not read as the field being empty.
-    if (el.validity.badInput) return reject();
+    if (el.validity.badInput) return reject(want);
     const v = el.value.trim();
     if (!v) return null;
     const n = Number(v);
-    if (!Number.isInteger(n) || n < 0) return reject();
+    if (!Number.isInteger(n) || n < 0) return reject(want);
+    // Past this the number stops being exact, and JSON.stringify writes it as an exponent
+    // that the server's whole-number field answers with a generic error.
+    if (!Number.isSafeInteger(n)) return reject(`${label} must be at most ${Number.MAX_SAFE_INTEGER}.`);
     return n;
 };
 
