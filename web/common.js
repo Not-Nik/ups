@@ -116,6 +116,13 @@ const escapeHtml = str => {
 };
 const escapeAttr = s => escapeHtml(s).replaceAll('"', '&quot;');
 
+// A table cell around a rounded number, its exact value cut after the last significant
+// digit sitting in a bubble over it on hover (.exact-score in style.css). `cls` colours
+// the number itself.
+const exactCell = (shown, exact, cls = '') =>
+    `<span class="exact-score${cls ? ` ${cls}` : ''}" data-exact="${escapeAttr(String(Number(exact.toFixed(6))))}">`
+    + `${escapeHtml(String(shown))}</span>`;
+
 // Team logos live on toornament; every page loads them through the server's proxy
 // instead, so they are same-origin (no third-party request, and a canvas can read them).
 const proxied = url => `/api/proxy?url=${encodeURIComponent(url)}`;
@@ -374,6 +381,13 @@ async function api(url, {method = 'GET', body} = {}) {
         invalidateLoad('me:predictions');
         invalidateLoad('me');
     }
+    // Everyone's standing picks move with this user's own, so neither the standings'
+    // crowd column nor the league leaderboard should keep ranking over the old set.
+    if (method === 'POST' && url === '/api/submit') {
+        [...dataCache.keys()]
+            .filter(key => key.startsWith('standings-predictions:'))
+            .forEach(key => invalidateLoad(key));
+    }
     return data;
 }
 
@@ -411,6 +425,10 @@ const loadMatches = id => cachedLoad(`matches:${id}`, () => api(`/api/matches/${
 // loader, which re-renders, so this one is named for what it returns.
 const loadStandingsRows = id => cachedLoad(`standings:${id}`, () => api(`/api/standings/${id}`));
 const loadMyPredictions = () => cachedLoad('me:predictions', () => api('/api/predictions/me'));
+// Every user's top-N picks of one tournament: the standings' crowd column and the league
+// leaderboard both rank over them.
+const loadStandingPredictions = id =>
+    cachedLoad(`standings-predictions:${id}`, () => api(`/api/standings/predictions/${id}`));
 // The logged-in user's name. The header, the "You" marks and the admin panel all want
 // the same answer on one page load.
 const loadMe = () => cachedLoad('me', () => api('/api/me'));

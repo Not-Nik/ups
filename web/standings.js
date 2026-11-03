@@ -3,8 +3,8 @@
 // Its tab bar mirrors the matches one: a button per stage on top, and below it the
 // group tabs of the open stage — left out when the stage has only one group, since
 // its button already carries the selection. Rows arrive sorted by stage, group,
-// then position, so the render keeps that order. Loaded once, the first time the
-// view opens.
+// then position, so that is the order each table opens in; every header sorts its
+// table. Loaded once, the first time the view opens.
 
 let standingsLoad = null;
 
@@ -257,14 +257,17 @@ async function renderStandings(id) {
     const root = $('standings');
     renderStatus(root, {text: 'Loading…'});
     try {
-        const [rows, picks] = await Promise.all([
+        const [rows, picks, crowd] = await Promise.all([
             loadStandingsRows(id),
             loadStandingPicks(),
+            // A failed load of everyone's picks costs the crowd column and nothing else.
+            tryFetch(() => loadStandingPredictions(id)) ?? [],
         ]);
         if (!rows.length) {
             renderStatus(root, {text: 'No standings for this tournament.'});
             return;
         }
+        const picksByGroup = groupBy(crowd, p => p.group_id);
         root.replaceChildren();
         standings.stages = [...groupBy(rows, r => r.stage_number).values()].map(stageRows => {
             const groups = [...groupBy(stageRows.map(([r]) => r), r => r.group_number).values()]
@@ -273,10 +276,11 @@ async function renderStandings(id) {
             return {
                 name,
                 tables: groups.map(groupRows => {
-                    const {group_name} = groupRows[0];
+                    const {group_name, group_id} = groupRows[0];
                     const param = standingsParam(name, group_name, groups.length === 1);
-                    const card = standingsTable(groupRows);
-                    const prediction = standingsPrediction(groupRows, picks.get(groupRows[0].group_id) ?? []);
+                    const predicted = (picksByGroup.get(group_id) ?? []).map(([p]) => p);
+                    const card = standingsTable(groupRows, crowdAverages(groupRows, predicted));
+                    const prediction = standingsPrediction(groupRows, picks.get(group_id) ?? []);
                     if (prediction) card.querySelector('.card-body').appendChild(prediction);
                     card.dataset.table = param;
                     root.appendChild(card);
@@ -295,52 +299,90 @@ async function renderStandings(id) {
 
 const signed = n => n > 0 ? `+${n}` : `${n}`;
 
+// ============== The crowd's order ==============
+// Every user's top N of a group turned into points: their first pick scores the group's
+// pick slots (4 by default, cut down to the group's size), their second one less, and so
+// on down to 1; a team they left out scores nothing. Those points, averaged over the
+// people who predicted the group, give each team its place in the crowd's order — the
+// column's number, tied scores sharing a place and the teams nobody picked sharing the
+// last one. Null, and so no column at all, where the group has no usable picks.
+function crowdAverages(rows, picks) {
+    const count = Number(rows[0].pick_count);
+    const slots = Math.min(count > 0 ? count : DEFAULT_PICK_COUNT, rows.length);
+    const scored = picks.filter(p => rows.some(r => r.team_id === p.team_id)
+        && p.position >= 1 && p.position <= slots);
+    if (!scored.length) return null;
+    const points = new Map(rows.map(r => [r.team_id, 0]));
+    scored.forEach(p => points.set(p.team_id, points.get(p.team_id) + slots - p.position + 1));
+    const best = [...points].sort((a, b) => b[1] - a[1]);
+    const place = new Map();
+    best.forEach(([team, sum], i) => place.set(team,
+        i && best[i - 1][1] === sum ? place.get(best[i - 1][0]) : i + 1));
+    return {place, points, predictors: new Set(scored.map(p => p.name)).size};
+}
+
+// The community's place for a team, coloured by how it reads against the team's rank:
+// the crowd rated it higher than it stands (green) or lower (red).
+function crowdColumn({place, points, predictors}) {
+    const rating = r => place.get(r.team_id) < r.rank ? 'text-success'
+        : place.get(r.team_id) > r.rank ? 'text-danger' : '';
+    return {
+        key: 'place', head: 'C', cls: 'standings-rank', asc: true,
+        title: 'Community Prediction',
+        compare: (a, b) => place.get(a.team_id) - place.get(b.team_id),
+        cell: r => exactCell(place.get(r.team_id), points.get(r.team_id) / predictors, rating(r)),
+    };
+}
+
 // Swiss groups carry no map scores and a tiebreaker-weighted `points` value, so they
-// show W/L only. Draws get a column only where a group actually has some.
+// show W/L only. Draws get a column only where a group actually has some (the crowd's
+// place, `crowdAverages`, likewise). Every column sorts on its own numbers, best first at
+// the first click.
 function standingsColumns(rows) {
     const swiss = rows[0].stage_type === 'swiss';
     const draws = rows.some(r => r.draws > 0);
+    const num = (key, head, title, extra = {}) => ({key, head, title, cls: 'standings-num', ...extra});
     return [
-        {head: 'P', title: 'Played', cell: r => r.played},
-        {head: 'W', title: 'Wins', cell: r => r.wins},
-        ...(draws ? [{head: 'D', title: 'Draws', cell: r => r.draws}] : []),
-        {head: 'L', title: 'Losses', cell: r => r.losses},
+        num('played', 'P', 'Played'),
+        num('wins', 'W', 'Wins', {asc: false}),
+        ...(draws ? [num('draws', 'D', 'Draws', {asc: false})] : []),
+        num('losses', 'L', 'Losses'),
         ...(swiss ? [] : [
-            {head: 'Maps', title: 'Maps won : lost', cell: r => `${r.score_for}:${r.score_against}`, wide: true},
-            {head: '+/-', title: 'Map difference', cell: r => signed(r.score_difference)},
-            {head: 'Pts', title: 'Points', cell: r => r.points, cls: 'fw-semibold'},
+            num('maps', 'Maps', 'Maps won : lost', {
+                cls: 'standings-num standings-wide', asc: false,
+                cell: r => `${r.score_for}:${r.score_against}`,
+                compare: (a, b) => (a.score_for ?? 0) - (b.score_for ?? 0),
+            }),
+            num('diff', '+/-', 'Map difference', {
+                asc: false, cell: r => signed(r.score_difference ?? 0),
+                compare: (a, b) => (a.score_difference ?? 0) - (b.score_difference ?? 0),
+            }),
+            num('points', 'Pts', 'Points', {cls: 'standings-num fw-semibold', asc: false}),
         ]),
     ];
 }
 
-function standingsTable(rows) {
-    const cols = standingsColumns(rows);
+function standingsTable(rows, crowd) {
     const first = rows[0];
-    const card = makeEl('div', {className: 'card standings-card'});
-    const body = rows.map(r => `
-        <tr class="${r.dropped ? 'standings-dropped' : ''}"${r.dropped ? ' title="Dropped out"' : ''}>
-            <td class="standings-rank">${escapeHtml(String(r.rank))}</td>
-            <td class="standings-team">
-                <span class="d-flex align-items-center gap-2">
-                    ${r.logo ? `<img src="${escapeAttr(proxied(r.logo))}" class="team-logo" alt="">` : ''}
-                    <span class="text-truncate">${teamLinkHTML(state.activeTournament, r.team)}</span>
-                </span>
-            </td>
-            ${cols.map(c => `<td class="standings-num ${c.cls ?? ''}">${escapeHtml(String(c.cell(r)))}</td>`).join('')}
-        </tr>`).join('');
-    card.insertAdjacentHTML('beforeend', `
-        <div class="card-body">
-            <div class="section-title mb-2">${escapeHtml(first.group_name || first.stage_name)}</div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th class="standings-rank" title="Rank">#</th>
-                        <th class="standings-team">Team</th>
-                        ${cols.map(c => `<th class="standings-num${c.wide ? ' standings-wide' : ''}" title="${escapeAttr(c.title)}">${c.head}</th>`).join('')}
-                    </tr>
-                </thead>
-                <tbody>${body}</tbody>
-            </table>
-        </div>`);
+    const {card, trs} = sortableTable(rows, [
+        {key: 'position', head: '#', title: 'Rank', cls: 'standings-rank', asc: true, cell: r => r.rank},
+        ...(crowd ? [crowdColumn(crowd)] : []),
+        {
+            key: 'team', head: 'Team', cls: 'standings-team', asc: true,
+            compare: (a, b) => a.team.localeCompare(b.team),
+            cell: r => `<span class="d-flex align-items-center gap-2">
+                ${r.logo ? `<img src="${escapeAttr(proxied(r.logo))}" class="team-logo" alt="">` : ''}
+                <span class="text-truncate">${teamLinkHTML(state.activeTournament, r.team)}</span>
+            </span>`,
+        },
+        ...standingsColumns(rows),
+    ]);
+    card.classList.add('standings-card');
+    card.querySelector('.card-body').insertAdjacentHTML('afterbegin',
+        `<div class="section-title mb-2">${escapeHtml(first.group_name || first.stage_name)}</div>`);
+    trs.forEach((tr, r) => {
+        tr.classList.toggle('standings-dropped', r.dropped);
+        if (r.dropped) tr.title = 'Dropped out';
+    });
     return card;
 }

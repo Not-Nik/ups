@@ -175,7 +175,19 @@ The Standings view shows one group's table at a time. Its tab bar (`#standings-t
 matches one: a `.category-btn` per stage on top, and the open stage's group tabs below — left out when
 the stage has a single group. League and
 pools tables show P/W/L, maps, map difference and points; swiss tables show P/W/L only. A D column
-appears only where a group has draws. Dropped teams are dimmed and struck through.
+appears only where a group has draws. Dropped teams are dimmed and struck through. The tables are
+`sortableTable`s (`standingsTable`), so every header sorts: they open in the server's `position` order (the `#` column
+sorts by `position` but shows `rank`), and the count columns sort best-first on the first click.
+
+Between the `#` and the team sits **C**, the community prediction (`crowdAverages` / `crowdColumn`): each team's place in
+the crowd's own order, computed client-side from `/api/standings/predictions/:id` (`loadStandingPredictions`, fetched
+alongside the standings through `tryFetch`, so a failed load just drops the column). Each user's top N of the group
+becomes points: their first pick scores the group's pick slots (its `pick_count`, cut to the group's size), their second
+one less, down to 1; a team they left out scores nothing, and a pick of a team no longer in the standings is ignored —
+including for the predictor count. Averaged over its predictors and ranked from there, equal averages sharing a place (so
+the teams nobody picked share the last one, in standings order), the cell shows that place over the exact average in the
+same hover bubble the league leaderboard's scores use (`exactCell`), green when the crowd rated the team above its rank
+and red when below it. Clicking the header sorts by place, 1 first. A group nobody predicted gets no C column at all.
 
 Under each table sits the user's top-N prediction ("Your top N", `standingsPrediction` in standings.js). N is the
 row's `pick_count`: 4 by default, set per stage in the admin panel (last season: 6 for Erste Liga, 8 for Vierte Liga). The
@@ -204,8 +216,8 @@ The players table is a `sortableTable` (`PLAYER_COLUMNS`): sorted by player name
 Team groups the lineups again (team name, then lineup position), BattleTag sorts too.
 
 The Leaderboard view (leaderboard.js) is computed on the client, no endpoint of its own: it takes the page's cached
-matches and standings (`loadMatches`, `loadStandingsRows`, so opening it after the other views costs nothing), keeps
-the matches with a final score, and posts their ids to `POST /api/predictions`.
+matches and standings (`loadMatches`, `loadStandingsRows`, `loadStandingPredictions`, so opening it after the other views
+costs nothing), keeps the matches with a final score, and posts their ids to `POST /api/predictions`.
 An exact score earns `EXACT_POINTS` (2), any other correct winner `WINNER_POINTS` (1) — the winner
 check is `sameOutcome` in common.js, shared with me.js's ✓/✗: sign of the score difference, so a draw
 only counts on an actual draw. A prediction whose two numbers add up to 100 is a percentage
@@ -249,8 +261,8 @@ currently inside the predicted range, the top `pick_count` of their group), Exac
 ÷ ((teams in group - 1) × the group's pick slots, `min(pick_count, teams in group)`) × `STAGE_POINTS` (40) ÷ groups in its
 stage — the slot count, not the number of picks stored, so leaving a place empty costs what a correct pick there
 would have added, and the ratio capped at 1 because picks stored under a higher pick count outlive it; the total is rounded to quarters by
-`roundQuarter`, shown with two decimals and its exact value in a hover bubble over the score (`.leaderboard-exact` in style.css, fed
-by `pointsCell`), so a perfect league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then In top; ties share a rank. Points, the main score, is higher-is-better like every other count.
+`roundQuarter`, shown with two decimals and its exact value in a hover bubble over the score (`.exact-score` in style.css, fed
+by `exactCell`), so a perfect league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then In top; ties share a rank. Points, the main score, is higher-is-better like every other count.
 
 ## Section / day model
 
@@ -297,6 +309,8 @@ Sorting:
     - `makeEl(tag, {dataset, ...props})` — element construction
     - `shakeEl(el)` — restart the shake animation across a forced reflow
     - `escapeHtml` / `escapeAttr` — for any user-provided string in templates; `proxied(url)` for every logo `src`
+    - `exactCell(shown, exact, cls)` — a table cell around a rounded number with its exact value in a hover bubble
+      (`.exact-score`) and `cls` colouring the number: the league leaderboard's points and the standings' community place
     - `statusLine({cls, text})` / `renderStatus(el, {cls, text})` — the centred line a view shows loading, empty and
       failed (app.js's `statusMsg` is the string form a predictions panel uses)
     - `loadImage(src)` — Promise wrapper around `new Image()`
@@ -308,12 +322,12 @@ Sorting:
       card's panel and me.html so the two can't drift
     - `DEFAULT_PICK_COUNT` (4) — the pick slots a standings row arriving without a `pick_count` falls back to
     - `api(url, {method, body})` — auth + JSON; throws with `.code` and `.rateLimited` from `{err}` on `!ok`, owns the
-      `X-Refreshing` toast, and drops the cached `/api/me` and `/api/predictions/me` after a `POST /api/submit` or
-      `/api/login`
+      `X-Refreshing` toast, drops the cached `/api/me` and `/api/predictions/me` after a `POST /api/submit` or
+      `/api/login`, and every cached `standings-predictions:` key after a `POST /api/submit`
     - the load cache — `cachedLoad(key, load)` / `invalidateLoad(key)` behind `loadMatches`, `loadStandingsRows`,
-      `loadMyPredictions` and `loadMe`: several views of one page ask an endpoint once, whoever gets there first, and a
-      rejected load is dropped so the next call retries. `loadRoster` and the overlay pages key their own data in the
-      same cache
+      `loadMyPredictions`, `loadStandingPredictions` and `loadMe`: several views of one page ask an endpoint once, whoever
+      gets there first, and a rejected load is dropped so the next call retries. `loadRoster` and the overlay pages key
+      their own data in the same cache
     - `tryFetch(fn)` — swallows errors, returns `undefined` (use for non-critical loads)
     - `withDisabled(ids, fn)` — disables buttons around an async op, re-enables in `finally`
     - `findCard(index)` — `.card[data-index="..."]` lookup

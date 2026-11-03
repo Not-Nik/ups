@@ -61,12 +61,6 @@ function rankLeaderboard(matches, predictions) {
 //   top `pick_count` of its group (4, or what the admin panel sets for the stage).
 const STAGE_POINTS = 40;
 const roundQuarter = x => Math.round(x * 4) / 4;
-// The rounded score keeps its two decimals; the exact one, cut after the last
-// significant digit, sits in a bubble over it on hover.
-function pointsCell(points, exact) {
-    const value = escapeAttr(String(Number(exact.toFixed(6))));
-    return `<span class="leaderboard-exact" data-exact="${value}">${escapeHtml(points.toFixed(2))}</span>`;
-}
 
 // Every group's share of its stage's points: STAGE_POINTS for a stage on its own, half
 // of it where the stage holds two groups, and so on. Computed over a whole tournament,
@@ -295,7 +289,7 @@ async function renderLeaderboard(id) {
         const [allMatches, standingRows, standingPicks] = await Promise.all([
             loadMatches(id),
             loadStandingsRows(id),
-            api(`/api/standings/predictions/${id}`),
+            loadStandingPredictions(id),
         ]);
         const matches = allMatches.filter(m => m.score_a != null && m.score_b != null);
         const predictions = matches.length
@@ -368,7 +362,7 @@ const LEAGUE_COLUMNS = [
     {
         key: 'points', head: 'Points', cls: 'standings-num fw-semibold',
         title: `Up to ${STAGE_POINTS} per league (shared by its groups), less for every place a pick is off. Rounded to quarters, the exact number on hover`,
-        cell: r => pointsCell(r.points, r.pointsExact)
+        cell: r => exactCell(r.points.toFixed(2), r.pointsExact)
     },
 ];
 
