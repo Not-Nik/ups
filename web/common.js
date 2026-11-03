@@ -30,6 +30,11 @@ const predictionText = (p, sep = ':') => isPercentPrediction(p)
     ? `${p.score_a}%${sep}${p.score_b}%`
     : `${p.score_a}${sep}${p.score_b}`;
 
+// The score of a finished match, as the row shows it next to the prediction. Escaped
+// like everything else this file interpolates: the server types these as integers today,
+// and the row builder is the one place the whole site trusts to do the escaping.
+const finalScoreText = (match, sep = ':') => escapeHtml(`${match.score_a}${sep}${match.score_b}`);
+
 // ============== Tournaments ==============
 // Newest (highest id) first, so the landing grid opens with the current season.
 const byNewestTournament = (a, b) => b.tournament_id - a.tournament_id;
@@ -136,7 +141,7 @@ const predictionRowHTML = (p, sep = ' : ', current = sep, {match = null, you = '
     const finished = match && match.score_a != null && match.score_b != null;
     const score = `${predictionText(p, sep)}${finished && (own ?? isYou)
         ? `<span class="ms-2 small ${sameOutcome(p, match) ? 'text-success' : 'text-danger'}">` +
-          `${escapeHtml(current)}${sameOutcome(p, match) ? '&#10003;' : '&#10007;'} ${match.score_a}:${match.score_b}</span>`
+          `${escapeHtml(current)}${sameOutcome(p, match) ? '&#10003;' : '&#10007;'} ${finalScoreText(match)}</span>`
         : ''}`;
     if (!match && heading == null) {
         return `
