@@ -321,8 +321,10 @@ let toastTimer = null;
 function showToast(msg, duration = 4000) {
     const toast = $('toast');
     if (!toast) return;
-    toast.textContent = msg;
+    // The text goes in while the region is on screen: a polite live region announces a
+    // change it can see, so writing first and un-hiding after can leave the toast unread.
     show(toast);
+    toast.textContent = msg;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => hide(toast), duration);
 }
