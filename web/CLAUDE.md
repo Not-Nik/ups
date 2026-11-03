@@ -99,8 +99,10 @@ Server returns `{err: 'Code'}` on failures, every route but `/api/proxy` behind 
 50). Two codes are the client's business: `RateLimited`, which `api()` toasts and rethrows as `err.rateLimited` so
 callers can stay quiet, and `AccountExists` (401), which makes `submitWithName` ask for another name.
 
-"admin" auth means a token whose account has the `Admin` flag (`is_admin` in `../src/account.rs`). Non-admins get a
-404 with `{err: 'AccessDenied'}`; `admin.js` maps that to "This account is not an admin."
+"admin" auth means a token whose account has the `Admin` flag (`is_admin` in `../src/account.rs`). Non-admins
+get a plain 404: `verify_admin` rejects with `not_found`, and `handle_rejection` answers that with `web/404.html`,
+so there is no `{err}` body to read. `api()` therefore throws with `status: 404` and no `code`, and `admin.js`'s
+writes map a bodiless 404 to "This account is not an admin."
 
 ## Auth
 
