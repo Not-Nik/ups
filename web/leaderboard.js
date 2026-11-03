@@ -121,7 +121,9 @@ function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWei
     byName.forEach((e, name) => {
         perGroup.get(name).forEach((sum, groupId) => {
             const max = maxPickPoints(groupId);
-            if (max > 0) e.pointsExact += sum / (max * pickSlots(groupId)) * groupWeight.get(groupId);
+            // Picks already stored outlive a lowered pick count, so a group can hold more
+            // slots' worth of points than it has: cap it at its share of the stage.
+            if (max > 0) e.pointsExact += Math.min(1, sum / (max * pickSlots(groupId))) * groupWeight.get(groupId);
             e.leagues++;
         });
         e.points = roundQuarter(e.pointsExact);
