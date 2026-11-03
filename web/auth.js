@@ -1,7 +1,8 @@
 // ============== Account UI ==============
 // The header's Log in button and user menu, plus the #name-modal and #logout-modal
 // they open. Shared by every page that carries that markup (the landing page and
-// the tournament page); app.js also drives the modal for its submit flow.
+// the tournament page); app.js also drives the modal for its submit flow. The dialog
+// behaviour they both want — trap, hidden page, Escape — is common.js's.
 
 // ============== Modal ==============
 const MODAL_MODES = {
@@ -38,85 +39,6 @@ const MODAL_MODES = {
         cancel: 'skip',
     },
 };
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
-const focusables = root => [...root.querySelectorAll(FOCUSABLE)].filter(isVisible);
-
-// aria-hidden set on the rest of the page while the dialog is open, so it only ever
-// comes off again where this put it on. Elements already carrying it (or announcing
-// themselves, like the toast) are left alone.
-let hiddenForDialog = [];
-
-const hidePage = dialog => {
-    showPage();
-    hiddenForDialog = [...document.body.children].filter(el => el !== dialog
-        && !el.hasAttribute('aria-hidden')
-        && !el.hasAttribute('aria-live')
-        && el.getAttribute('role') !== 'alert');
-    hiddenForDialog.forEach(el => el.setAttribute('aria-hidden', 'true'));
-};
-
-const showPage = () => {
-    hiddenForDialog.forEach(el => el.removeAttribute('aria-hidden'));
-    hiddenForDialog = [];
-};
-
-// Keeps the keyboard on the dialog while it is open, and Escape is its cancel
-// button. Only one dialog holds the trap and the hidden page: opening a second
-// hands the pair over rather than stacking a second keydown listener, and close-
-// ing the one that lost it leaves the holder's alone, so a takeover can never
-// strand a listener or leave the page permanently aria-hidden.
-let dialogTrap = null;
-let trappedDialog = null;
-
-// Binds the trap for one open dialog; returns the function that unbinds it.
-function addDialogTrap(dialog, onEscape) {
-    const onKey = e => trapKeys(e, dialog, onEscape);
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-}
-
-// For a dialog the caller has just shown; the caller focuses into it itself.
-function openDialog(dialog, onEscape) {
-    hidePage(dialog);
-    dialogTrap?.();
-    dialogTrap = addDialogTrap(dialog, onEscape);
-    trappedDialog = dialog;
-}
-
-function closeDialog(dialog) {
-    if (trappedDialog !== dialog) return;
-    dialogTrap?.();
-    dialogTrap = null;
-    trappedDialog = null;
-    showPage();
-}
-
-function trapKeys(e, dialog, onEscape) {
-    if (e.key === 'Escape') {
-        e.preventDefault();
-        onEscape();
-        return;
-    }
-    if (e.key !== 'Tab') return;
-    const items = focusables(dialog);
-    if (!items.length) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement;
-    if (!dialog.contains(active) || (e.shiftKey && (active === first || !items.includes(active)))) {
-        e.preventDefault();
-        last.focus();
-    } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-    }
-}
-
-// Rows hidden with d-none have no layout box, so their controls stay out of the trap.
-// Also answers whether the control that opened a dialog is still around to take the
-// focus back; a menu item that hid with its menu is not.
-const isVisible = el => !!(el?.offsetWidth || el?.offsetHeight || el?.getClientRects().length);
 
 const nameModal = {
     _resolve: null,
