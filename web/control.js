@@ -163,7 +163,14 @@ async function initControl() {
         box.append(head, grid);
         search.focus();
 
-        const heroes = await fetchHeroes().catch(() => []);
+        // A failed manifest is its own message, not an empty grid: inside a dialog that
+        // reads as "there are no heroes". cachedLoad dropped the failure, so re-opening
+        // the picker retries.
+        const heroes = await fetchHeroes().catch(() => null);
+        if (!heroes) {
+            grid.append(crEmpty('Failed to load heroes.'));
+            return;
+        }
         const cells = heroes.map(h => {
             const cell = makeEl('button', {
                 className: 'ban-cell',
@@ -209,7 +216,11 @@ async function initControl() {
         box.append(head, grid);
         search.focus();
 
-        const maps = await fetchMaps().catch(() => []);
+        const maps = await fetchMaps().catch(() => null);
+        if (!maps) {
+            grid.append(crEmpty('Failed to load maps.'));
+            return;
+        }
         const MODES = ['Control', 'Hybrid', 'Escort', 'Push', 'Flashpoint', 'Clash'];
         const groups = []; // {wrap, cells} so search can hide whole empty modes
         MODES.forEach(mode => {
