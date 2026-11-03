@@ -57,6 +57,7 @@ async function initControl() {
     let syncBo = noop;
     let syncMaps = noop;
     let mapsEl = null; // the horizontal map list, set in render() (for scroll-to-end)
+    let addMapBtn = null; // set in render() (for the map picker's focus restore)
     const message = text => panel.replaceChildren(crEmpty(text));
     const actionBtn = (label, onClick) => {
         const btn = makeEl('button', {className: 'cr-swap', type: 'button', textContent: label});
@@ -85,7 +86,7 @@ async function initControl() {
         if (!maps[slotIdx]) return;
         maps[slotIdx].map = key;
         saveMaps(mid, maps);
-        syncMaps();
+        return syncMaps();
     };
 
     // Declare (or swap to) `side` as the winner of the latest unplayed map. This is
@@ -120,9 +121,22 @@ async function initControl() {
         maps.splice(slotIdx, 1);
         saveMaps(mid, maps);
         saveScores(mid, derivedScore(mid));
-        syncMaps();
+        const done = syncMaps();
         syncScores();
         syncBans();
+        return done;
+    };
+
+    // syncMaps rebuilds the map list, so the slot button that opened the picker is gone
+    // by the time the list is back and the modal's focus restore has already landed on
+    // the removed node. Once the rebuild has happened, focus the button that holds this
+    // slot now — the slot after a removal sits at the same index, one past the end lands
+    // on the last slot, and an emptied list on "Add map", which never gets rebuilt.
+    const refocusSlot = (done, slotIdx) => {
+        Promise.resolve(done).then(() => {
+            const slots = [...(mapsEl?.querySelectorAll('.cr-map-pick') ?? [])];
+            (slots[Math.min(slotIdx, slots.length - 1)] ?? addMapBtn)?.focus();
+        });
     };
 
     // key -> name, for the picker thumbnails and slot labels. cachedLoad drops a failed
@@ -205,8 +219,9 @@ async function initControl() {
         if (slotIdx !== null) {
             const removeBtn = makeEl('button', {className: 'cr-swap ban-clear', type: 'button', textContent: 'Remove map'});
             removeBtn.addEventListener('click', () => {
-                removeMap(mid, slotIdx);
+                const done = removeMap(mid, slotIdx);
                 closeModal();
+                refocusSlot(done, slotIdx);
             });
             head.append(removeBtn);
         }
@@ -245,9 +260,11 @@ async function initControl() {
                 else img.classList.add('map-cell-noart');
                 cell.append(img, makeEl('span', {className: 'ban-cell-name', textContent: m.name}));
                 cell.addEventListener('click', () => {
-                    if (slotIdx === null) addMap(mid, m.key);
-                    else setMap(mid, slotIdx, m.key);
+                    // The list is rebuilt either way; only an added slot keeps its opener,
+                    // since "Add map" sits in the header outside the list.
+                    const done = slotIdx === null ? addMap(mid, m.key) : setMap(mid, slotIdx, m.key);
                     closeModal();
+                    if (slotIdx !== null) refocusSlot(done, slotIdx);
                 });
                 cellsRow.append(cell);
                 return cell;
@@ -454,7 +471,7 @@ async function initControl() {
         // Title, best-of dropdown and "Add map" share one header line. Best-of lives
         // here (not the control grid) since it drives the maps' match-point detection.
         const mapsHead = makeEl('div', {className: 'cr-maps-head'});
-        const addMapBtn = actionBtn('Add map', () => openMapPicker(id, null, addMapBtn));
+        addMapBtn = actionBtn('Add map', () => openMapPicker(id, null, addMapBtn));
         mapsHead.append(
             makeEl('h2', {className: 'cr-maps-title', textContent: 'Maps'}),
             boSelect,
