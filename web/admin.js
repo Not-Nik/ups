@@ -8,9 +8,13 @@ function toast(msg, ok = false) {
     $('toast').classList.toggle('toast-success', ok);
 }
 
-function report(e, fallback) {
+// `write` marks the admin-only POSTs: those routes hide behind not_found, so a
+// non-admin gets the HTML 404 page with no { err } body, and the status is the only
+// thing that says why nothing was stored. A failed public GET keeps its own message.
+function report(e, fallback, write = false) {
     if (e.rateLimited) return;
-    toast(e.code === 'AccessDenied' ? 'This account is not an admin.' : e.code || fallback);
+    const denied = e.code === 'AccessDenied' || (write && !e.code && e.status === 404);
+    toast(denied ? 'This account is not an admin.' : e.code || fallback);
 }
 
 // The one-liner a card shows in place of its rows: why there are none, or that
@@ -198,7 +202,7 @@ async function submitTournament(btn) {
         await loadTournamentOptions(); // the new tournament lands in the match form
         loadPickCounts(); // ... and the select above the pick counts starts over
     } catch (e) {
-        report(e, 'Tournament could not be added');
+        report(e, 'Tournament could not be added', true);
     } finally {
         btn.disabled = false;
     }
@@ -299,7 +303,7 @@ async function submitPickCounts(btn) {
         }
         toast('Saved.', true);
     } catch (e) {
-        report(e, 'Could not be saved');
+        report(e, 'Could not be saved', true);
     } finally {
         btn.disabled = false;
     }
@@ -340,7 +344,7 @@ async function submitRefreshInterval(btn) {
         t.refresh_interval = refresh_interval;
         toast('Saved.', true);
     } catch (e) {
-        report(e, 'Could not be saved');
+        report(e, 'Could not be saved', true);
     } finally {
         btn.disabled = false;
     }
@@ -363,7 +367,7 @@ async function submitRelease(btn) {
         toast(`${me.name ?? name} is now claimable.`, true);
         $('release-name').value = '';
     } catch (e) {
-        report(e, 'Account could not be released');
+        report(e, 'Account could not be released', true);
     } finally {
         btn.disabled = false;
     }
@@ -642,7 +646,7 @@ async function submitMatch(btn) {
         }
         pickers['team-a'].btn.focus();
     } catch (e) {
-        report(e, 'Match could not be added');
+        report(e, 'Match could not be added', true);
     } finally {
         btn.disabled = false;
     }

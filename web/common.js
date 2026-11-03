@@ -361,7 +361,10 @@ async function api(url, {method = 'GET', body} = {}) {
         const code = data.err;
         const rateLimited = code === 'RateLimited';
         if (rateLimited) showToast('Too many requests — please wait a moment and try again.');
-        throw Object.assign(new Error('Request failed'), {code, rateLimited});
+        // The status too: a route that hides behind warp's not_found answers with the
+        // HTML 404 page rather than a { err } body, so the code alone can't tell a
+        // caller "you may not" from "this does not exist".
+        throw Object.assign(new Error('Request failed'), {code, rateLimited, status: res.status});
     }
     if (res.headers.get('X-Refreshing') === '1') showToast(REFRESH_MSG);
     // Whose predictions /api/predictions/me answers, and what they are, and the name
