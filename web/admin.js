@@ -38,15 +38,19 @@ async function loadList(what, load, where = null) {
 // nothing is sent at all; callers bail out on undefined.
 const intOrNull = (id, label) => {
     const el = $(id);
-    const v = el.value.trim();
-    if (!v) return null;
-    const n = Number(v);
-    if (!Number.isInteger(n) || n < 0) {
+    const reject = () => {
         toast(`${label} must be a whole number from 0 up, or empty.`);
         shakeEl(el);
         el.focus();
         return undefined;
-    }
+    };
+    // A number input reports '' for content it cannot parse ("12abc", "1e", "-"), which
+    // must not read as the field being empty.
+    if (el.validity.badInput) return reject();
+    const v = el.value.trim();
+    if (!v) return null;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 0) return reject();
     return n;
 };
 
