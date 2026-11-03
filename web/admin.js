@@ -20,15 +20,48 @@ const statusNote = (text, failed = false) => makeEl('p', {
     textContent: text,
 });
 
+// A failed load in the place of the list it left empty: why the list is missing and a
+// button that asks for it again. The retry can't wait for the tournament select's
+// `change`, since re-picking what is already selected never fires it.
+const failedNote = (what, retry) => {
+    const row = makeEl('div', {
+        className: 'd-flex align-items-center justify-content-between gap-3',
+    });
+    row.append(statusNote(`${what} could not be loaded.`, true));
+    if (retry) {
+        const btn = makeEl('button', {
+            type: 'button',
+            className: 'btn btn-sm btn-outline-secondary flex-shrink-0',
+            textContent: 'Try again',
+        });
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                await retry();
+            } finally {
+                btn.disabled = false;
+            }
+        });
+        row.append(btn);
+    }
+    return row;
+};
+
 // A list load that reports instead of throwing, so a broken request is not mistaken for
-// an empty database: the reason goes on the toast and, where a container is given, into
-// the list's place. The caller still gets undefined, so it can keep its empty state.
-async function loadList(what, load, where = null) {
+// an empty database: the reason goes on the toast and, in every container given, into the
+// list's place, with a way to ask for it again. A load that works hides those notes again.
+// The caller still gets undefined on failure, so it can keep its empty state.
+async function loadList(what, load, where = [], retry = null) {
     try {
-        return await load();
+        const data = await load();
+        for (const box of where) setHidden(box, true);
+        return data;
     } catch (e) {
         report(e, `${what} could not be loaded.`);
-        if (where) where.replaceChildren(statusNote(`${what} could not be loaded.`, true));
+        for (const box of where) {
+            box.replaceChildren(failedNote(what, retry));
+            setHidden(box, false);
+        }
     }
 }
 
@@ -73,10 +106,7 @@ function render() {
     setHidden($('logout'), !loggedIn);
     if (loggedIn) {
         loadAccountName();
-        loadTournamentOptions().then(() => {
-            loadTournamentData();
-            loadPickCounts();
-        });
+        reloadTournaments();
     }
 }
 
@@ -121,8 +151,24 @@ $('login-password').addEventListener('keydown', e => {
 
 let tournaments = []; // from /api/tournaments, for the refresh interval card
 
+// Every card whose tournament select is filled from /api/tournaments. One failed load
+// leaves all three of them empty, so all three have to say so.
+const tournamentStatus = () => [
+    $('match-tournaments-status'),
+    $('picks-tournaments-status'),
+    $('refresh-tournaments-status'),
+];
+
+// The list itself plus what is read off the tournament it selects. A retry re-runs this
+// whole chain: the selects were empty, so nothing downstream ever loaded.
+const reloadTournaments = () => loadTournamentOptions().then(() => {
+    loadTournamentData();
+    loadPickCounts();
+});
+
 async function loadTournamentOptions() {
-    const list = await loadList('Tournaments', () => api('/api/tournaments'));
+    const list = await loadList('Tournaments', () => api('/api/tournaments'),
+        tournamentStatus(), reloadTournaments);
     if (!Array.isArray(list)) return;
     tournaments = list;
     for (const select of [$('match-tournament'), $('picks-tournament'), $('refresh-tournament')]) {
@@ -168,8 +214,12 @@ const MAX_PICK_COUNT = 32; // same limit as the server
 async function loadPickCounts() {
     const box = $('picks-stages');
     const tid = parseInt($('picks-tournament').value, 10);
-    const stages = isNaN(tid) ? [] : await loadList('Leagues', () => api(`/api/stages/${tid}`), box);
-    if (stages === undefined) return; // loadList has said so in the box
+    const stages = isNaN(tid) ? [] : await loadList('Leagues', () => api(`/api/stages/${tid}`),
+        [$('picks-stages-status')], loadPickCounts);
+    if (stages === undefined) {
+        box.replaceChildren(); // the note above says why; drop the previous tournament's rows
+        return;
+    }
     if (!stages.length) {
         box.replaceChildren(statusNote('No leagues loaded for this tournament yet.'));
         return;
@@ -369,7 +419,9 @@ function makePicker({key, btn, list, placeholder, render, onSelect, custom = fal
         input.select();
     };
 
-    picker.fill = names => {
+    // fill(names, empty) rebuilds the list. `empty` stands in for the "nothing here yet"
+    // line where the list is empty because loading it went wrong.
+    picker.fill = (names, empty = null) => {
         if (picker.customEl) return; // stay in custom mode
         picker.value = '';
         renderBtn();
@@ -382,7 +434,9 @@ function makePicker({key, btn, list, placeholder, render, onSelect, custom = fal
         if (!names.length) {
             items.push(makeEl('div', {
                 className: 'admin-team-empty',
-                textContent: custom ? 'No entries yet — or pick "Custom…" below.' : 'No entries yet.',
+                textContent: empty ?? (custom
+                    ? 'No entries yet — or pick "Custom…" below.'
+                    : 'No entries yet.'),
             }));
         }
         if (custom) {
@@ -493,22 +547,25 @@ async function loadTournamentData() {
     sectionCombos = new Map();
     const stages = new Set(), groups = new Set(), rounds = new Set();
     const tid = matchTournamentId();
+    let matches = [];
+    let failed = false;
     if (tid !== null) {
-        const matches = await loadList('Matches', () => api(`/api/matches/${tid}`));
-        if (Array.isArray(matches)) {
-            for (const m of matches) {
-                for (const side of ['a', 'b']) {
-                    const team = m[`team_${side}`];
-                    if (team && !teamLogos.has(team)) teamLogos.set(team, m[`logo_${side}`] || '');
-                }
-                if (m.stage_name) stages.add(m.stage_name);
-                if (m.group_name) groups.add(m.group_name);
-                if (m.round_name) rounds.add(m.round_name);
-                const key = [m.stage_name, m.group_name, m.round_name].join('\u0000');
-                if (!sectionCombos.has(key)) {
-                    sectionCombos.set(key, {stage_number: m.stage_number, stage_type: m.stage_type});
-                }
-            }
+        const list = await loadList('Matches', () => api(`/api/matches/${tid}`),
+            [$('match-entries-status')], loadTournamentData);
+        if (Array.isArray(list)) matches = list;
+        else failed = true;
+    }
+    for (const m of matches) {
+        for (const side of ['a', 'b']) {
+            const team = m[`team_${side}`];
+            if (team && !teamLogos.has(team)) teamLogos.set(team, m[`logo_${side}`] || '');
+        }
+        if (m.stage_name) stages.add(m.stage_name);
+        if (m.group_name) groups.add(m.group_name);
+        if (m.round_name) rounds.add(m.round_name);
+        const key = [m.stage_name, m.group_name, m.round_name].join('\u0000');
+        if (!sectionCombos.has(key)) {
+            sectionCombos.set(key, {stage_number: m.stage_number, stage_type: m.stage_type});
         }
     }
     const sortByName = (a, b) => a.localeCompare(b);
@@ -518,11 +575,14 @@ async function loadTournamentData() {
         round: [...rounds].sort(compareDays),
     };
     const teamNames = [...teamLogos.keys()].sort(sortByName);
-    pickers['team-a'].fill(teamNames);
-    pickers['team-b'].fill(teamNames);
-    pickers.stage.fill(sectionNames.stage);
-    pickers.group.fill(sectionNames.group);
-    pickers.round.fill(sectionNames.round);
+    // An empty list that came off a failed request must not read as a tournament nobody
+    // has made a match in yet.
+    const empty = failed ? 'Matches could not be loaded.' : null;
+    pickers['team-a'].fill(teamNames, empty);
+    pickers['team-b'].fill(teamNames, empty);
+    pickers.stage.fill(sectionNames.stage, empty);
+    pickers.group.fill(sectionNames.group, empty);
+    pickers.round.fill(sectionNames.round, empty);
 }
 
 // ============== Matches ==============

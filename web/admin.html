@@ -52,6 +52,8 @@
                             <label for="picks-tournament" class="form-label">Tournament</label>
                             <select id="picks-tournament" class="form-select"></select>
                         </div>
+                        <div id="picks-tournaments-status" class="mb-3 d-none"></div>
+                        <div id="picks-stages-status" class="mb-3 d-none"></div>
                         <div id="picks-stages" class="mb-3"></div>
                         <button id="picks-submit" class="btn btn-primary w-100">Save</button>
                     </div>
@@ -64,6 +66,7 @@
                             <label for="refresh-tournament" class="form-label">Tournament</label>
                             <select id="refresh-tournament" class="form-select"></select>
                         </div>
+                        <div id="refresh-tournaments-status" class="mb-3 d-none"></div>
                         <div class="mb-3">
                             <label for="refresh-minutes" class="form-label">Minutes <span class="text-secondary">(1 to 10080)</span></label>
                             <input id="refresh-minutes" type="number" min="1" max="10080" class="form-control">
@@ -105,6 +108,7 @@
                             <label for="match-tournament" class="form-label">Tournament</label>
                             <select id="match-tournament" class="form-select"></select>
                         </div>
+                        <div id="match-tournaments-status" class="mb-3 d-none"></div>
                         <div class="row g-3 mb-3">
                             <div class="col-6">
                                 <label for="team-btn-a" class="form-label">Team A</label>
@@ -121,6 +125,7 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="match-entries-status" class="mb-3 d-none"></div>
                         <div class="row g-3 mb-3">
                             <div class="col-6">
                                 <label for="match-score-a" class="form-label">Score A <span class="text-secondary">(final)</span></label>
