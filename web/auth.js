@@ -276,6 +276,11 @@ function bindAuthEvents() {
         setMenuOpen(userDropdown.classList.contains('d-none'));
     });
     document.addEventListener('click', () => setMenuOpen(false));
+    // A menu opened from the keyboard needs the key that closes menus: nothing else
+    // listens for Escape here, and the button would stay aria-expanded over a hidden menu.
+    userBtn.addEventListener('keydown', e => {
+        if (e.key === 'Escape') setMenuOpen(false);
+    });
 
     onClick('change-password-btn', async () => {
         setMenuOpen(false);
