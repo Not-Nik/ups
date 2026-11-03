@@ -283,7 +283,12 @@ function trapKeys(e, dialog, onEscape) {
     const first = items[0];
     const last = items[items.length - 1];
     const active = document.activeElement;
-    if (!dialog.contains(active) || (e.shiftKey && (active === first || !items.includes(active)))) {
+    // Focus that escaped the dialog (a click on the page behind it) re-enters at its
+    // top; only wrapping past the ends, or shifting off the first row, goes to the last.
+    if (!dialog.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+    } else if (e.shiftKey && (active === first || !items.includes(active))) {
         e.preventDefault();
         last.focus();
     } else if (!e.shiftKey && active === last) {
