@@ -384,12 +384,22 @@ async function initOverlay() {
         return c ? `rgb(${c.join(',')})` : null;
     };
 
-    // Manifest name lookup; starts empty and repaints once /maps/maps.json loads.
+    // Manifest name lookup; starts empty and repaints once /maps/maps.json loads. One
+    // failed attempt must not cost the whole stream session its map names, so the
+    // repaint path below tries again for as long as the table is still empty.
     let mapInfo = new Map();
-    fetchMaps().then(list => {
+    const loadMapInfo = () => fetchMaps().then(list => {
         mapInfo = new Map(list.map(m => [m.key, m]));
         paintMaps();
     }).catch(noop);
+    loadMapInfo();
+
+    // fetchMaps caches in flight and drops a rejection, so a call while an attempt is
+    // running reuses it and a call after one failed re-requests: retrying per repaint
+    // needs no timer and never means a request per repaint.
+    const retryMapInfo = () => {
+        if (!mapInfo.size) loadMapInfo();
+    };
 
     // One map tile: art (background image) + name + optional winner-team badge.
     // `kind` is played | upcoming | later and selects styling in overlay.css.
@@ -618,8 +628,10 @@ async function initOverlay() {
             // maps change can move the current map whose bans the banners show.
             paint();
             paintMaps();
+            retryMapInfo();
         } else if (e.key === boKey(id)) {
             paintMaps();
+            retryMapInfo();
         } else if (e.key === LOGO_KEY) {
             paintLogo();
         } else if (e.key === SCENE_KEY) {
