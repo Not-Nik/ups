@@ -567,7 +567,8 @@ async function openAllPredictions(targets) {
     // batched POST feeds all the misses, and only the first cachedLoad call starts it.
     let batch;
     const loadBatch = () => batch ??= api('/api/predictions', {method: 'POST', body: targets.map(t => t.match.id)});
-    const loads = targets.map(({match}) => cachedLoad(`predictions:${match.id}`, loadBatch));
+    const loads = targets.map(({match}) => cachedLoad(`predictions:${match.id}`,
+        () => loadBatch().then(all => all.filter(p => p.id === match.id))));
     const results = await Promise.allSettled(loads);
     results.forEach((r, i) => {
         const {panel, match} = targets[i];
