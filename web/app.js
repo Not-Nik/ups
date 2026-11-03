@@ -1109,10 +1109,19 @@ function bindEvents() {
     onClick('save-image-btn', () => imageDialog.open());
 
     const overlayInfoModal = $('overlay-info-modal');
-    onClick('overlay-info-btn', () => show(overlayInfoModal));
-    onClick('overlay-info-close', () => hide(overlayInfoModal));
+    const closeOverlayInfo = () => {
+        hide(overlayInfoModal);
+        closeDialog(overlayInfoModal);
+        $('overlay-info-btn').focus();
+    };
+    onClick('overlay-info-btn', () => {
+        show(overlayInfoModal);
+        openDialog(overlayInfoModal, closeOverlayInfo);
+        focusables(overlayInfoModal)[0]?.focus();
+    });
+    onClick('overlay-info-close', closeOverlayInfo);
     overlayInfoModal.addEventListener('click', e => {
-        if (e.target === overlayInfoModal) hide(overlayInfoModal);
+        if (e.target === overlayInfoModal) closeOverlayInfo();
     });
     onClick('image-modal-cancel', () => imageDialog.close());
     onClick('image-modal-save', () => withDisabled(['image-modal-save'], async () => {
