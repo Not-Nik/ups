@@ -867,15 +867,15 @@ async function submitWithName(body) {
         try {
             const isNew = await postSubmission(body, name);
             if (isNew) await nameModal.promptPassword(name);
-            nameModal.close(null);
+            nameModal.closeUnlessPending();
             return true;
         } catch (e) {
             if (e.rateLimited) {
-                nameModal.close(null);
+                nameModal.closeUnlessPending();
                 return false;
             }
             if (e.code !== 'AccountExists') {
-                nameModal.close(null);
+                nameModal.closeUnlessPending();
                 failSubmission();
                 return false;
             }

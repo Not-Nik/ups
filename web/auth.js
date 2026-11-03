@@ -145,6 +145,12 @@ const nameModal = {
         this._restore = null;
         this.resolve(result);
     },
+
+    // Close it while nothing waits on a prompt. When another flow replaced this one while
+    // it was pending, that dialog is still owed its answer and is not ours to shut.
+    closeUnlessPending(result = null) {
+        if (!this._resolve) this.close(result);
+    },
 };
 
 async function loadCurrentUser() {
@@ -274,7 +280,7 @@ function bindAuthEvents() {
     onClick('change-password-btn', async () => {
         setMenuOpen(false);
         await nameModal.promptChangePassword($('user-name').textContent);
-        nameModal.close(null);
+        nameModal.closeUnlessPending();
     });
     // The button that opened the menu is also what a keyboard close returns to:
     // the logout item it was opened from hides again with the menu.
