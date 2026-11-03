@@ -230,12 +230,12 @@ const showPage = () => {
 };
 
 // Keeps the keyboard on the dialog while it is open, and Escape is its cancel
-// button. Only one dialog holds the trap and the hidden page: opening a second
-// hands the pair over rather than stacking a second keydown listener, and close-
-// ing the one that lost it leaves the holder's alone, so a takeover can never
-// strand a listener or leave the page permanently aria-hidden.
-let dialogTrap = null;
-let trappedDialog = null;
+// button. The dialog on top of this stack holds the trap and the hidden page: opening a
+// second hands the pair over instead of stacking a second keydown listener, and closing
+// the second takes them back from where the first left off — so a takeover can never
+// strand a listener, leave the page permanently aria-hidden, or leave the dialog still
+// open but no longer trapped.
+let dialogHolders = [];
 
 // Binds the trap for one open dialog; returns the function that unbinds it.
 function addDialogTrap(dialog, onEscape) {
@@ -244,20 +244,31 @@ function addDialogTrap(dialog, onEscape) {
     return () => document.removeEventListener('keydown', onKey, true);
 }
 
-// For a dialog the caller has just shown; the caller focuses into it itself.
+// For a dialog the caller has just shown; the caller focuses into it itself. Re-opening
+// the dialog already on top — the next step of one flow — replaces its own holder.
 function openDialog(dialog, onEscape) {
+    closeDialog(dialog);
+    const holder = {dialog, onEscape, undo: null};
     hidePage(dialog);
-    dialogTrap?.();
-    dialogTrap = addDialogTrap(dialog, onEscape);
-    trappedDialog = dialog;
+    dialogHolders.at(-1)?.undo();
+    holder.undo = addDialogTrap(dialog, onEscape);
+    dialogHolders.push(holder);
 }
 
 function closeDialog(dialog) {
-    if (trappedDialog !== dialog) return;
-    dialogTrap?.();
-    dialogTrap = null;
-    trappedDialog = null;
-    showPage();
+    const index = dialogHolders.map(h => h.dialog).lastIndexOf(dialog);
+    if (index === -1) return;
+    const [holder] = dialogHolders.splice(index, 1);
+    // A dialog closed from underneath the open one: the holder keeps what it holds.
+    if (index !== dialogHolders.length) return;
+    holder.undo();
+    const last = dialogHolders.at(-1);
+    if (!last) {
+        showPage();
+        return;
+    }
+    hidePage(last.dialog);
+    last.undo = addDialogTrap(last.dialog, last.onEscape);
 }
 
 function trapKeys(e, dialog, onEscape) {
