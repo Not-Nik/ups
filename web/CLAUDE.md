@@ -339,12 +339,15 @@ are thin wrappers returning a Promise resolved by user action. `nameModal.mode` 
 branching; only the pending prompt is ever resolved (`_settle`), so a second close is harmless. Its one password field
 is `current-password` in `'login'` and `new-password` everywhere else.
 
-`openDialog`/`closeDialog`, next to the modal in auth.js, are how every dialog opens and shuts: the keyboard stays
-inside it (Tab cycles its visible controls, Escape is its Cancel — or Skip, whichever the mode shows), the page behind
-goes `aria-hidden`, and focus lands on `focusId` or the first control, then back on whatever opened it (the user button,
-not the menu item that hid with the menu, for the log-out confirmation). One dialog holds the trap at a time; an overlap
-hands it over. The image dialog and `#logout-modal` are static markup driven through them, `#overlay-info-modal` the
-last one left on bare `show`/`hide`.
+`openDialog`/`closeDialog` live in common.js, above the pages that need them, and are how every dialog opens and
+shuts: the keyboard stays inside it (Tab cycles its visible controls, Escape is its Cancel — or Skip, whichever the
+mode shows; focus that had escaped the dialog re-enters at its top), the page behind goes `aria-hidden`, and focus
+lands on `focusId` or the first control, then back on whatever opened it (the user button, not the menu item that
+hid with the menu, for the log-out confirmation). Dialogs stack: the top one holds the trap and the hidden page, an
+overlap hands them over, and closing the top gives them back to the one underneath. Driven through them: the image
+dialog, `#logout-modal` and `#overlay-info-modal` (static markup), and the control room's three pickers, whose box
+is built per open — `openModal` passes the backdrop, the dialog's only body-level ancestor, so hiding the page
+leaves the dialog visible.
 
 ## Save-as-image
 
