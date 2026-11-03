@@ -16,12 +16,13 @@ const BO_OPTIONS = [[null, 'Bo: Off'], [3, 'Bo3'], [5, 'Bo5'], [7, 'Bo7']];
 // At most one picker modal is open at a time. openModal dismisses any current one,
 // mounts a fresh full-screen backdrop with a box of `boxClass` (clicking outside the
 // box closes it), and returns the box to fill. The box is the dialog: it is named by
-// `label`, and closing it puts focus back on `opener`, the control that opened it.
-// closeModal (and Escape) dismisses.
+// `label`, it gets the shared keyboard trap and the hidden page from common.js, and
+// closing it puts focus back on `opener`, the control that opened it.
 let activeModal = null;
 let modalOpener = null;
 const closeModal = () => {
     if (!activeModal) return;
+    closeDialog(activeModal);
     activeModal.remove();
     activeModal = null;
     if (modalOpener?.isConnected) modalOpener.focus();
@@ -40,6 +41,9 @@ function openModal(boxClass, {label, opener = null} = {}) {
     document.body.append(overlay);
     activeModal = overlay;
     modalOpener = opener;
+    // The trap wants the element the dialog lives in: hiding the body's other children
+    // has to leave this overlay, the box's only body-level ancestor, visible.
+    openDialog(overlay, closeModal);
     return box;
 }
 
@@ -352,10 +356,6 @@ async function initControl() {
 
         showTournaments();
     }
-
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') closeModal();
-    });
 
     async function render() {
         syncScores = noop;
