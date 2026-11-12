@@ -134,6 +134,10 @@ Back walks through it. What localStorage does hold is listed under Auth.
   falls back to `matches`.
 - `?table=<stage>[:<group>]` — which standings table is open; the group is appended only where the
   stage holds several (`standingsParam` in standings.js). Unknown or missing falls back to the first.
+- `?predictor=<name>` — whose picks the standings' C column shows (`standings.predictor`); left out for the
+  community, the default, so a plain link stays clean. Matched case-insensitively against the open table's
+  predictors (`predictorIn`) and rewritten to the stored spelling; a name that didn't predict the table falls back
+  to the community and drops the param. Switching tables keeps the predictor wherever they predicted the new one.
 - `?tab=<tab>` — which day/bracket tab of the matches view is open. `renderTabs` assigns each tab its `param`: a league day is its own
   name (`tab=Day+5`), a day of a wildcard stage is `<stage>:<round>` (`tab=Wildcard+Liga+3:Day+1`), a bracket is `bracket:<stage>` — its merged group key is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
@@ -145,10 +149,11 @@ Back walks through it. What localStorage does hold is listed under Auth.
   tournament page links there (match cards, bracket slots, standings rows, "Your top N" picks, Teams-view tiles), as
   do the teams on me.html. On tournament.html a plain left click is caught and handled in place (`openTeamPlayers`);
   a modified or middle click follows the href.
-- `syncUrl(replace)` writes all five from `state.activeTournament` / `state.activeView` /
-  `state.activeTab` / `activeStandingsTable()` / `#players-search`, keeping any other params. A user's click **pushes** a history entry; settling on a
+- `syncUrl(replace)` writes all six from `state.activeTournament` / `state.activeView` /
+  `state.activeTab` / `activeStandingsTable()` / `activeStandingsPredictor()` / `#players-search`, keeping any other params. A user's click **pushes** a history entry; settling on a
   default **replaces**, so the URL is always complete without cluttering history.
-- `applyLocation()` is the `popstate` handler: it re-picks the players search, the view, the tab and the standings table.
+- `applyLocation()` is the `popstate` handler: it re-picks the players search, the view, the standings table and
+  predictor, then the tab — in that order, since `activateWantedTab` replaces the URL from the state.
   First load picks the view in the init handler, `renderGrid` → `activateWantedTab()` picks the tab,
   and `renderStandings` → `activateWantedStandingsTable()` the table once the standings have loaded.
 - Unknown tab values are dropped silently — `activateWantedTab()` falls back to the default and rewrites
@@ -196,6 +201,14 @@ including for the predictor count. Averaged over its predictors and ranked from 
 the teams nobody picked share the last one, in standings order), the cell shows that place over the exact average in the
 same hover bubble the league leaderboard's scores use (`exactCell`), green when the crowd rated the team above its rank
 and red when below it. Clicking the header sorts by place, 1 first. A group nobody predicted gets no C column at all.
+
+A dropdown above the table (`#standings-predictor`, "C: Community") swaps the C column for one person's picks: it lists
+Community and everyone who predicted the open group (`predictorPlaces`, the same picks the crowd counts), A to Z, the
+logged-in user marked "You", behind a search box (`searchKey` from roster.js, every typed word; Enter takes the first
+name left, arrow keys walk the list, Escape closes). A person's column (`predictorColumn`) shows their predicted place,
+coloured the same way, and a dash for the teams they left out, which sort last; no hover bubble, the place being exact.
+Switching rebuilds only the table (`showPredictor`), moving the "Your top N" box below it over as it stands. The choice
+is `?predictor=` (see Location state), and the dropdown hides where the group has no C column.
 
 Under each table sits the user's top-N prediction ("Your top N", `standingsPrediction` in standings.js). N is the
 row's `pick_count`: 4 by default, set per stage in the admin panel (last season: 6 for Erste Liga, 8 for Vierte Liga). The

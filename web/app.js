@@ -116,6 +116,7 @@ function syncUrl(replace = false) {
     set('view', state.activeView);
     set('tab', state.activeTab && tabParam(state.activeTab));
     set('table', activeStandingsTable());
+    set('predictor', activeStandingsPredictor());
     set('search', state.activeView === 'players' ? $('players-search').value || null : null);
     const query = params.toString();
     history[replace ? 'replaceState' : 'pushState'](null, '', query ? `?${query}` : location.pathname);
@@ -127,8 +128,10 @@ function syncUrl(replace = false) {
 function applyLocation() {
     setRosterSearch('players', urlParams().get('search') ?? '');
     activateView(wantedView(), null);
-    activateWantedTab();
+    // The standings first: activateWantedTab replaces the URL from the state, which
+    // would otherwise still hold the table and predictor being left.
     activateWantedStandingsTable();
+    activateWantedTab();
 }
 
 // ============== Views ==============

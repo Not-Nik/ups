@@ -1172,6 +1172,42 @@ th[aria-sort="descending"] .sort-btn::after {
     background: rgba(128, 128, 128, 0.1);
 }
 
+/* The standings' "whose prediction" dropdown: a search box over a scrolling name list. */
+.predictor-menu {
+    width: 14rem;
+    padding: 0.25rem;
+}
+
+.predictor-list {
+    max-height: 16rem;
+    overflow-y: auto;
+    margin-top: 0.25rem;
+}
+
+.predictor-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.predictor-item[aria-checked="true"] {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.predictor-label {
+    opacity: 0.65;
+}
+
+.predictor-caret {
+    display: inline-block;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+    border-left: 0.3em solid transparent;
+    border-right: 0.3em solid transparent;
+    border-top: 0.3em solid currentColor;
+}
+
 /* ============== My predictions page ============== */
 .profile-icon {
     width: 3rem;

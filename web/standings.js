@@ -9,8 +9,9 @@
 let standingsLoad = null;
 
 const standings = {
-    stages: [],   // [{name, tables: [{param, label}]}] in display order
-    active: null, // param of the open table
+    stages: [],      // [{name, tables: [table]}] in display order, a table as built by renderStandings
+    active: null,    // param of the open table
+    predictor: null, // whose picks the open table's C column shows; null for the community
 };
 
 const loadStandings = id => standingsLoad ??= renderStandings(id);
@@ -20,15 +21,23 @@ const loadStandings = id => standingsLoad ??= renderStandings(id);
 // rendered tables.
 const standingsParam = (stage, group, single) => single ? stage : `${stage}:${group}`;
 
-// Read by syncUrl; null until the standings have loaded.
+// Read by syncUrl; null until the standings have loaded. A null predictor (the
+// community) keeps ?predictor= out of the URL.
 const activeStandingsTable = () => standings.active;
+const activeStandingsPredictor = () => standings.predictor;
 
 const stageOfTable = param => standings.stages.find(s => s.tables.some(t => t.param === param));
+const tableOf = param => stageOfTable(param)?.tables.find(t => t.param === param);
 
-// `record` works as in activateTab.
+// `record` works as in activateTab. The predictor carries over from the table before
+// where they predicted this one too, and falls back to the community where not.
 function activateStandingsTable(param, record = 'push') {
     standings.active = param;
     const stage = stageOfTable(param);
+    const table = tableOf(param);
+    standings.predictor = table ? predictorIn(table, standings.predictor) : null;
+    if (table) showPredictor(table, standings.predictor);
+    renderPredictorPicker(table);
     $('standings-stage-tabs').querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.stage === stage?.name);
     });
@@ -56,7 +65,9 @@ function activateStandingsTable(param, record = 'push') {
 function activateWantedStandingsTable(record = null) {
     const all = standings.stages.flatMap(s => s.tables);
     if (!all.length) return;
-    const wanted = urlParams().get('table');
+    const params = urlParams();
+    const wanted = params.get('table');
+    standings.predictor = params.get('predictor');
     activateStandingsTable((all.find(t => t.param === wanted) ?? all[0]).param, record);
 }
 
@@ -279,12 +290,15 @@ async function renderStandings(id) {
                     const {group_name, group_id} = groupRows[0];
                     const param = standingsParam(name, group_name, groups.length === 1);
                     const predicted = (picksByGroup.get(group_id) ?? []).map(([p]) => p);
-                    const card = standingsTable(groupRows, crowdAverages(groupRows, predicted));
-                    const prediction = standingsPrediction(groupRows, picks.get(group_id) ?? []);
-                    if (prediction) card.querySelector('.card-body').appendChild(prediction);
-                    card.dataset.table = param;
-                    root.appendChild(card);
-                    return {param, label: group_name || name};
+                    const table = {
+                        param, label: group_name || name, rows: groupRows,
+                        crowd: crowdAverages(groupRows, predicted),
+                        places: predictorPlaces(groupRows, predicted),
+                        prediction: standingsPrediction(groupRows, picks.get(group_id) ?? []),
+                        card: null, shown: undefined,
+                    };
+                    showPredictor(table, null);
+                    return table;
                 }),
             };
         });
@@ -307,10 +321,7 @@ const signed = n => n > 0 ? `+${n}` : `${n}`;
 // column's number, tied scores sharing a place and the teams nobody picked sharing the
 // last one. Null, and so no column at all, where the group has no usable picks.
 function crowdAverages(rows, picks) {
-    const count = Number(rows[0].pick_count);
-    const slots = Math.min(count > 0 ? count : DEFAULT_PICK_COUNT, rows.length);
-    const scored = picks.filter(p => rows.some(r => r.team_id === p.team_id)
-        && p.position >= 1 && p.position <= slots);
+    const {slots, scored} = scoredPicks(rows, picks);
     if (!scored.length) return null;
     const points = new Map(rows.map(r => [r.team_id, 0]));
     scored.forEach(p => points.set(p.team_id, points.get(p.team_id) + slots - p.position + 1));
@@ -321,18 +332,171 @@ function crowdAverages(rows, picks) {
     return {place, points, predictors: new Set(scored.map(p => p.name)).size};
 }
 
-// The community's place for a team, coloured by how it reads against the team's rank:
-// the crowd rated it higher than it stands (green) or lower (red).
+// The picks of a group that count: teams still in its standings, placed within its pick
+// slots (its `pick_count`, 4 by default, cut down to the group's size).
+function scoredPicks(rows, picks) {
+    const count = Number(rows[0].pick_count);
+    const slots = Math.min(count > 0 ? count : DEFAULT_PICK_COUNT, rows.length);
+    const teams = new Set(rows.map(r => r.team_id));
+    return {slots, scored: picks.filter(p => teams.has(p.team_id) && p.position >= 1 && p.position <= slots)};
+}
+
+// Each predictor's own order of a group, from the same picks the crowd's order counts: a
+// Map of name -> Map(team_id -> predicted place), in name order. Empty where nobody predicted.
+function predictorPlaces(rows, picks) {
+    const places = new Map();
+    scoredPicks(rows, picks).scored.forEach(p => {
+        if (!places.has(p.name)) places.set(p.name, new Map());
+        places.get(p.name).set(p.team_id, p.position);
+    });
+    return new Map([...places].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+// A predicted place read against the team's rank: rated higher than it stands (green)
+// or lower (red).
+const placeRating = (place, rank) => place < rank ? 'text-success' : place > rank ? 'text-danger' : '';
+
+// The community's place for a team, its exact average points in the hover bubble.
 function crowdColumn({place, points, predictors}) {
-    const rating = r => place.get(r.team_id) < r.rank ? 'text-success'
-        : place.get(r.team_id) > r.rank ? 'text-danger' : '';
     return {
         key: 'place', head: 'C', cls: 'standings-rank', asc: true,
         title: 'Community Prediction',
         compare: (a, b) => place.get(a.team_id) - place.get(b.team_id),
-        cell: r => exactCell(place.get(r.team_id), points.get(r.team_id) / predictors, rating(r)),
+        cell: r => exactCell(place.get(r.team_id), points.get(r.team_id) / predictors,
+            placeRating(place.get(r.team_id), r.rank)),
     };
 }
+
+// One predictor's place for a team, a dash for the teams they left out, which sort last.
+function predictorColumn(name, place) {
+    const at = r => place.get(r.team_id) ?? Infinity;
+    return {
+        key: 'place', head: 'C', cls: 'standings-rank', asc: true,
+        title: `${name}'s prediction`,
+        compare: (a, b) => at(a) === at(b) ? 0 : at(a) - at(b),
+        cell: r => place.has(r.team_id) ? `<span class="${placeRating(at(r), r.rank)}">${at(r)}</span>` : '–',
+    };
+}
+
+// ============== Whose prediction ==============
+// The dropdown above the table picks whose order the C column shows: the community's, or
+// that of any one person who predicted the open group, found through its search box. The
+// choice is ?predictor=<name>, left out for the community.
+
+// The table's own spelling of `name`, or null (the community) where they didn't predict it.
+function predictorIn(table, name) {
+    if (name == null || table.places.has(name)) return name ?? null;
+    const key = name.toLowerCase();
+    return [...table.places.keys()].find(n => n.toLowerCase() === key) ?? null;
+}
+
+// Draw a table with `name`'s picks in its C column, or the community's for null. Only the
+// table is rebuilt: the "Your top N" box under it moves over to the new card as it stands,
+// an unsaved order included.
+function showPredictor(table, name) {
+    if (table.shown === name) return;
+    table.shown = name;
+    const card = standingsTable(table.rows,
+        name == null ? table.crowd && crowdColumn(table.crowd) : predictorColumn(name, table.places.get(name)));
+    card.dataset.table = table.param;
+    if (table.prediction) card.querySelector('.card-body').appendChild(table.prediction);
+    if (table.card) {
+        setHidden(card, table.card.classList.contains('d-none'));
+        table.card.replaceWith(card);
+    } else {
+        $('standings').appendChild(card);
+    }
+    table.card = card;
+}
+
+// `record` works as in activateTab.
+function selectPredictor(name, record = 'push') {
+    const table = tableOf(standings.active);
+    if (!table) return;
+    standings.predictor = predictorIn(table, name);
+    showPredictor(table, standings.predictor);
+    renderPredictorPicker(table);
+    if (record) syncUrl(record === 'replace');
+}
+
+// Fill the dropdown with the open table's predictors; hidden where nobody predicted it.
+function renderPredictorPicker(table) {
+    const names = [...(table?.places.keys() ?? [])];
+    setHidden($('standings-predictor'), !names.length);
+    $('predictor-name').textContent = standings.predictor ?? 'Community';
+    $('predictor-list').replaceChildren(...[null, ...names].map(name => {
+        const item = makeEl('button', {
+            className: 'user-dropdown-item predictor-item',
+            textContent: name ?? 'Community',
+            dataset: name == null ? {} : {key: searchKey(name)},
+        });
+        item.setAttribute('role', 'menuitemradio');
+        item.setAttribute('aria-checked', String(name === standings.predictor));
+        if (name != null && name === myName) {
+            item.append(makeEl('span', {className: 'leaderboard-you', textContent: 'You'}));
+        }
+        item.addEventListener('click', () => {
+            setPredictorPickerOpen(false);
+            $('predictor-btn').focus();
+            if (name !== standings.predictor) selectPredictor(name);
+        });
+        return item;
+    }));
+    filterPredictors();
+}
+
+// The search box keeps the names holding every typed word; the community always stays.
+function filterPredictors() {
+    const terms = searchKey($('predictor-search').value).split(/\s+/).filter(Boolean);
+    let shown = 0;
+    $('predictor-list').querySelectorAll('.predictor-item[data-key]').forEach(item => {
+        const match = terms.every(t => item.dataset.key.includes(t));
+        setHidden(item, !match);
+        if (match) shown++;
+    });
+    setHidden($('predictor-empty'), shown > 0);
+}
+
+function setPredictorPickerOpen(open) {
+    setHidden($('predictor-menu'), !open);
+    $('predictor-btn').setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    $('predictor-search').value = '';
+    filterPredictors();
+    $('predictor-search').focus();
+}
+
+// Up and down walk the search box and the visible names, Enter in the box takes the first
+// name left, Escape closes the menu back onto its button.
+function bindPredictorPicker() {
+    const picker = $('standings-predictor');
+    const menu = $('predictor-menu');
+    const search = $('predictor-search');
+    const visibleItems = () => [...menu.querySelectorAll('.predictor-item:not(.d-none)')];
+    onClick('predictor-btn', () => setPredictorPickerOpen(menu.classList.contains('d-none')));
+    document.addEventListener('click', e => {
+        if (!picker.contains(e.target)) setPredictorPickerOpen(false);
+    });
+    search.addEventListener('input', filterPredictors);
+    picker.addEventListener('keydown', e => {
+        if (menu.classList.contains('d-none')) return;
+        const stops = [search, ...visibleItems()];
+        const at = stops.indexOf(document.activeElement);
+        if (e.key === 'Escape') {
+            setPredictorPickerOpen(false);
+            $('predictor-btn').focus();
+        } else if (e.key === 'Enter' && e.target === search) {
+            (visibleItems().find(item => item.dataset.key) ?? visibleItems()[0])?.click();
+        } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && at >= 0) {
+            stops[Math.min(Math.max(at + (e.key === 'ArrowDown' ? 1 : -1), 0), stops.length - 1)].focus();
+        } else {
+            return;
+        }
+        e.preventDefault();
+    });
+}
+
+bindPredictorPicker();
 
 // Swiss groups carry no map scores and a tiebreaker-weighted `points` value, so they
 // show W/L only. Draws get a column only where a group actually has some (the crowd's
@@ -362,11 +526,12 @@ function standingsColumns(rows) {
     ];
 }
 
-function standingsTable(rows, crowd) {
+// `place` is the C column (crowdColumn or predictorColumn), null for none.
+function standingsTable(rows, place) {
     const first = rows[0];
     const {card, trs} = sortableTable(rows, [
         {key: 'position', head: '#', title: 'Rank', cls: 'standings-rank', asc: true, cell: r => r.rank},
-        ...(crowd ? [crowdColumn(crowd)] : []),
+        ...(place ? [place] : []),
         {
             key: 'team', head: 'Team', cls: 'standings-team', asc: true,
             compare: (a, b) => a.team.localeCompare(b.team),
