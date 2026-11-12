@@ -111,13 +111,16 @@
 }
 
 /* A team name linking to its lineup in the Players view: looks like the name it
-   replaces (winner colours included), underlined on hover. */
-.team-link {
+   replaces (winner colours included), underlined on hover. A name on the league
+   leaderboard linking to its picks in the Standings view looks the same. */
+.team-link,
+.predictor-link {
     color: inherit;
     text-decoration: none;
 }
 
-.team-link:hover {
+.team-link:hover,
+.predictor-link:hover {
     color: inherit;
     text-decoration: underline;
 }

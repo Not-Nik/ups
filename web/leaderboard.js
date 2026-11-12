@@ -223,14 +223,15 @@ function stageCategories(items, keyOf, tabOf) {
     }).filter(category => category.tabs.length);
 }
 
-const subgroupTable = (rows, columns, empty) => rows.length
-    ? leaderboardTable(rows, columns)
+const subgroupTable = (rows, columns, empty, tables = null) => rows.length
+    ? leaderboardTable(rows, columns, tables)
     : statusLine({text: empty});
 
 // Everyone on the tournament's leagues, then everyone on one stage or group.
 // Every table scores with the weights of the whole tournament, so a group's own table
 // tops out at the share it adds to the total. The Leagues column counts the groups a
-// score spans, which a group's table doesn't need.
+// score spans, which a group's table doesn't need. Each name links to its picks in the
+// Standings view: the tab's group, or on an All tab the first of its groups they predicted.
 function leagueLeaderboard(standingRows, standingPicks) {
     const weights = groupWeights(standingRows);
     return leaderboardTabs([
@@ -239,7 +240,7 @@ function leagueLeaderboard(standingRows, standingPicks) {
             tabs: [{
                 label: ALL_TAB,
                 build: () => subgroupTable(rankLeaguePredictions(standingRows, standingPicks, weights), LEAGUE_COLUMNS,
-                    'No league predictions yet.'),
+                    'No league predictions yet.', predictorTables(standingRows, standingRows, standingPicks)),
             }],
         },
         ...stageCategories(standingRows, groupSubgroupKey, (label, items) => {
@@ -250,7 +251,7 @@ function leagueLeaderboard(standingRows, standingPicks) {
             return {
                 label,
                 build: () => subgroupTable(rankLeaguePredictions(items, picks, weights), leagueGroupColumns(max),
-                    'No predictions on this league yet.'),
+                    'No predictions on this league yet.', predictorTables(items, standingRows, picks)),
             };
         }),
     ]);
@@ -380,7 +381,9 @@ const leagueGroupColumns = max => {
 
 // A sortableTable (app.js) of leaderboard rows. They arrive in rank order, and the sort
 // is stable, so ties keep that order either way. The rank shown is always the points rank.
-function leaderboardTable(rows, columns) {
+// `tables` (name -> ?table= param, from predictorTables) turns the names into links to
+// their picks in the Standings view; a name it lacks stays plain text.
+function leaderboardTable(rows, columns, tables = null) {
     const {card, trs} = sortableTable(rows, columns, {
         sortKey: 'rank',
         tableClass: 'leaderboard-table',
@@ -389,6 +392,8 @@ function leaderboardTable(rows, columns) {
     // The logged-in user's name is marked; empty when logged out.
     const me = $('user-menu').classList.contains('d-none') ? '' : $('user-name').textContent;
     trs.forEach((tr, r) => {
+        const table = tables?.get(r.name);
+        if (table) tr.querySelector('.standings-team').replaceChildren(predictorLink(r.name, table));
         if (r.name !== me) return;
         tr.querySelector('.standings-team').append(' ', makeEl('span', {
             className: 'leaderboard-you',
@@ -396,4 +401,21 @@ function leaderboardTable(rows, columns) {
         }));
     });
     return card;
+}
+
+// A name opening its picks on one standings table. A plain left click stays on the page
+// (openStandingsPredictor); a modified or middle click follows the href, like a team link.
+function predictorLink(name, table) {
+    const link = makeEl('a', {
+        className: 'predictor-link',
+        href: standingsPredictorHref(state.activeTournament, table, name),
+        textContent: name,
+        title: `${name}'s prediction in the standings`,
+    });
+    link.addEventListener('click', e => {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        openStandingsPredictor(table, name);
+    });
+    return link;
 }

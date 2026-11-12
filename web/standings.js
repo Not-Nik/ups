@@ -397,6 +397,44 @@ function predictorIn(table, name) {
     return [...table.places.keys()].find(n => n.toLowerCase() === key) ?? null;
 }
 
+// One standings table (its ?table= param) with `predictor`'s picks in the C column.
+const standingsPredictorHref = (tournamentId, table, predictor) => `${tournamentHref(tournamentId)}`
+    + `&view=standings&table=${encodeURIComponent(table)}&predictor=${encodeURIComponent(predictor)}`;
+
+// Where the names of a league leaderboard tab lead: name -> the ?table= param of the
+// first group of `items` (the tab's standing rows, in standings order) the person
+// predicted, counting the picks the C column does. `standingRows` are the whole
+// tournament's, which tell whether a stage's param needs its group.
+function predictorTables(items, standingRows, picks) {
+    const groupsOfStage = new Map();
+    standingRows.forEach(r => {
+        if (!groupsOfStage.has(r.stage_number)) groupsOfStage.set(r.stage_number, new Set());
+        groupsOfStage.get(r.stage_number).add(r.group_id);
+    });
+    const picksByGroup = groupBy(picks, p => p.group_id);
+    const tables = new Map();
+    groupBy(items, r => r.group_id).forEach(listed => {
+        const rows = listed.map(([r]) => r);
+        const {stage_name, stage_number, group_name, group_id} = rows[0];
+        const table = standingsParam(stage_name, group_name, groupsOfStage.get(stage_number).size === 1);
+        predictorPlaces(rows, (picksByGroup.get(group_id) ?? []).map(([p]) => p)).forEach((_, name) => {
+            if (!tables.has(name)) tables.set(name, table);
+        });
+    });
+    return tables;
+}
+
+// Open the Standings view on `table` with `predictor`'s picks, in place, as the one
+// history entry a link click would make: the view pushes it, and a first load of the
+// standings and then the table and predictor only ever replace it.
+async function openStandingsPredictor(table, predictor) {
+    activateView('standings');
+    await loadStandings(state.activeTournament);
+    if (state.activeView !== 'standings' || !tableOf(table)) return;
+    standings.predictor = knownPredictor(predictor);
+    activateStandingsTable(table, 'replace');
+}
+
 // The stored spelling of `name` from whichever table they predicted, or null for a name
 // that predicted none of this tournament's groups.
 function knownPredictor(name) {

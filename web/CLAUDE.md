@@ -288,6 +288,11 @@ stage — the slot count, not the number of picks stored, so leaving a place emp
 would have added, and the ratio capped at 1 because picks stored under a higher pick count outlive it; the total is rounded to quarters by
 `roundQuarter`, shown with two decimals and its exact value in a hover bubble over the score (`.exact-score` in style.css, fed
 by `exactCell`), so a perfect league is worth 40, or 20 each when the stage has two groups). Ranked by points, then exact, then In top; ties share a rank. Points, the main score, is higher-is-better like every other count.
+Every name in a league table is a `.predictor-link` (`predictorLink`) to that person's picks in the Standings view
+(`standingsPredictorHref`: `view=standings&table=…&predictor=…`): the tab's group, or on an All tab the first of its
+groups they predicted, in standings order (`predictorTables` in standings.js, counting the picks the C column does). A
+plain left click opens it in place as one history entry (`openStandingsPredictor`), so Back returns to the leaderboard;
+a modified or middle click follows the href. The match tables' names stay plain.
 
 ## Section / day model
 
