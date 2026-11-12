@@ -135,9 +135,10 @@ Back walks through it. What localStorage does hold is listed under Auth.
 - `?table=<stage>[:<group>]` — which standings table is open; the group is appended only where the
   stage holds several (`standingsParam` in standings.js). Unknown or missing falls back to the first.
 - `?predictor=<name>` — whose picks the standings' C column shows (`standings.predictor`); left out for the
-  community, the default, so a plain link stays clean. Matched case-insensitively against the open table's
-  predictors (`predictorIn`) and rewritten to the stored spelling; a name that didn't predict the table falls back
-  to the community and drops the param. Switching tables keeps the predictor wherever they predicted the new one.
+  community, the default, so a plain link stays clean. Matched case-insensitively (`predictorIn`, `knownPredictor`)
+  and rewritten to the stored spelling; a name that predicted none of the tournament's groups is dropped. Switching
+  tables keeps it: a table the person didn't predict shows the community's order, the dropdown still naming them
+  ("· not in this group") and the param staying, until a table they did predict brings their picks back.
 - `?tab=<tab>` — which day/bracket tab of the matches view is open. `renderTabs` assigns each tab its `param`: a league day is its own
   name (`tab=Day+5`), a day of a wildcard stage is `<stage>:<round>` (`tab=Wildcard+Liga+3:Day+1`), a bracket is `bracket:<stage>` — its merged group key is appended only where one stage holds
   more than one bracket tab, since `mergeConnected` usually leaves a stage with exactly one. A bracket's
@@ -190,7 +191,10 @@ the stage has a single group. League and
 pools tables show P/W/L, maps, map difference and points; swiss tables show P/W/L only. A D column
 appears only where a group has draws. Dropped teams are dimmed and struck through. The tables are
 `sortableTable`s (`standingsTable`), so every header sorts: they open in the server's `position` order (the `#` column
-sorts by `position` but shows `rank`), and the count columns sort best-first on the first click.
+sorts by `position` but shows `rank`), and the count columns sort best-first on the first click. All tables share
+one sort (`standings.sort`, handed to `sortableTable` as its `sort` option), so the column and direction hold when
+switching tables or predictors; a table without that column (a swiss group has no Pts) opens by `#` until one that has
+it comes up. Not kept in the URL.
 
 Between the `#` and the team sits **C**, the community prediction (`crowdAverages` / `crowdColumn`): each team's place in
 the crowd's own order, computed client-side from `/api/standings/predictions/:id` (`loadStandingPredictions`, fetched

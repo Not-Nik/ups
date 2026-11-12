@@ -12,6 +12,9 @@ const standings = {
     stages: [],      // [{name, tables: [table]}] in display order, a table as built by renderStandings
     active: null,    // param of the open table
     predictor: null, // whose picks the open table's C column shows; null for the community
+    // The column every table sorts by, shared so it holds from table to table (and across
+    // a predictor switch). Not kept in the URL, like the leaderboard's sort.
+    sort: {key: 'position', asc: true},
 };
 
 const loadStandings = id => standingsLoad ??= renderStandings(id);
@@ -29,14 +32,17 @@ const activeStandingsPredictor = () => standings.predictor;
 const stageOfTable = param => standings.stages.find(s => s.tables.some(t => t.param === param));
 const tableOf = param => stageOfTable(param)?.tables.find(t => t.param === param);
 
-// `record` works as in activateTab. The predictor carries over from the table before
-// where they predicted this one too, and falls back to the community where not.
+// `record` works as in activateTab. The predictor stays chosen from table to table; one
+// they didn't predict shows the community's order until a table they did comes up.
 function activateStandingsTable(param, record = 'push') {
     standings.active = param;
     const stage = stageOfTable(param);
     const table = tableOf(param);
-    standings.predictor = table ? predictorIn(table, standings.predictor) : null;
-    if (table) showPredictor(table, standings.predictor);
+    if (table) {
+        showPredictor(table, predictorIn(table, standings.predictor));
+        // Sorted somewhere else since it was last open.
+        table.resort();
+    }
     renderPredictorPicker(table);
     $('standings-stage-tabs').querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.stage === stage?.name);
@@ -67,7 +73,7 @@ function activateWantedStandingsTable(record = null) {
     if (!all.length) return;
     const params = urlParams();
     const wanted = params.get('table');
-    standings.predictor = params.get('predictor');
+    standings.predictor = knownPredictor(params.get('predictor'));
     activateStandingsTable((all.find(t => t.param === wanted) ?? all[0]).param, record);
 }
 
@@ -381,7 +387,8 @@ function predictorColumn(name, place) {
 // ============== Whose prediction ==============
 // The dropdown above the table picks whose order the C column shows: the community's, or
 // that of any one person who predicted the open group, found through its search box. The
-// choice is ?predictor=<name>, left out for the community.
+// choice is ?predictor=<name>, left out for the community. It holds across tables: one the
+// person didn't predict shows the community's order, the dropdown still naming them.
 
 // The table's own spelling of `name`, or null (the community) where they didn't predict it.
 function predictorIn(table, name) {
@@ -390,14 +397,25 @@ function predictorIn(table, name) {
     return [...table.places.keys()].find(n => n.toLowerCase() === key) ?? null;
 }
 
+// The stored spelling of `name` from whichever table they predicted, or null for a name
+// that predicted none of this tournament's groups.
+function knownPredictor(name) {
+    for (const table of standings.stages.flatMap(s => s.tables)) {
+        const found = predictorIn(table, name);
+        if (found) return found;
+    }
+    return null;
+}
+
 // Draw a table with `name`'s picks in its C column, or the community's for null. Only the
 // table is rebuilt: the "Your top N" box under it moves over to the new card as it stands,
 // an unsaved order included.
 function showPredictor(table, name) {
     if (table.shown === name) return;
     table.shown = name;
-    const card = standingsTable(table.rows,
+    const {card, resort} = standingsTable(table.rows,
         name == null ? table.crowd && crowdColumn(table.crowd) : predictorColumn(name, table.places.get(name)));
+    table.resort = resort;
     card.dataset.table = table.param;
     if (table.prediction) card.querySelector('.card-body').appendChild(table.prediction);
     if (table.card) {
@@ -420,10 +438,18 @@ function selectPredictor(name, record = 'push') {
 }
 
 // Fill the dropdown with the open table's predictors; hidden where nobody predicted it.
+// A chosen predictor without picks here stays on the button, marked as such, while the
+// menu checks the community the table falls back to.
 function renderPredictorPicker(table) {
     const names = [...(table?.places.keys() ?? [])];
+    const shown = table ? predictorIn(table, standings.predictor) : null;
+    const absent = standings.predictor != null && shown == null;
     setHidden($('standings-predictor'), !names.length);
     $('predictor-name').textContent = standings.predictor ?? 'Community';
+    setHidden($('predictor-absent'), !absent);
+    $('predictor-btn').title = absent
+        ? `${standings.predictor} didn't predict this group: showing the community's prediction`
+        : 'Whose prediction the C column shows';
     $('predictor-list').replaceChildren(...[null, ...names].map(name => {
         const item = makeEl('button', {
             className: 'user-dropdown-item predictor-item',
@@ -431,7 +457,7 @@ function renderPredictorPicker(table) {
             dataset: name == null ? {} : {key: searchKey(name)},
         });
         item.setAttribute('role', 'menuitemradio');
-        item.setAttribute('aria-checked', String(name === standings.predictor));
+        item.setAttribute('aria-checked', String(name === shown));
         if (name != null && name === myName) {
             item.append(makeEl('span', {className: 'leaderboard-you', textContent: 'You'}));
         }
@@ -526,10 +552,11 @@ function standingsColumns(rows) {
     ];
 }
 
-// `place` is the C column (crowdColumn or predictorColumn), null for none.
+// `place` is the C column (crowdColumn or predictorColumn), null for none. Every table
+// sorts by the one shared `standings.sort`; returns {card, resort}.
 function standingsTable(rows, place) {
     const first = rows[0];
-    const {card, trs} = sortableTable(rows, [
+    const {card, trs, resort} = sortableTable(rows, [
         {key: 'position', head: '#', title: 'Rank', cls: 'standings-rank', asc: true, cell: r => r.rank},
         ...(place ? [place] : []),
         {
@@ -541,7 +568,7 @@ function standingsTable(rows, place) {
             </span>`,
         },
         ...standingsColumns(rows),
-    ]);
+    ], {sort: standings.sort});
     card.classList.add('standings-card');
     card.querySelector('.card-body').insertAdjacentHTML('afterbegin',
         `<div class="section-title mb-2">${escapeHtml(first.group_name || first.stage_name)}</div>`);
@@ -549,5 +576,5 @@ function standingsTable(rows, place) {
         tr.classList.toggle('standings-dropped', r.dropped);
         if (r.dropped) tr.title = 'Dropped out';
     });
-    return card;
+    return {card, resort};
 }

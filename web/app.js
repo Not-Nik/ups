@@ -28,9 +28,10 @@ function groupBy(items, key) {
 //   asc            whether the column's first click sorts ascending.
 // Clicking a header sorts by it; clicking the sorted one again flips it. The sort is
 // stable, so ties keep the order `rows` came in. It isn't kept in the URL.
-// `sortKey` is the column sorted at first (ascending). Returns {card, trs}, `trs` a
-// Map from each row to its <tr>.
-function sortableTable(rows, columns, {sortKey = columns[0].key, tableClass = '', bodyClass = ''} = {}) {
+// `sortKey` is the column sorted at first (ascending); a `sort` object ({key, asc}),
+// shared between tables, overrides it and is updated by every click. Returns
+// {card, trs, resort}, `trs` a Map from each row to its <tr>, `resort` re-applying `sort`.
+function sortableTable(rows, columns, {sortKey = columns[0].key, sort = null, tableClass = '', bodyClass = ''} = {}) {
     const card = makeEl('div', {className: 'card'});
     card.insertAdjacentHTML('beforeend', `
         <div class="card-body ${bodyClass}">
@@ -54,26 +55,33 @@ function sortableTable(rows, columns, {sortKey = columns[0].key, tableClass = ''
         return [r, tr];
     }));
 
-    const sort = {key: sortKey, asc: true};
-    const apply = () => {
+    // A shared `sort` is how several tables keep one order: a table lacking its column
+    // falls back to `sortKey` ascending, the choice left standing for the tables that have it.
+    sort ??= {key: sortKey, asc: true};
+    const current = () => {
         const col = columns.find(c => c.key === sort.key);
+        return col ? {col, asc: sort.asc} : {col: columns.find(c => c.key === sortKey) ?? columns[0], asc: true};
+    };
+    const apply = () => {
+        const {col, asc} = current();
         const compare = col.compare ?? ((a, b) => a[col.key] - b[col.key]);
-        const sorted = [...rows].sort((a, b) => sort.asc ? compare(a, b) : compare(b, a));
+        const sorted = [...rows].sort((a, b) => asc ? compare(a, b) : compare(b, a));
         body.replaceChildren(...sorted.map(r => trs.get(r)));
         card.querySelectorAll('.sort-btn').forEach(btn => {
             const th = btn.parentElement;
-            if (btn.dataset.key === sort.key) th.setAttribute('aria-sort', sort.asc ? 'ascending' : 'descending');
+            if (btn.dataset.key === col.key) th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
             else th.removeAttribute('aria-sort');
         });
     };
     card.querySelectorAll('.sort-btn').forEach(btn => btn.addEventListener('click', () => {
         const col = columns.find(c => c.key === btn.dataset.key);
-        sort.asc = sort.key === col.key ? !sort.asc : !!col.asc;
+        const shown = current();
+        sort.asc = shown.col === col ? !shown.asc : !!col.asc;
         sort.key = col.key;
         apply();
     }));
     apply();
-    return {card, trs};
+    return {card, trs, resort: apply};
 }
 
 // ============== State ==============
