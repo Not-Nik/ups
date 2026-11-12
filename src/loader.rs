@@ -77,7 +77,8 @@ struct PlayerFields {
 
 #[derive(Deserialize)]
 struct LineupPlayer {
-    name: String,
+    // Null for a slot the team left empty.
+    name: Option<String>,
     #[serde(rename = "playerUser")]
     player_user: Option<NodeRef>,
     #[serde(rename = "customFieldValues")]
@@ -852,7 +853,11 @@ async fn replace_players(conn: &mut SqliteConnection, feed: &Feed, ids: &Ids) ->
             .execute(&mut *conn)
             .await?;
 
-        for (position, player) in p.lineup.iter().flatten().enumerate() {
+        let named = p.lineup.iter().flatten().filter_map(|player| {
+            let name = player.name.as_deref().map(str::trim)?;
+            (!name.is_empty()).then_some((name, player))
+        });
+        for (position, (name, player)) in named.enumerate() {
             let battle_tag = player
                 .custom_field_values
                 .as_ref()
@@ -866,7 +871,7 @@ async fn replace_players(conn: &mut SqliteConnection, feed: &Feed, ids: &Ids) ->
             )
             .bind(team_id)
             .bind(position as i64 + 1)
-            .bind(player.name.trim())
+            .bind(name)
             .bind(battle_tag)
             .bind(player.player_user.as_ref().map(|u| &u.id))
             .execute(&mut *conn)
@@ -1652,5 +1657,32 @@ mod tests {
 
         assert_eq!(team_ids(&mut conn).await, [10, 11, 12, 13, 14]);
         assert_eq!(count(&mut conn, "standing_predictions").await, 1);
+    }
+
+    #[tokio::test]
+    async fn empty_lineup_slot_is_skipped() {
+        // A slot toornament sends with nothing filled in, between two real players.
+        let rival: Participant = serde_json::from_str(
+            r#"{"id": "p-rival", "name": "Rival", "lineup": [
+                {"name": "Ana", "playerUser": null, "customFieldValues": {"battle_net_id": "Ana#1"}},
+                {"name": null, "logo": null, "playerUser": null,
+                 "customFieldValues": {"battle_net_id": null}, "gameId": null},
+                {"name": "Bo", "playerUser": null, "customFieldValues": null}
+            ]}"#,
+        )
+        .unwrap();
+        let mut conn = db_with_teams().await;
+        let (mut feed, ids) = feed_with_current_teams();
+        feed.participants[1] = rival;
+
+        replace_players(&mut conn, &feed, &ids).await.unwrap();
+
+        let players: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT Position, Name FROM players WHERE TeamID = 13 ORDER BY Position",
+        )
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+        assert_eq!(players, [(1, "Ana".into()), (2, "Bo".into())]);
     }
 }
