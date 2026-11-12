@@ -23,6 +23,26 @@ function switchMatch() {
     location.reload();
 }
 
+// A .ban-badge plays its intro (portrait, ring, then the strike) only while it
+// carries `ban-animate`. The class is dropped once the strike, the last step,
+// finishes, so later DOM moves and repaints don't restart it; only a ban change
+// re-adds it (playBanIntro, with a reflow so a running intro starts over).
+function makeBanBadge(className) {
+    const icon = makeEl('img', {className: 'ban-icon', alt: ''});
+    const badge = makeEl('div', {className});
+    badge.append(icon);
+    badge.addEventListener('animationend', e => {
+        if (e.animationName === 'ban-strike') badge.classList.remove('ban-animate');
+    });
+    return {badge, icon};
+}
+
+function playBanIntro(badge) {
+    badge.classList.remove('ban-animate');
+    void badge.offsetWidth;
+    badge.classList.add('ban-animate');
+}
+
 async function initOverlay() {
     const id = localStorage.getItem(CURRENT_KEY);
     const tournamentId = localStorage.getItem(TOURNAMENT_KEY);
@@ -118,14 +138,7 @@ async function initOverlay() {
         const scoreEl = makeEl('span', {className: 'team-score'});
         const scoreNum = makeEl('span', {className: 'team-score-plate'});
         scoreEl.append(scoreNum);
-        const banImg = makeEl('img', {className: 'ban-icon', alt: ''});
-        const banEl = makeEl('div', {className: 'ban-badge'});
-        banEl.append(banImg);
-        // Drop the intro class once it finishes (the strike is the last step) so
-        // later DOM moves/repaints don't restart it; only a ban change re-adds it.
-        banEl.addEventListener('animationend', e => {
-            if (e.animationName === 'ban-strike') banEl.classList.remove('ban-animate');
-        });
+        const {badge: banEl, icon: banImg} = makeBanBadge('ban-badge');
         const team = {idx, logo, nameEl, scoreEl, scoreNum, banImg, banEl, color: null, ban: undefined};
 
         scoreEl.addEventListener('click', () => bump(idx, +1));
@@ -194,11 +207,7 @@ async function initOverlay() {
                 team.ban = ban;
                 if (ban) team.banImg.src = heroIcon(ban);
                 team.banEl.hidden = !ban;
-                if (ban) {
-                    team.banEl.classList.remove('ban-animate');
-                    void team.banEl.offsetWidth; // reflow so the animation restarts
-                    team.banEl.classList.add('ban-animate');
-                }
+                if (ban) playBanIntro(team.banEl);
             }
         });
     }
@@ -432,12 +441,11 @@ async function initOverlay() {
     // (appear, move, winner reveal) instead of rebuilding the whole timeline.
     const trackTiles = [];
 
-    // A ban badge for the maps-screen card: reuses .ban-badge (red ring + strike)
-    // at a smaller size. Hidden when the side hasn't banned for this map.
+    // A ban badge for the maps-screen card: reuses .ban-badge (ring, strike and
+    // intro) at a smaller size. Hidden when the side hasn't banned for this map.
     function createBanBadge(cls) {
-        const badge = makeEl('div', {className: `map-ban ${cls} ban-badge`, hidden: true});
-        const icon = makeEl('img', {className: 'ban-icon', alt: ''});
-        badge.append(icon);
+        const {badge, icon} = makeBanBadge(`map-ban ${cls} ban-badge`);
+        badge.hidden = true;
         return {badge, icon, key: undefined};
     }
 
@@ -450,11 +458,15 @@ async function initOverlay() {
         art.append(img);
         const nameEl = makeEl('span', {className: 'map-name'});
         card.append(art, nameEl);
-        // The top/bottom bans line up with the stacked banners (top = slot 0's team).
-        const banTop = createBanBadge('map-ban-top');
-        const banBot = createBanBadge('map-ban-bot');
-        tile.append(banTop.badge, card, banBot.badge);
-        return {tile, art, img, nameEl, banTop, banBot, winnerEl: null, mapKey: undefined, winner: undefined};
+        // The bans sit side by side under the card in banner order: the upper banner's
+        // team (slot 0) on the left, each struck through in its team's colour.
+        const bans = [createBanBadge('map-ban-0'), createBanBadge('map-ban-1')];
+        const banRow = makeEl('div', {className: 'map-bans', hidden: true});
+        banRow.append(...bans.map(b => b.badge));
+        tile.append(card, banRow);
+        return {
+            tile, art, img, nameEl, bans, banRow, teamBans: [], winnerEl: null, mapKey: undefined, winner: undefined
+        };
     }
 
     function tileName(slot) {
@@ -464,15 +476,17 @@ async function initOverlay() {
     }
 
     // `key` = this side's banned hero (or null). `reserve` keeps the slot's space
-    // (but invisible) when the other side banned, so a lone ban doesn't pull the
-    // card off-centre; with neither side banning, the slot collapses entirely.
-    const applyBan = (b, key, reserve) => {
+    // (but invisible) when the other side banned, so a lone ban stays on its team's
+    // side; with neither side banning, the whole ban row collapses. `intro` plays
+    // the strike-through intro, for a ban that was just made.
+    const applyBan = (b, key, reserve, intro) => {
         if (b.key !== key) {
             b.key = key;
             if (key) b.icon.src = heroIcon(key);
         }
         b.badge.hidden = !key && !reserve;
         b.badge.style.visibility = key ? '' : 'hidden';
+        if (intro) playBanIntro(b.badge);
     };
 
     function updateTrackTile(entry, slot, kind, mpColor, animate) {
@@ -484,12 +498,18 @@ async function initOverlay() {
         }
         nameEl.textContent = tileName(slot);
 
-        // Top ban belongs to the team in the upper banner (slot 0); swap flips them.
-        const swap = loadSwap(id);
-        const topBan = slot.bans[swap ? 1 : 0];
-        const botBan = slot.bans[swap ? 0 : 1];
-        applyBan(entry.banTop, topBan, !!botBan);
-        applyBan(entry.banBot, botBan, !!topBan);
+        // The left ban belongs to the team in the upper banner (slot 0); swap flips them.
+        // The intro plays when a team's own ban changes (on screen only, like the
+        // winner reveal), not when a swap merely moves it to the other badge.
+        const order = loadSwap(id) ? [1, 0] : [0, 1];
+        const keys = order.map(t => slot.bans[t]);
+        entry.bans.forEach((b, i) => {
+            const t = order[i];
+            const intro = animate && !!keys[i] && entry.teamBans[t] !== slot.bans[t];
+            applyBan(b, keys[i], !!keys[1 - i], intro);
+        });
+        entry.teamBans = [slot.bans[0], slot.bans[1]];
+        entry.banRow.hidden = !keys[0] && !keys[1];
 
         if (slot.winner !== entry.winner) {
             entry.winner = slot.winner;
@@ -624,7 +644,7 @@ async function initOverlay() {
         } else if (e.key === scoreKey(id)) {
             paint();
         } else if (e.key === swapKey(id) || e.key === mapsKey(id)) {
-            // Swap reorders the stacked banners (and the cards' top/bottom bans); a
+            // Swap reorders the stacked banners (and the cards' left/right bans); a
             // maps change can move the current map whose bans the banners show.
             paint();
             paintMaps();

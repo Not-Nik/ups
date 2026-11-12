@@ -31,6 +31,11 @@ html, body {
 :root {
     --u: calc(100vw / 1920);
     --score-w: calc(140 * var(--u)); /* open width of the in-banner score plate (shared with overlay.js) */
+    /* Maps scene: the map row is centred on the screen, so its tallest form (424u:
+       lifted card, name, ban row) tops out at 50vh - 212u. The two stacked banners
+       (200u) sit midway between the top edge and that line, this gap above and
+       below them. A row without bans is shorter and sits a little lower. */
+    --maps-gap: calc((50vh - 412 * var(--u)) / 2);
 }
 
 /* The team banners set display:flex, which would otherwise beat the [hidden]
@@ -259,8 +264,8 @@ html, body {
     z-index: 2; /* above both the icon and the outline ring */
     background: linear-gradient(135deg,
     transparent calc(50% - 1.5px),
-    rgba(220, 40, 40, .95) calc(50% - 1.5px),
-    rgba(220, 40, 40, .95) calc(50% + 1.5px),
+    var(--ban-strike-color, rgba(220, 40, 40, .95)) calc(50% - 1.5px),
+    var(--ban-strike-color, rgba(220, 40, 40, .95)) calc(50% + 1.5px),
     transparent calc(50% + 1.5px));
 }
 
@@ -1070,10 +1075,10 @@ body.maps-leaving .maps-screen {
     inset: 0;
     z-index: 2;
     display: flex;
+    /* Centred on the screen at full width; the banners sit above it (--maps-gap). */
     align-items: center;
     justify-content: center;
-    /* Leave the left third clear for the stacked team banners. */
-    padding: 0 4vw 0 34vw;
+    padding: 0 4vw;
     color: #fff;
     text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
 }
@@ -1087,8 +1092,9 @@ body.scene-maps .powered {
     display: none;
 }
 
-/* Maps scene banners: both on the left, team B normalised to the left-edge look
-   and dropped just below team A so they read as a stacked scoreboard. Entering
+/* Maps scene banners: both on the left, midway between the top edge and the map
+   cards (--maps-gap), team B normalised to the left-edge look and dropped just
+   below team A so they read as a stacked scoreboard. Entering
    and leaving reuses the shared scene-exit slide (overlay.js paintScene). */
 body.scene-maps .team {
     width: 30vw;
@@ -1109,11 +1115,11 @@ body.scene-maps .team-name {
 }
 
 body.scene-maps .team-left {
-    top: calc(50vh - 104 * var(--u));
+    top: var(--maps-gap);
 }
 
 body.scene-maps .team-right {
-    top: calc(50vh + 8 * var(--u));
+    top: calc(var(--maps-gap) + 104 * var(--u));
     left: 0;
     right: auto;
     flex-direction: row;
@@ -1208,12 +1214,32 @@ body.maps-leaving.anim-ready .maps-track {
     box-shadow: 0 calc(4 * var(--u)) calc(16 * var(--u)) rgba(0, 0, 0, .5);
 }
 
-/* Per-map ban badges stacked above/below the card on the maps screen (reusing the
-   banner .ban-badge look at a smaller size). Hidden when that side hasn't banned. */
+/* Per-map ban badges side by side under the card on the maps screen (reusing the
+   banner .ban-badge look at a smaller size), in banner order: the upper banner's
+   team on the left. Each strike takes its team's banner colour (the same
+   --scene-color-N the background gradient uses, red until the logo is sampled),
+   with a dark edge so a dark or grey team colour still reads over the portrait. */
+.map-bans {
+    display: flex;
+    gap: calc(8 * var(--u));
+}
+
 .map-ban {
-    width: calc(36 * var(--u));
-    height: calc(36 * var(--u));
+    width: calc(60 * var(--u));
+    height: calc(60 * var(--u));
     flex-shrink: 0;
+}
+
+.map-ban-0 {
+    --ban-strike-color: var(--scene-color-0, rgba(220, 40, 40, .95));
+}
+
+.map-ban-1 {
+    --ban-strike-color: var(--scene-color-1, rgba(220, 40, 40, .95));
+}
+
+.map-ban::after {
+    filter: drop-shadow(0 0 calc(1.5 * var(--u)) rgba(0, 0, 0, .9));
 }
 
 .map-art {
@@ -1282,7 +1308,7 @@ body.maps-leaving.anim-ready .maps-track {
 }
 
 /* scale() grows the card past its layout box, so reserve real vertical space with
-   a margin to keep the lifted card clear of its ban badges above/below. */
+   a margin to keep the lifted card clear of its ban badges below. */
 .maps-track .map-upcoming .map-card {
     transform: scale(1.06);
     margin: calc(10 * var(--u)) 0;
@@ -1304,7 +1330,7 @@ body.scene-maps.anim-ready .maps-track .map-card {
                 box-shadow .4s ease;
 }
 
-/* Maps scene tiles are portrait so the whole pool fits beside the scoreboard. */
+/* Maps scene tiles are portrait so the whole pool fits in a row under the scoreboard. */
 .maps-track .map-tile {
     width: clamp(calc(130 * var(--u)), 14vw, calc(200 * var(--u)));
 }
