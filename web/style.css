@@ -1175,7 +1175,47 @@ th[aria-sort="descending"] .sort-btn::after {
     background: rgba(128, 128, 128, 0.1);
 }
 
-/* The standings' "whose prediction" dropdown: a search box over a scrolling name list. */
+/* The standings' "whose prediction" dropdown, in the table's title line: a bare button in
+   the title's own size, so the line stays as high as the title alone, over a search box
+   and a scrolling name list. */
+.standings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+.predictor-picker {
+    position: relative;
+    min-width: 0;
+}
+
+.predictor-btn {
+    display: flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: .75rem;
+    line-height: inherit;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.predictor-btn:hover,
+.predictor-btn[aria-expanded="true"] {
+    color: var(--bs-body-color);
+}
+
+#predictor-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: .25em;
+}
+
 .predictor-menu {
     width: 14rem;
     padding: 0.25rem;

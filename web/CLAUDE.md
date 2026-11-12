@@ -206,7 +206,9 @@ the teams nobody picked share the last one, in standings order), the cell shows 
 same hover bubble the league leaderboard's scores use (`exactCell`), green when the crowd rated the team above its rank
 and red when below it. Clicking the header sorts by place, 1 first. A group nobody predicted gets no C column at all.
 
-A dropdown above the table (`#standings-predictor`, "C: Community") swaps the C column for one person's picks: it lists
+A dropdown at the right end of the open table's title line (`#standings-predictor`, "C: Community", a bare button in the
+title's size so the line keeps its height; one element, moved into whichever card is open and along with a rebuilt one)
+swaps the C column for one person's picks: it lists
 Community and everyone who predicted the open group (`predictorPlaces`, the same picks the crowd counts), A to Z, the
 logged-in user marked "You", behind a search box (`searchKey` from roster.js, every typed word; Enter takes the first
 name left, arrow keys walk the list, Escape closes). A person's column (`predictorColumn`) shows their predicted place,

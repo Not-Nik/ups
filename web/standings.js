@@ -456,6 +456,9 @@ function showPredictor(table, name) {
     table.resort = resort;
     card.dataset.table = table.param;
     if (table.prediction) card.querySelector('.card-body').appendChild(table.prediction);
+    // The dropdown, where it sits in the card being replaced, goes along.
+    const picker = table.card?.querySelector('#standings-predictor');
+    if (picker) card.querySelector('.standings-head').append(picker);
     if (table.card) {
         setHidden(card, table.card.classList.contains('d-none'));
         table.card.replaceWith(card);
@@ -482,7 +485,9 @@ function renderPredictorPicker(table) {
     const names = [...(table?.places.keys() ?? [])];
     const shown = table ? predictorIn(table, standings.predictor) : null;
     const absent = standings.predictor != null && shown == null;
-    setHidden($('standings-predictor'), !names.length);
+    const picker = $('standings-predictor');
+    if (table) table.card.querySelector('.standings-head').append(picker);
+    setHidden(picker, !names.length);
     $('predictor-name').textContent = standings.predictor ?? 'Community';
     setHidden($('predictor-absent'), !absent);
     $('predictor-btn').title = absent
@@ -608,8 +613,10 @@ function standingsTable(rows, place) {
         ...standingsColumns(rows),
     ], {sort: standings.sort});
     card.classList.add('standings-card');
-    card.querySelector('.card-body').insertAdjacentHTML('afterbegin',
-        `<div class="section-title mb-2">${escapeHtml(first.group_name || first.stage_name)}</div>`);
+    // The title line also holds the predictor dropdown, on whichever table is open.
+    card.querySelector('.card-body').insertAdjacentHTML('afterbegin', `<div class="standings-head mb-2">
+        <div class="section-title">${escapeHtml(first.group_name || first.stage_name)}</div>
+    </div>`);
     trs.forEach((tr, r) => {
         tr.classList.toggle('standings-dropped', r.dropped);
         if (r.dropped) tr.title = 'Dropped out';

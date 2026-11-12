@@ -101,19 +101,18 @@
     </div>
     <div id="grid" class="matches-grid" data-view-panel="matches"></div>
     <div id="standings-tabs" class="mb-3 d-none" data-view-panel="standings"></div>
-    <div class="d-none d-flex justify-content-end" data-view-panel="standings">
-        <div id="standings-predictor" class="position-relative mb-2 d-none">
-            <button id="predictor-btn" class="btn btn-sm btn-outline-secondary" aria-haspopup="menu"
-                    aria-expanded="false" title="Whose prediction the C column shows">
-                <span class="predictor-label">C:</span> <span id="predictor-name">Community</span><span id="predictor-absent" class="predictor-label d-none"> · not in this group</span>
-                <span class="predictor-caret" aria-hidden="true"></span>
-            </button>
-            <div id="predictor-menu" class="user-dropdown predictor-menu d-none" role="menu">
-                <input type="search" id="predictor-search" class="form-control form-control-sm"
-                       placeholder="Search" aria-label="Search predictors" autocomplete="off">
-                <div id="predictor-list" class="predictor-list"></div>
-                <div id="predictor-empty" class="text-secondary small px-2 py-1 d-none">No one found</div>
-            </div>
+    <!-- Lives in the open standings table's title line; standings.js moves it there. -->
+    <div id="standings-predictor" class="predictor-picker d-none">
+        <button id="predictor-btn" class="predictor-btn" aria-haspopup="menu"
+                aria-expanded="false" title="Whose prediction the C column shows">
+            <span class="predictor-label">C:</span> <span id="predictor-name">Community</span><span id="predictor-absent" class="predictor-label d-none"> · not in this group</span>
+            <span class="predictor-caret" aria-hidden="true"></span>
+        </button>
+        <div id="predictor-menu" class="user-dropdown predictor-menu d-none" role="menu">
+            <input type="search" id="predictor-search" class="form-control form-control-sm"
+                   placeholder="Search" aria-label="Search predictors" autocomplete="off">
+            <div id="predictor-list" class="predictor-list"></div>
+            <div id="predictor-empty" class="text-secondary small px-2 py-1 d-none">No one found</div>
         </div>
     </div>
     <div id="standings" class="d-none" data-view-panel="standings"></div>
