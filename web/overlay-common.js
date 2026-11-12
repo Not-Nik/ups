@@ -90,6 +90,58 @@ const saveBo = (id, n) => {
     else localStorage.removeItem(boKey(id));
 };
 
+// Lineups: per match, each team's five players for its lineup scene, keyed by the
+// match's own side ('a' / 'b', not the swapped slot) so a swap never hands a lineup
+// to the other team. Spots follow LINEUP_ROLES; each holds the name shown on stream
+// (a toornament player name or a custom one), null while empty. The role keys are
+// OverFast's and name the icons under /roles.
+const LINEUP_PREFIX = 'ups_overlay_lineup_';
+const lineupKey = id => `${LINEUP_PREFIX}${id}`;
+const LINEUP_ROLES = ['tank', 'damage', 'damage', 'support', 'support'];
+const ROLE_LABELS = {tank: 'Tank', damage: 'DPS', support: 'Support'};
+const EMPTY_LINEUP = () => LINEUP_ROLES.map(() => null);
+
+// Exactly one entry per spot, each a trimmed non-empty string or null; anything not
+// shaped like a lineup is an empty one.
+function normaliseLineup(v) {
+    if (!Array.isArray(v) || v.length !== LINEUP_ROLES.length) return EMPTY_LINEUP();
+    return v.map(name => (typeof name === 'string' && name.trim() ? name.trim() : null));
+}
+
+function loadLineups(id) {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(lineupKey(id)));
+        if (parsed && typeof parsed === 'object') {
+            return {a: normaliseLineup(parsed.a), b: normaliseLineup(parsed.b)};
+        }
+    } catch { /* malformed — fall through */
+    }
+    return {a: EMPTY_LINEUP(), b: EMPTY_LINEUP()};
+}
+
+// `names` null clears the side; the key goes once neither side holds anyone.
+function saveLineup(id, side, names) {
+    const lineups = loadLineups(id);
+    lineups[side] = names ? normaliseLineup(names) : EMPTY_LINEUP();
+    if ([...lineups.a, ...lineups.b].every(n => n === null)) localStorage.removeItem(lineupKey(id));
+    else localStorage.setItem(lineupKey(id), JSON.stringify(lineups));
+}
+
+// All five spots filled, and nobody in two of them.
+function isLineupComplete(names) {
+    const lineup = normaliseLineup(names);
+    if (lineup.includes(null)) return false;
+    return new Set(lineup.map(n => n.toLowerCase())).size === lineup.length;
+}
+
+// Names of one team's lineup entries from /api/players/:id, deduplicated, in the
+// endpoint's order (player name first). Matches carry team names, not ids, and the
+// backend resolves a match's teams by name within the tournament too.
+function playersOf(players, teamName) {
+    const names = players.filter(p => p.team === teamName && p.name).map(p => p.name);
+    return [...new Set(names)];
+}
+
 // --- Pure derivations (no storage access, unit-testable) ---
 // Tally of map wins per side as [aWins, bWins].
 function countWins(maps) {
@@ -150,6 +202,10 @@ async function getJson(url) {
 
 const fetchHeroes = () => cachedLoad('heroes', () => getJson('/heroes/heroes.json'));
 const fetchMaps = () => cachedLoad('maps', () => getJson('/maps/maps.json'));
+const fetchPlayers = tournamentId => cachedLoad(
+    `players:${tournamentId}`,
+    () => getJson(`/api/players/${tournamentId}`),
+);
 
 // The "Powered by" badge position is a global overlay setting (not per-match):
 // bottom-left, bottom-right, or hidden. The control room cycles through these.
@@ -162,22 +218,33 @@ const loadLogo = () => {
 const saveLogo = state => localStorage.setItem(LOGO_KEY, state);
 const nextLogo = state => LOGO_STATES[(LOGO_STATES.indexOf(state) + 1) % LOGO_STATES.length];
 
-// "Big view" is a global presentation scene (like the logo position, not per-match):
-// the control room toggles it, the overlay animates between its transparent default
-// and a full-background scene. Persisted so a reload keeps the chosen scene.
+// The scene is a global presentation setting (like the logo position, not per-match):
+// the control room picks it, the overlay animates between its transparent default
+// ('normal') and the full-background scenes: big view, maps and one lineup scene per
+// team, named by the match's own side. Persisted so a reload keeps the chosen scene.
 const SCENE_KEY = 'ups_overlay_scene';
-const SCENE_STATES = ['normal', 'big', 'maps'];
+const LINEUP_SCENES = {a: 'lineup-a', b: 'lineup-b'};
+const SCENE_STATES = ['normal', 'big', 'maps', LINEUP_SCENES.a, LINEUP_SCENES.b];
 const loadScene = () => {
     const v = localStorage.getItem(SCENE_KEY);
     return SCENE_STATES.includes(v) ? v : 'normal';
 };
 const saveScene = state => localStorage.setItem(SCENE_KEY, state);
+const lineupSide = scene => SIDES.find(k => LINEUP_SCENES[k] === scene) ?? null;
 
-// Wipe every per-match overlay key (scores, swap, maps incl. bans, best-of) regardless of which match
+// The scene actually on air: the stored one, except that a lineup scene whose team has
+// no complete lineup (a match switch, a Clear, a reload after either) shows big view.
+function effectiveScene(id) {
+    const scene = loadScene();
+    const side = lineupSide(scene);
+    return side && !isLineupComplete(loadLineups(id)[side]) ? 'big' : scene;
+}
+
+// Wipe every per-match overlay key (scores, swap, maps incl. bans, best-of, lineups) regardless of which match
 // owns it. Called only when explicitly switching matches so a fresh match starts
 // clean; reloads never run this, so re-reading the same match is non-destructive.
 // LOGO_KEY is a global overlay setting and is intentionally preserved.
-const PER_MATCH_PREFIXES = [SCORE_PREFIX, SWAP_PREFIX, MAPS_PREFIX, BO_PREFIX];
+const PER_MATCH_PREFIXES = [SCORE_PREFIX, SWAP_PREFIX, MAPS_PREFIX, BO_PREFIX, LINEUP_PREFIX];
 
 function clearMatchData() {
     for (let i = localStorage.length - 1; i >= 0; i--) {

@@ -210,6 +210,54 @@ async function initOverlay() {
                 if (ban) playBanIntro(team.banEl);
             }
         });
+        paintLineup(); // a logo colour sampled late re-tints the lineup too
+    }
+
+    // The lineup scene's one block, filled for whichever team's scene is on air: its
+    // logo and name on that team's banner side (left slot = logo left, banners flush
+    // right; `lineup-right` mirrors it), and its five players in role order. Left as it
+    // was while no lineup scene is on, so a lineup leaving the screen slides out intact.
+    const lineupEl = $('lineup');
+    let lineupLogoSide = null; // whose logo #lineup-logo holds, so repaints don't reload it
+    function paintLineup() {
+        const k = lineupSide(effectiveScene(id));
+        if (!k) return;
+        const idx = k === 'a' ? 0 : 1;
+        const slot = loadSwap(id) ? 1 - idx : idx;
+        lineupEl.classList.toggle('lineup-right', slot === 1);
+
+        const team = match[`team_${k}`];
+        if (lineupLogoSide !== k) {
+            lineupLogoSide = k;
+            const box = $('lineup-logo');
+            const textMark = () => box.replaceChildren(
+                makeEl('span', {className: 'team-logo-text', textContent: shortName(team)}),
+            );
+            if (match[`logo_${k}`]) {
+                const img = makeEl('img', {className: 'lineup-logo-img', alt: ''});
+                img.addEventListener('error', textMark, {once: true});
+                img.src = teamLogo(k);
+                box.replaceChildren(img);
+            } else {
+                textMark();
+            }
+        }
+        $('lineup-name').textContent = team;
+
+        const names = loadLineups(id)[k];
+        $('lineup-list').replaceChildren(...LINEUP_ROLES.map((role, i) => {
+            const row = makeEl('li', {className: 'lineup-row'});
+            row.style.setProperty('--i', String(i));
+            // The icon's shadow sits on a wrapper: on the icon itself its own mask
+            // would cut the shadow away.
+            const icon = makeEl('span', {className: 'lineup-role'});
+            icon.append(makeEl('span', {className: `role-icon role-${role}`}));
+            row.append(icon, makeEl('span', {className: 'lineup-player', textContent: names[i] ?? ''}));
+            return row;
+        }));
+
+        const color = teams[idx].color;
+        lineupEl.style.setProperty('--lineup-color', color ? `rgb(${color.join(',')})` : '');
     }
 
     const powered = $('powered');
@@ -234,9 +282,12 @@ async function initOverlay() {
     let leaveTimer = null; // holds the maps screen visible while its cards fade out
     // Drive the body scene class off the persisted state. SCENE_STATES lives in
     // overlay-common.js; we toggle exactly one `scene-<state>` class at a time.
+    // Both lineup scenes also carry `scene-lineup`, which holds their shared layout.
     const applyScene = scene => {
         SCENE_STATES.forEach(s => document.body.classList.toggle(`scene-${s}`, s === scene));
+        document.body.classList.toggle('scene-lineup', !!lineupSide(scene));
     };
+    const appliedScene = () => SCENE_STATES.find(s => document.body.classList.contains(`scene-${s}`));
     const isBigMaps = (a, b) => (a === 'big' && b === 'maps') || (a === 'maps' && b === 'big');
 
     // FLIP the logo and name across a big<->maps layout change. The banner itself
@@ -322,9 +373,10 @@ async function initOverlay() {
     };
 
     const paintScene = () => {
-        const scene = loadScene();
+        const scene = effectiveScene(id);
         const body = document.body;
         if (!body.classList.contains('anim-ready')) {
+            paintLineup();
             applyScene(scene);
             body.classList.toggle('scene-fx-right', scene === 'maps'); // resting state on load
             return;
@@ -340,7 +392,7 @@ async function initOverlay() {
         // mid state is "big layout, team B pinned to the left edge"; each phase is one
         // .team transition (top/left/width/height/clip-path), with the logo/name carried
         // by the FLIP in captureContentFlip. Transitions touching `normal` still slide.
-        const prev = SCENE_STATES.find(s => body.classList.contains(`scene-${s}`));
+        const prev = appliedScene();
         if (isBigMaps(prev, scene)) {
             body.classList.remove('scene-exit');
             if (scene === 'maps') {
@@ -380,6 +432,7 @@ async function initOverlay() {
         body.classList.add('scene-exit');
         sceneTimer = setTimeout(() => {
             body.classList.add('scene-snap');
+            paintLineup(); // the incoming team, filled while everything is off-screen
             applyScene(scene);
             body.classList.toggle('scene-fx-right', scene === 'maps');
             void body.offsetWidth; // commit the snapped off-screen layout as the slide-in start
@@ -646,9 +699,15 @@ async function initOverlay() {
         } else if (e.key === swapKey(id) || e.key === mapsKey(id)) {
             // Swap reorders the stacked banners (and the cards' left/right bans); a
             // maps change can move the current map whose bans the banners show.
-            paint();
+            paint(); // also repaints the lineup, whose logo side follows the swap
             paintMaps();
             retryMapInfo();
+        } else if (e.key === lineupKey(id)) {
+            // An edit to the lineup on air shows in place. Only a change of what's on air
+            // (the lineup became incomplete and drops to big view, or became complete
+            // under a selected lineup scene) moves the scene.
+            paintLineup();
+            if (effectiveScene(id) !== appliedScene()) paintScene();
         } else if (e.key === boKey(id)) {
             paintMaps();
             retryMapInfo();

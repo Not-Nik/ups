@@ -1,0 +1,5 @@
+[
+  {"key": "tank", "name": "Tank"},
+  {"key": "damage", "name": "Damage"},
+  {"key": "support", "name": "Support"}
+]

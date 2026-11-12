@@ -1,0 +1,3 @@
+# Role icons — fetched from OverFast by ../fetch-assets.py, not committed.
+# The manifest (roles.json) is tracked and drives what gets fetched.
+*.svg

@@ -33,11 +33,17 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `leaderboard.js` — the Leaderboard view (ranked from matches + predictions on the client)
 - `overlay.html` / `overlay.js` and `control.html` / `control.js` — the stream pair: a transparent OBS browser source
   (two team banners with logo, name, score and hero-ban badge, tinted from the logo's average colour, plus a
-  full-screen "big" scene and a map-timeline scene) and the control room that drives it — pick the live match, score
-  it, set the best-of, the map sequence and the bans, switch scene, swap sides, move the logo
+  full-screen "big" scene, a map-timeline scene and one lineup scene per team — big logo and name on the team's banner
+  side, its five players as slanted banners with role icons on the other, tank, DPS, DPS, support, support) and the
+  control room that drives it — pick the live match, score it, set the best-of, the map sequence and the bans, switch
+  scene, swap sides, move the logo, and set each team's lineup. A team's View button opens its lineup dialog
+  (`openLineupPicker`: per spot, the team's `/api/players/:id` names as chips or a custom name, nobody in two spots)
+  until its five are saved, then just switches to its scene; Edit reopens the dialog and only saves, Clear forgets the
+  lineup. A lineup scene whose team has no complete lineup shows big view instead (`effectiveScene`), and Clear on the
+  team on air or a match switch stores big view outright
 - `overlay-common.js` — what they share: the `ups_overlay_*` localStorage keys that are their whole contract (current
-  match and tournament, per-match score, maps and best-of, global scene and logo position), the series derivations read
-  off them and the `/heroes/` and `/maps/` manifest loads. They talk through `storage` events only — no
+  match and tournament, per-match score, maps, best-of and lineups, global scene and logo position), the series
+  derivations read off them, the `/heroes/` and `/maps/` manifest loads and the lineup dialog's `/api/players/:id`. They talk through `storage` events only — no
   BroadcastChannel, no polling, no URL params — and fetch with plain `fetch`, not `api()`: a broadcast surface has no
   token and wants no refresh toast
 - `auth.js` — header Log in button / user menu (profile, change password, log out), the `#name-modal` dialog and the
@@ -50,8 +56,9 @@ Vanilla HTML/CSS/JS, **no build step**. Files are served as-is.
 - `vendor/bootstrap.min.css` (5.3.3) and `vendor/html2canvas.min.js` (1.4.1) — vendored, do not load from CDN
 - `pulow.png` — watermark for saved images; `favicon.ico`, `favicon-32.png` and `apple-touch-icon.png` are in every
   page's head, `og.png` is the shareable pages' link preview
-- `heroes/` and `maps/` — the overlay's hero portraits and map screenshots; only the `heroes.json` / `maps.json`
-  manifests are committed, `../fetch-assets.py` (OverFast API) downloads the gitignored images
+- `heroes/`, `maps/` and `roles/` — the overlay's hero portraits, map screenshots and role icons (SVGs, drawn as CSS
+  masks by `.role-icon`); only the `heroes.json` / `maps.json` / `roles.json` manifests are committed,
+  `../fetch-assets.py` (OverFast API) downloads the gitignored images
 - The document root is exactly `web/` (`warp::fs::dir("web")` in `../src/main.rs`): `../docs/superpowers/` (design
   specs and plans, git-ignored) and `../fetch-assets.py` sit one directory up and are never served
 
@@ -111,7 +118,8 @@ writes map a bodiless 404 to "This account is not an admin."
   (the overlay pages excepted, by design).
 - Theme preference under `ups_theme` (`dark`/`light`/`system`), applied before the first paint by `theme-head.js`.
 - Beyond those two, localStorage holds only the incident toast's read marker (`ups_incidents_seen`) and the
-  overlay's live-match keys (`ups_overlay_*`) — never a name, never where the user is.
+  overlay's live-match keys (`ups_overlay_*`) — never the user's name, never where the user is. (The overlay's
+  lineups do hold names: the toornament or typed names of the players shown on stream.)
 
 ## Location state
 

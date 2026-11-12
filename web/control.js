@@ -56,6 +56,7 @@ async function initControl() {
     let syncScene = noop;
     let syncBo = noop;
     let syncMaps = noop;
+    let syncLineups = noop;
     let mapsEl = null; // the horizontal map list, set in render() (for scroll-to-end)
     let addMapBtn = null; // set in render() (for the map picker's focus restore)
     const message = text => panel.replaceChildren(crEmpty(text));
@@ -289,12 +290,101 @@ async function initControl() {
     }
 
     const selectMatch = (tid, mid) => {
-        clearMatchData(); // drop residual scores/swap/bans before repointing
+        // A lineup scene would point at the old match's lineup, which goes with the rest.
+        if (lineupSide(loadScene())) saveScene('big');
+        clearMatchData(); // drop residual scores/swap/bans/lineups before repointing
         localStorage.setItem(TOURNAMENT_KEY, String(tid));
         localStorage.setItem(CURRENT_KEY, String(mid));
         closeModal();
         render(); // same-tab write doesn't fire `storage`, so re-render manually
     };
+
+    // One team's lineup: a row per spot (LINEUP_ROLES), each offering the team's
+    // toornament players as chips plus a custom name. A player can hold one spot only.
+    // 'setup' (the team button's first click) saves and puts the lineup on air; 'edit'
+    // only saves, leaving the stream on whatever it shows.
+    async function openLineupPicker(mid, tid, match, side, mode, opener) {
+        const team = match[`team_${side}`];
+        const draft = loadLineups(mid)[side];
+        const confirmBtn = makeEl('button', {
+            className: 'cr-swap cr-primary',
+            type: 'button',
+            textContent: mode === 'setup' ? 'Show lineup' : 'Save',
+        });
+        const cancelBtn = actionBtn('Cancel', closeModal);
+        const rows = LINEUP_ROLES.map((role, i) => {
+            const label = makeEl('span', {className: 'cr-lineup-role'});
+            label.append(
+                makeEl('span', {className: `role-icon role-${role}`}),
+                makeEl('span', {textContent: ROLE_LABELS[role]}),
+            );
+            const chips = makeEl('div', {className: 'cr-lineup-chips'});
+            const input = makeEl('input', {
+                className: 'ban-search cr-lineup-custom',
+                type: 'text',
+                placeholder: 'Custom name',
+                ariaLabel: `${ROLE_LABELS[role]} ${LINEUP_ROLES.slice(0, i).filter(r => r === role).length + 1}, custom name`,
+                value: draft[i] ?? '',
+            });
+            input.addEventListener('input', () => {
+                draft[i] = input.value;
+                refresh();
+            });
+            const row = makeEl('div', {className: 'cr-lineup-row'});
+            row.append(label, chips);
+            chips.append(input);
+            return {chips, input, buttons: []};
+        });
+
+        // Chips lit for the spot's own name, disabled where another spot holds it.
+        const refresh = () => {
+            const taken = draft.map(n => n?.trim().toLowerCase() || null);
+            rows.forEach((r, i) => r.buttons.forEach(b => {
+                const name = b.textContent.toLowerCase();
+                b.classList.toggle('cr-toggle-on', taken[i] === name);
+                b.disabled = taken.some((t, j) => j !== i && t === name);
+            }));
+            confirmBtn.disabled = !isLineupComplete(draft);
+        };
+        confirmBtn.addEventListener('click', () => {
+            saveLineup(mid, side, normaliseLineup(draft));
+            if (mode === 'setup') saveScene(LINEUP_SCENES[side]);
+            closeModal();
+            syncScene();
+            syncLineups();
+        });
+
+        const box = openModal('lineup-picker', {label: `${team} lineup`, opener});
+        const foot = makeEl('div', {className: 'cr-lineup-foot'});
+        foot.append(cancelBtn, confirmBtn);
+        box.append(
+            makeEl('h2', {className: 'cr-maps-title', textContent: `${team} lineup`}),
+            ...rows.map(r => r.chips.parentElement),
+            foot,
+        );
+        refresh();
+        rows[0].input.focus();
+
+        // Without toornament players (a team added by hand, a failed load) the custom
+        // names are the whole dialog. A dialog closed before they arrive is left alone.
+        const players = playersOf(await fetchPlayers(tid).catch(() => []), team);
+        if (!box.isConnected || !players.length) return;
+        rows.forEach((r, i) => {
+            r.buttons = players.map(name => {
+                const chip = makeEl('button', {className: 'cr-swap cr-lineup-chip', type: 'button', textContent: name});
+                chip.addEventListener('click', () => {
+                    draft[i] = name;
+                    r.input.value = '';
+                    refresh();
+                });
+                return chip;
+            });
+            r.chips.prepend(...r.buttons);
+            // A saved name that is one of the team's players shows as its chip.
+            if (players.includes(draft[i])) r.input.value = '';
+        });
+        refresh();
+    }
 
     // Three-stage match picker: pick a tournament, then a day, then a match.
     async function openMatchPicker(currentTournamentId, currentId, opener) {
@@ -391,6 +481,7 @@ async function initControl() {
         syncScene = noop;
         syncBo = noop;
         syncMaps = noop;
+        syncLineups = noop;
         const id = localStorage.getItem(CURRENT_KEY);
         const tid = localStorage.getItem(TOURNAMENT_KEY);
         if (!id || !tid) {
@@ -456,6 +547,39 @@ async function initControl() {
             btn.dataset.scene = state;
             return btn;
         });
+        // Per team: its lineup scene's button (the first click sets the lineup up), and
+        // Edit / Clear. Both groups run in banner order, so they follow Swap (syncLineups).
+        const lineupBtns = {};
+        const editBtns = {};
+        const clearBtns = {};
+        SIDES.forEach(k => {
+            const team = match[`team_${k}`];
+            const btn = actionBtn(team || 'TBD', () => {
+                if (isLineupComplete(loadLineups(id)[k])) {
+                    saveScene(LINEUP_SCENES[k]);
+                    syncScene();
+                } else {
+                    openLineupPicker(id, tid, match, k, 'setup', btn);
+                }
+            });
+            btn.dataset.scene = LINEUP_SCENES[k];
+            // Full names: initials collide ("Team Kiel" and "TU Karlsruhe" are both TK).
+            const edit = actionBtn(`Edit ${team}`, () => openLineupPicker(id, tid, match, k, 'edit', edit));
+            const clear = actionBtn(`Clear ${team}`, () => {
+                saveLineup(id, k, null);
+                if (loadScene() === LINEUP_SCENES[k]) saveScene('big');
+                syncScene();
+                syncLineups();
+                edit.focus(); // Clear has just disabled itself
+            });
+            btn.disabled = edit.disabled = !team;
+            lineupBtns[k] = btn;
+            editBtns[k] = edit;
+            clearBtns[k] = clear;
+        });
+        const viewBtns = [...sceneBtns, ...SIDES.map(k => lineupBtns[k])];
+        const lineupGroup = makeEl('span', {className: 'cr-control-group'});
+        const lineupEditGroup = makeEl('span', {className: 'cr-control-group'});
         const boSelect = makeEl('select', {className: 'cr-select'});
         BO_OPTIONS.forEach(([n, label]) => {
             boSelect.append(makeEl('option', {value: n === null ? '' : String(n), textContent: label}));
@@ -491,11 +615,15 @@ async function initControl() {
                 cell,
             );
         };
-        controlRow('View', ...sceneBtns);
+        controlRow('View', ...sceneBtns, lineupGroup);
+        controlRow('Lineup', lineupEditGroup);
         const changeMatchBtn = actionBtn('Change match', () => openMatchPicker(tid, id, changeMatchBtn));
         controlRow('Match',
             changeMatchBtn,
-            actionBtn('Swap teams', () => saveSwap(id, !loadSwap(id))),
+            actionBtn('Swap teams', () => {
+                saveSwap(id, !loadSwap(id));
+                syncLineups(); // same-tab write, no `storage` event
+            }),
             actionBtn('Cycle logo', () => saveLogo(nextLogo(loadLogo()))),
         );
 
@@ -530,11 +658,27 @@ async function initControl() {
         };
         syncBans();
 
+        // What's on air, so a lineup scene without its lineup lights Big view.
         syncScene = () => {
-            const cur = loadScene();
-            sceneBtns.forEach(btn => btn.classList.toggle('cr-toggle-on', btn.dataset.scene === cur));
+            const cur = effectiveScene(id);
+            viewBtns.forEach(btn => btn.classList.toggle('cr-toggle-on', btn.dataset.scene === cur));
         };
         syncScene();
+
+        syncLineups = () => {
+            // Moved only when the order changed: re-inserting the focused button would
+            // drop focus to <body>, undoing the dialog's return to its opener.
+            const order = loadSwap(id) ? ['b', 'a'] : ['a', 'b'];
+            if (lineupGroup.firstChild !== lineupBtns[order[0]]) {
+                lineupGroup.replaceChildren(...order.map(k => lineupBtns[k]));
+                lineupEditGroup.replaceChildren(...order.flatMap(k => [editBtns[k], clearBtns[k]]));
+            }
+            const lineups = loadLineups(id);
+            SIDES.forEach(k => {
+                clearBtns[k].disabled = lineups[k].every(n => n === null);
+            });
+        };
+        syncLineups();
 
         syncBo = () => {
             const cur = loadBo(id);
@@ -585,6 +729,11 @@ async function initControl() {
             syncBo();
             syncMaps();
         } else if (e.key === SCENE_KEY) syncScene();
+        else if (e.key?.startsWith(SWAP_PREFIX)) syncLineups();
+        else if (e.key?.startsWith(LINEUP_PREFIX)) {
+            syncLineups();
+            syncScene(); // a cleared lineup on air shows big view
+        }
     });
 }
 

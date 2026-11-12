@@ -889,7 +889,8 @@ body.scene-fx-right .scene-fx {
 
 /* --- Big view target layout --- */
 body.scene-big .scene-bg,
-body.scene-maps .scene-bg {
+body.scene-maps .scene-bg,
+body.scene-lineup .scene-bg {
     transform: translateY(0);
 }
 
@@ -1349,6 +1350,201 @@ body.scene-maps.anim-ready .maps-track .map-card {
     font-size: calc(12.8 * var(--u)); /* .8rem */
 }
 
+/* ============== Role icons ============== */
+/* A tank / damage / support icon in the current text colour: a square of
+   currentColor masked by the OverFast SVG (fetched into /roles by
+   ../fetch-assets.py). Sized by whoever uses it — the lineup rows and the control
+   room's lineup dialog. A missing SVG masks the whole square away: no icon, no box. */
+.role-icon {
+    flex-shrink: 0;
+    background-color: currentColor;
+    -webkit-mask: center / contain no-repeat;
+    mask: center / contain no-repeat;
+}
+
+.role-tank {
+    -webkit-mask-image: url(/roles/tank.svg);
+    mask-image: url(/roles/tank.svg);
+}
+
+.role-damage {
+    -webkit-mask-image: url(/roles/damage.svg);
+    mask-image: url(/roles/damage.svg);
+}
+
+.role-support {
+    -webkit-mask-image: url(/roles/support.svg);
+    mask-image: url(/roles/support.svg);
+}
+
+/* ============== Lineup scenes ============== */
+/* One team's five players before the match: its big logo and name on one side and
+   the five players stacked as slanted banners on the other, in the team colour
+   (--lineup-color, set by paintLineup in overlay.js) with white text. Laid out for the
+   team on the left slot — logo left, banners flush right with their inner edge
+   slanted like .team-right — and mirrored by `.lineup-right` for the right slot.
+   Shares the full-screen background with big view and maps; the in-game banners,
+   bans and watermark are off it. */
+.lineup {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    color: #fff;
+}
+
+body.scene-lineup .lineup {
+    display: block;
+}
+
+body.scene-lineup .ban-slot,
+body.scene-lineup .powered {
+    display: none;
+}
+
+/* The in-game banners stay where the exit step shoved them. */
+body.scene-lineup .team-left {
+    transform: translateX(-160%);
+}
+
+body.scene-lineup .team-right {
+    transform: translateX(160%);
+}
+
+.lineup-team {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 36vw;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(32 * var(--u));
+}
+
+.lineup-right .lineup-team {
+    left: auto;
+    right: 0;
+}
+
+.lineup-logo {
+    width: calc(440 * var(--u));
+    height: calc(440 * var(--u));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lineup-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 calc(6 * var(--u)) calc(24 * var(--u)) rgba(0, 0, 0, .6));
+}
+
+.lineup-logo .team-logo-text {
+    font-size: calc(160 * var(--u));
+}
+
+.lineup-name {
+    max-width: 32vw;
+    font-size: calc(48 * var(--u)); /* 3rem */
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
+}
+
+.lineup-list {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 52vw;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: calc(20 * var(--u));
+}
+
+.lineup-right .lineup-list {
+    right: auto;
+    left: 0;
+}
+
+.lineup-row {
+    --slant: calc(40 * var(--u));
+    height: calc(112 * var(--u));
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: calc(28 * var(--u));
+    padding: 0 calc(64 * var(--u)) 0 calc(var(--slant) + 48 * var(--u));
+    background: var(--lineup-color, #1a1a1a);
+    color: #fff;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, var(--slant) 100%);
+}
+
+/* Mirrored: flush left, slant on the right, the icon still on the inner side. */
+.lineup-right .lineup-row {
+    flex-direction: row-reverse;
+    padding: 0 calc(var(--slant) + 48 * var(--u)) 0 calc(64 * var(--u));
+    clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+
+/* Icon and name are always white, whatever the team colour; the shadows keep them
+   legible on light ones. The icon's shadow goes on its wrapper, since the mask that
+   draws the icon would clip a shadow of its own. */
+.lineup-role {
+    display: flex;
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6));
+}
+
+.lineup-row .role-icon {
+    width: calc(56 * var(--u));
+    height: calc(56 * var(--u));
+}
+
+.lineup-player {
+    min-width: 0;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+    font-size: calc(44 * var(--u));
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Rows slide in from their outer edge one after another and leave the same way,
+   quicker, so the last one is gone before the exit step hides the block (450ms). */
+body.anim-ready .lineup-row {
+    transition: transform .45s cubic-bezier(.4, 0, .2, 1) calc(var(--i) * 60ms);
+}
+
+body.anim-ready .lineup-team {
+    transition: opacity .45s ease, transform .45s cubic-bezier(.4, 0, .2, 1);
+}
+
+body.scene-exit .lineup-row {
+    transform: translateX(110%);
+    transition-duration: .3s;
+    transition-delay: calc(var(--i) * 30ms);
+}
+
+body.scene-exit .lineup-right .lineup-row {
+    transform: translateX(-110%);
+}
+
+body.scene-exit .lineup-team {
+    opacity: 0;
+    transform: translateY(-50%) scale(.85);
+}
+
 /* ============== Control room ============== */
 /* Sized for an OBS browser dock, which is often narrow and tall. `safe center`
    keeps the panel centred when it fits but pins it to the top (scrollable)
@@ -1452,6 +1648,92 @@ body.scene-maps.anim-ready .maps-track .map-card {
 .cr-btn:active,
 .cr-swap:active {
     background: #444;
+}
+
+.cr-swap:disabled,
+.cr-swap:disabled:hover {
+    background: #2a2a2a;
+    color: #fff;
+    opacity: .4;
+    cursor: default;
+}
+
+/* The one action a dialog is for (e.g. the lineup's "Show lineup" / "Save"),
+   in the "on" green. */
+.cr-primary,
+.cr-primary:hover {
+    background: #2f7d57;
+}
+
+/* A run of buttons that sits in a control cell as if its buttons were the cell's
+   own, so a group can be reordered as one (the lineup buttons follow Swap). */
+.cr-control-group {
+    display: contents;
+}
+
+/* Lineup dialog: a row per spot, the role on the left, the team's players as chips
+   and a custom name on the right. */
+.lineup-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: min(560px, 100%);
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 20px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    color: #fff;
+    text-align: left;
+}
+
+.lineup-picker .cr-maps-title {
+    margin: 0 0 4px;
+}
+
+.cr-lineup-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+}
+
+.cr-lineup-role {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    color: var(--cr-muted);
+    font-weight: 600;
+}
+
+.cr-lineup-role .role-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.cr-lineup-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.cr-lineup-chip {
+    padding: 7px 12px;
+    font-size: .9rem;
+}
+
+.cr-lineup-custom {
+    flex: 1 1 140px;
+    padding: 7px 12px;
+    font-size: .9rem;
+}
+
+.cr-lineup-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 6px;
 }
 
 /* Toggle in its "on" state (e.g. Big view active). */
@@ -1904,5 +2186,11 @@ body.scene-maps.anim-ready .maps-track .map-card {
     .boom-spark,
     .scene-shape {
         animation: none;
+    }
+
+    /* The slide in and out says the scene changed; the stagger is decoration. */
+    body.anim-ready .lineup-row,
+    body.scene-exit .lineup-row {
+        transition-delay: 0s;
     }
 }

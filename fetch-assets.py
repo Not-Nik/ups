@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Fetch the hero icons and map images referenced by the web manifests.
+"""Fetch the hero icons, map images and role icons referenced by the web manifests.
 
-The images themselves are gitignored (see web/heroes/.gitignore and web/maps/.gitignore)
-— run this after a clone to populate them:
+The images themselves are gitignored (see web/heroes/.gitignore, web/maps/.gitignore and
+web/roles/.gitignore) — run this after a clone to populate them:
 
     python3 fetch-assets.py            # fetch anything missing
     python3 fetch-assets.py --force    # re-download everything
 
-Source: the community OverFast API (hero `portrait`, map `screenshot`). The set of
-assets to fetch is driven by web/heroes/heroes.json and web/maps/maps.json, so adding
-entry there and re-running is all that's needed to pull a new icon.
+Source: the community OverFast API (hero `portrait`, map `screenshot`, role `icon`). The
+set of assets to fetch is driven by web/heroes/heroes.json, web/maps/maps.json and
+web/roles/roles.json, so adding entry there and re-running is all that's needed to pull
+a new icon.
 """
 import argparse
 import json
@@ -71,6 +72,9 @@ def main():
     failed += sync("maps", os.path.join(WEB, "maps", "maps.json"),
                    os.path.join(WEB, "maps"), "jpg",
                    f"{OVERFAST}/maps", "screenshot", args.force)
+    failed += sync("roles", os.path.join(WEB, "roles", "roles.json"),
+                   os.path.join(WEB, "roles"), "svg",
+                   f"{OVERFAST}/roles", "icon", args.force)
     sys.exit(1 if failed else 0)
 
 
