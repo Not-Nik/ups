@@ -76,7 +76,8 @@ function groupWeights(standingRows) {
     return weights;
 }
 
-// [{name, leagues, points, pointsExact, exact, top, rank}], best first: most points,
+// [{name, leagues, points, pointsExact, exact, top, rank}], best first: most points (the
+// exact sum, not the rounded one shown, so two equal-looking scores still read in order),
 // then exact, then teams inside the predicted range. Ties share a rank.
 function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWeights(standingRows)) {
     const current = new Map();
@@ -122,8 +123,9 @@ function rankLeaguePredictions(standingRows, predictions, groupWeight = groupWei
         });
         e.points = roundQuarter(e.pointsExact);
     });
-    const key = e => [-e.points, -e.exact, -e.top];
-    const cmp = (a, b) => key(a).map((v, i) => v - key(b)[i]).find(d => d) ?? 0;
+    const key = e => [-e.pointsExact, -e.exact, -e.top];
+    // Sums of the same value can differ in their last bits; that is still a tie.
+    const cmp = (a, b) => key(a).map((v, i) => v - key(b)[i]).find(d => Math.abs(d) > 1e-9) ?? 0;
     const rows = [...byName.values()].sort((a, b) => cmp(a, b) || a.name.localeCompare(b.name));
     rows.forEach((r, i) => {
         r.rank = i && cmp(rows[i - 1], r) === 0 ? rows[i - 1].rank : i + 1;
@@ -363,6 +365,7 @@ const LEAGUE_COLUMNS = [
     {
         key: 'points', head: 'Points', cls: 'standings-num fw-semibold',
         title: `Up to ${STAGE_POINTS} per league (shared by its groups), less for every place a pick is off. Rounded to quarters, the exact number on hover`,
+        compare: (a, b) => a.pointsExact - b.pointsExact,
         cell: r => exactCell(r.points.toFixed(2), r.pointsExact)
     },
 ];
