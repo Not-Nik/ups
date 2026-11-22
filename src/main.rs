@@ -95,6 +95,12 @@ fn with_rate_limit(
 
 const DB_PATH: &str = "db.sqlite3";
 
+/// Where the HTTP server sends a request: the same host and path over HTTPS. None for
+/// a request without a Host header, which has nowhere to be sent.
+fn https_redirect(host: Option<&warp::host::Authority>, path: &str) -> Option<warp::http::Uri> {
+    format!("https://{}{path}", host?).parse().ok()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
@@ -347,9 +353,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::path::full())
         .map(
             |host: Option<warp::host::Authority>, path: warp::path::FullPath| {
-                let host = host.map(|h| h.to_string()).unwrap_or_default();
-                let https_url = format!("https://{}{}", host, path.as_str());
-                warp::redirect::permanent(https_url.parse::<warp::http::Uri>().unwrap())
+                match https_redirect(host.as_ref(), path.as_str()) {
+                    Some(uri) => warp::redirect::permanent(uri).into_response(),
+                    None => warp::http::StatusCode::BAD_REQUEST.into_response(),
+                }
             },
         );
 
@@ -358,4 +365,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::join!(http_server, https_server);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn authority(host: &str) -> warp::host::Authority {
+        host.parse().unwrap()
+    }
+
+    #[test]
+    fn redirect_keeps_host_and_path() {
+        let uri = https_redirect(Some(&authority("pulow.cc")), "/me.html?x=1").unwrap();
+        assert_eq!(uri, "https://pulow.cc/me.html?x=1");
+    }
+
+    #[test]
+    fn redirect_without_a_host_is_refused() {
+        // An HTTP/1.0 request (or a scanner) may send no Host header at all.
+        assert_eq!(https_redirect(None, "/"), None);
+    }
 }
