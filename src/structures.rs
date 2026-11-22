@@ -41,10 +41,11 @@ pub struct Match {
     pub logo_a: String,
     #[sqlx(rename = "LogoB")]
     pub logo_b: String,
+    // A forfeit is -1 for the side that forfeited and 0 for the other, see loader::scores.
     #[sqlx(rename = "ScoreA")]
-    pub score_a: Option<u64>,
+    pub score_a: Option<i64>,
     #[sqlx(rename = "ScoreB")]
-    pub score_b: Option<u64>,
+    pub score_b: Option<i64>,
     #[sqlx(rename = "ToornamentId")]
     pub toornament_id: Option<String>,
     #[sqlx(rename = "StageType")]
@@ -91,10 +92,11 @@ pub struct BracketNode {
     pub logo_a: Option<String>,
     #[sqlx(rename = "LogoB")]
     pub logo_b: Option<String>,
+    // A forfeit is -1 for the side that forfeited and 0 for the other, see loader::scores.
     #[sqlx(rename = "ScoreA")]
-    pub score_a: Option<u64>,
+    pub score_a: Option<i64>,
     #[sqlx(rename = "ScoreB")]
-    pub score_b: Option<u64>,
+    pub score_b: Option<i64>,
     #[sqlx(rename = "SourceTypeA")]
     pub source_type_a: Option<String>,
     #[sqlx(rename = "SourceA")]

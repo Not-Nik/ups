@@ -30,10 +30,15 @@ const predictionText = (p, sep = ':') => isPercentPrediction(p)
     ? `${p.score_a}%${sep}${p.score_b}%`
     : `${p.score_a}${sep}${p.score_b}`;
 
+// One side's actual score, next to the other side's. The server stores a forfeit as -1
+// for the side that forfeited and 0 for the other: shown as FF and W.
+const scoreText = (score, other) => score < 0 ? 'FF' : other < 0 ? 'W' : String(score);
+
 // The score of a finished match, as the row shows it next to the prediction. Escaped
 // like everything else this file interpolates: the server types these as integers today,
 // and the row builder is the one place the whole site trusts to do the escaping.
-const finalScoreText = (match, sep = ':') => escapeHtml(`${match.score_a}${sep}${match.score_b}`);
+const finalScoreText = (match, sep = ':') =>
+    escapeHtml(`${scoreText(match.score_a, match.score_b)}${sep}${scoreText(match.score_b, match.score_a)}`);
 
 // ============== Tournaments ==============
 // Newest (highest id) first, so the landing grid opens with the current season.

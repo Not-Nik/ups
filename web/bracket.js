@@ -528,16 +528,16 @@ const edgePath = e => 'M' + edgePoints(e).map(p => p.join(',')).join(' L');
 function bracketPlaceholder(node) {
     const final = node.score_a != null && node.score_b != null;
     const color = (a, b) => final ? winnerColor(a, b) : ''; // green/red only on a final score
-    const row = (second, name, logo, score, cls) => `
+    const row = (second, name, logo, score, other, cls) => `
         <div class="team-row${second ? ' mt-1' : ''}">
             ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
             <span class="team-name fw-semibold small ${cls}">${name != null ? teamLinkHTML(state.activeTournament, name) : 'TBD'}</span>
-            ${score != null ? `<span class="actual-score small ${cls || 'text-secondary'}">${score}</span>` : ''}
+            ${score != null ? `<span class="actual-score small ${cls || 'text-secondary'}">${escapeHtml(scoreText(score, other))}</span>` : ''}
         </div>`;
     const card = makeEl('div', {className: 'card bracket-tbd'});
     card.innerHTML = `<div class="card-body"><div class="score-box">
-        ${row(false, node.team_a, node.logo_a, node.score_a, color(node.score_a, node.score_b))}
-        ${row(true, node.team_b, node.logo_b, node.score_b, color(node.score_b, node.score_a))}
+        ${row(false, node.team_a, node.logo_a, node.score_a, node.score_b, color(node.score_a, node.score_b))}
+        ${row(true, node.team_b, node.logo_b, node.score_b, node.score_a, color(node.score_b, node.score_a))}
     </div></div>`;
     return card;
 }

@@ -344,13 +344,13 @@ async function togglePredictions(match, panel, btn) {
     }
 }
 
-const teamRowHTML = ({name, logo, score, color, side}) => `
+const teamRowHTML = ({name, logo, score, other, color, side}) => `
   <div class="team-row${side === 1 ? ' mt-1' : ''}">
     ${logo ? `<img src="${escapeAttr(proxied(logo))}" class="team-logo" alt="">` : ''}
     <span class="team-name fw-semibold small ${color}">${teamLinkHTML(state.activeTournament, name)}</span>
     <input type="text" class="form-control score-input" data-side="${side}" inputmode="numeric" placeholder="0"
            aria-label="Predicted score for ${escapeAttr(name)}">
-    ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${escapeHtml(String(score))}</span>` : ''}
+    ${score != null ? `<span class="actual-score small ${color || 'text-secondary'}">${escapeHtml(scoreText(score, other))}</span>` : ''}
   </div>`;
 
 function createCard(match, index, day) {
@@ -361,6 +361,7 @@ function createCard(match, index, day) {
         name: match[`team_${k}`],
         logo: match[`logo_${k}`],
         score: match[`score_${k}`],
+        other: match[`score_${OTHER_SIDE[k]}`],
         color: hasFinal ? winnerColor(match[`score_${k}`], match[`score_${OTHER_SIDE[k]}`]) : '',
         side,
     }));
@@ -918,11 +919,13 @@ function applyPastPrediction(p) {
 
     const match = state.matches[index];
     const hasFinal = match.score_a != null && match.score_b != null;
+    // A forfeit (FF:W) has no map score to be above or below.
+    const forfeit = match.score_a < 0 || match.score_b < 0;
 
     [...card.querySelectorAll('.score-input')].forEach((input, i) => {
         const k = SIDES[i];
         input.value = p[`score_${k}`];
-        if (hasFinal) {
+        if (hasFinal && !forfeit) {
             const pred = predictionFor(p[`score_${k}`], match[`score_${k}`]);
             input.classList.add(pred.cls);
             input.insertAdjacentHTML('afterend', predSignHTML(pred));

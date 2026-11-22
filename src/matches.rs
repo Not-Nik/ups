@@ -241,8 +241,8 @@ pub async fn add_match(
     .bind(round_id)
     .bind(team_a)
     .bind(team_b)
-    .bind(match_.score_a.map(|a| a as u32))
-    .bind(match_.score_b.map(|a| a as u32))
+    .bind(match_.score_a)
+    .bind(match_.score_b)
     .bind(match_.toornament_id)
     .execute(conn)
     .await?;

@@ -94,6 +94,10 @@ struct NodeRef {
 struct Opponent {
     participant: Option<Participant>,
     score: Option<i64>,
+    // True on the side that forfeited; toornament may then leave both scores null.
+    // See scores() for how a forfeit is stored.
+    #[serde(default)]
+    forfeit: bool,
     #[serde(rename = "sourceType")]
     source_type: Option<String>,
     #[serde(rename = "sourceNode")]
@@ -887,6 +891,18 @@ fn opponent_team(opponent: &Opponent, ids: &Ids) -> Option<i64> {
     ids.teams.get(&opponent.participant.as_ref()?.id).copied()
 }
 
+/// The stored scores of two opponents. A forfeit is stored as -1 for the side that
+/// forfeited and 0 for the other, whatever score toornament gives it: the match counts
+/// as decided, and no prediction (never negative) can match it exactly. A double
+/// forfeit has no winner, so it keeps the feed's scores.
+fn scores(a: &Opponent, b: &Opponent) -> (Option<i64>, Option<i64>) {
+    match (a.forfeit, b.forfeit) {
+        (true, false) => (Some(-1), Some(0)),
+        (false, true) => (Some(0), Some(-1)),
+        _ => (a.score, b.score),
+    }
+}
+
 /// A NewMatch for the predictable (both teams known) `matches` table, or None.
 fn build_match(raw: &RawMatch, ids: &Ids) -> Option<NewMatch> {
     let (o_a, o_b) = (raw.opponents.first()?, raw.opponents.get(1)?);
@@ -900,11 +916,12 @@ fn build_match(raw: &RawMatch, ids: &Ids) -> Option<NewMatch> {
         return None;
     };
 
+    let (score_a, score_b) = scores(o_a, o_b);
     Some(NewMatch {
         team_a,
         team_b,
-        score_a: o_a.score,
-        score_b: o_b.score,
+        score_a,
+        score_b,
         group_id,
         round_id,
         number: raw.number,
@@ -1036,6 +1053,7 @@ async fn upsert_bracket_nodes(
         };
         let (source_type_a, source_a) = node_source(o_a);
         let (source_type_b, source_b) = node_source(o_b);
+        let (score_a, score_b) = scores(o_a, o_b);
 
         // Predictable only when both teams are present — then a matches row exists
         // with ToornamentId == this node id (set by upsert_matches above).
@@ -1059,8 +1077,8 @@ async fn upsert_bracket_nodes(
         .bind(n.depth)
         .bind(opponent_team(o_a, ids))
         .bind(opponent_team(o_b, ids))
-        .bind(o_a.score)
-        .bind(o_b.score)
+        .bind(score_a)
+        .bind(score_b)
         .bind(source_type_a)
         .bind(source_a)
         .bind(source_type_b)
@@ -1684,5 +1702,45 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(players, [(1, "Ana".into()), (2, "Bo".into())]);
+    }
+
+    fn opponents(json: &str) -> Vec<Opponent> {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn forfeit_without_a_score_is_stored_as_minus_one_to_nil() {
+        // As toornament sends a forfeit nobody entered a score for.
+        let o = opponents(
+            r#"[{"score": null, "forfeit": true, "result": null},
+                {"score": null, "forfeit": false, "result": "win"}]"#,
+        );
+        assert_eq!(scores(&o[0], &o[1]), (Some(-1), Some(0)));
+        assert_eq!(scores(&o[1], &o[0]), (Some(0), Some(-1)));
+    }
+
+    #[test]
+    fn forfeit_with_a_score_drops_the_score() {
+        let o = opponents(
+            r#"[{"score": 0, "forfeit": true}, {"score": 3, "forfeit": false}]"#,
+        );
+        assert_eq!(scores(&o[0], &o[1]), (Some(-1), Some(0)));
+        let o = opponents(r#"[{"score": 3}, {"score": 1, "forfeit": true}]"#);
+        assert_eq!(scores(&o[0], &o[1]), (Some(0), Some(-1)));
+    }
+
+    #[test]
+    fn double_forfeit_keeps_the_feed_scores() {
+        let o = opponents(
+            r#"[{"score": null, "forfeit": true}, {"score": null, "forfeit": true}]"#,
+        );
+        assert_eq!(scores(&o[0], &o[1]), (None, None));
+    }
+
+    #[test]
+    fn unplayed_match_has_no_score() {
+        // Bracket nodes and older feeds may leave the field out entirely.
+        let o = opponents(r#"[{"score": null}, {"score": null, "forfeit": false}]"#);
+        assert_eq!(scores(&o[0], &o[1]), (None, None));
     }
 }
