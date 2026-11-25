@@ -1149,6 +1149,8 @@ body.scene-maps.scene-exit .team-right {
     align-items: center;
     justify-content: center;
     gap: 1.6vw;
+    /* A wrapped row also clears the ban badges hanging under the row above (.map-bans). */
+    row-gap: calc(1.6vw + 66 * var(--u));
 }
 
 /* Fade/rise the timeline in once the banners have started settling. */
@@ -1219,9 +1221,16 @@ body.maps-leaving.anim-ready .maps-track {
    banner .ban-badge look at a smaller size), in banner order: the upper banner's
    team on the left. Each strike takes its team's banner colour (the same
    --scene-color-N the background gradient uses, red until the logo is sampled),
-   with a dark edge so a dark or grey team colour still reads over the portrait. */
+   with a dark edge so a dark or grey team colour still reads over the portrait.
+   Out of flow, hanging below the tile: in flow, a ban would make its tile taller and
+   the centring (track and screen) would push the card up. */
 .map-bans {
+    position: absolute;
+    top: calc(100% + 6 * var(--u));
+    left: 0;
+    right: 0;
     display: flex;
+    justify-content: center;
     gap: calc(8 * var(--u));
 }
 
